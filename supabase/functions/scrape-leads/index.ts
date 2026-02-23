@@ -34,16 +34,10 @@ Deno.serve(async (req) => {
 
     const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
-    // Get Firecrawl API key from integrations table
-    const { data: integration } = await supabaseAdmin
-      .from("integrations")
-      .select("api_key")
-      .eq("org_id", org_id)
-      .eq("service_name", "firecrawl")
-      .single();
-
-    if (!integration?.api_key) {
-      return new Response(JSON.stringify({ error: "Chave Firecrawl não configurada. Vá em Configurações para adicioná-la." }), {
+    // Get Firecrawl API key from environment (Lovable connector)
+    const firecrawlApiKey = Deno.env.get("FIRECRAWL_API_KEY");
+    if (!firecrawlApiKey) {
+      return new Response(JSON.stringify({ error: "Firecrawl não configurado. Conecte o conector Firecrawl no projeto." }), {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
@@ -60,7 +54,7 @@ Deno.serve(async (req) => {
     const firecrawlResponse = await fetch("https://api.firecrawl.dev/v1/scrape", {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${integration.api_key}`,
+        Authorization: `Bearer ${firecrawlApiKey}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
