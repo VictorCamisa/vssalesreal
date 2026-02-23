@@ -55,6 +55,7 @@ function AppRoutes() {
         <Route path="/settings" element={<SettingsPage />} />
       </Route>
       <Route path="/auth" element={<Navigate to="/" replace />} />
+      <Route path="/onboarding" element={<Navigate to="/" replace />} />
       <Route path="*" element={<NotFound />} />
     </Routes>
   );

@@ -1,1 +1,4 @@
 project_id = "akstlpiqjvgbjjnawqfn"
+
+[functions.enrich-lead]
+verify_jwt = false

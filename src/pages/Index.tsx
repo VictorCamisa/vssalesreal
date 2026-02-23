@@ -2,27 +2,34 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Users, Target, TrendingUp, Zap } from "lucide-react";
+import { Users, Target, TrendingUp, Zap, Loader2 } from "lucide-react";
 
 export default function Index() {
   const { profile } = useAuth();
   const [stats, setStats] = useState({ leads: 0, opportunities: 0, converted: 0 });
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (!profile?.org_id) return;
     const orgId = profile.org_id;
 
     const fetchStats = async () => {
-      const [leadsRes, oppsRes, convertedRes] = await Promise.all([
-        supabase.from("leads_raw").select("id", { count: "exact", head: true }).eq("org_id", orgId),
-        supabase.from("opportunities").select("id", { count: "exact", head: true }).eq("org_id", orgId),
-        supabase.from("leads_raw").select("id", { count: "exact", head: true }).eq("org_id", orgId).eq("status", "converted"),
-      ]);
-      setStats({
-        leads: leadsRes.count ?? 0,
-        opportunities: oppsRes.count ?? 0,
-        converted: convertedRes.count ?? 0,
-      });
+      try {
+        const [leadsRes, oppsRes, convertedRes] = await Promise.all([
+          supabase.from("leads_raw").select("id", { count: "exact", head: true }).eq("org_id", orgId),
+          supabase.from("opportunities").select("id", { count: "exact", head: true }).eq("org_id", orgId),
+          supabase.from("leads_raw").select("id", { count: "exact", head: true }).eq("org_id", orgId).eq("status", "converted"),
+        ]);
+        setStats({
+          leads: leadsRes.count ?? 0,
+          opportunities: oppsRes.count ?? 0,
+          converted: convertedRes.count ?? 0,
+        });
+      } catch (error) {
+        console.error("Failed to fetch stats:", error);
+      } finally {
+        setLoading(false);
+      }
     };
     fetchStats();
   }, [profile?.org_id]);
@@ -51,7 +58,11 @@ export default function Index() {
               <card.icon className={`h-5 w-5 ${card.color}`} />
             </CardHeader>
             <CardContent>
-              <div className="text-3xl font-bold">{card.value}</div>
+              {loading ? (
+                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+              ) : (
+                <div className="text-3xl font-bold">{card.value}</div>
+              )}
             </CardContent>
           </Card>
         ))}
