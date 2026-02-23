@@ -225,30 +225,31 @@ export default function Prospecting() {
               )}
 
               <Button
-                onClick={() => {
-                  if (whatsappMode === "group") {
-                    handleEvolution();
-                  } else {
-                    // For conversation/contact, add directly as lead
-                    if (!profile?.org_id || !evolutionPhone) return;
-                    setEvolutionLoading(true);
-                    const digits = evolutionPhone.replace(/\D/g, "");
-                    const phone = digits.startsWith("+") ? evolutionPhone : `+${digits}`;
-                    supabase.from("leads_raw").insert({
-                      org_id: profile.org_id,
-                      phone,
-                      source: "whatsapp" as const,
-                      status: "pending" as const,
-                      enrichment_data: { extraction_type: whatsappMode },
-                    }).then(({ error }) => {
-                      setEvolutionLoading(false);
-                      if (error) {
-                        toast({ title: "Erro", description: error.message, variant: "destructive" });
-                      } else {
-                        toast({ title: "Contato importado!", description: `${phone} adicionado como lead.` });
-                        setEvolutionPhone("");
-                      }
+                onClick={async () => {
+                  if (!profile?.org_id) return;
+                  setEvolutionLoading(true);
+                  try {
+                    const { data, error } = await supabase.functions.invoke("extract-whatsapp", {
+                      body: {
+                        org_id: profile.org_id,
+                        mode: whatsappMode,
+                        group_name: whatsappMode === "group" ? evolutionGroup : undefined,
+                        phone: whatsappMode !== "group" ? evolutionPhone : undefined,
+                      },
                     });
+                    if (error) throw error;
+                    const desc = whatsappMode === "group"
+                      ? `${data?.count || 0} contatos extraídos do grupo ${data?.group || ""}`
+                      : whatsappMode === "conversation"
+                      ? `${data?.count || 0} contatos extraídos da conversa${data?.contact_name ? ` com ${data.contact_name}` : ""}`
+                      : `${data?.count || 0} contato importado${data?.contact_name ? `: ${data.contact_name}` : ""}`;
+                    toast({ title: "Extração concluída!", description: desc });
+                    setEvolutionGroup("");
+                    setEvolutionPhone("");
+                  } catch (error: any) {
+                    toast({ title: "Erro na extração", description: error.message, variant: "destructive" });
+                  } finally {
+                    setEvolutionLoading(false);
                   }
                 }}
                 disabled={evolutionLoading || (whatsappMode === "group" ? !evolutionGroup : !evolutionPhone)}
