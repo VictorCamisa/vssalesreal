@@ -39,7 +39,7 @@ Deno.serve(async (req) => {
     const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
     const { data: integration } = await supabaseAdmin
       .from("integrations")
-      .select("api_key, endpoint_url, config")
+      .select("id, api_key, endpoint_url, config")
       .eq("org_id", org_id)
       .eq("service_name", "evolution")
       .single();
@@ -84,11 +84,14 @@ Deno.serve(async (req) => {
       if (!orgInstances.includes(instance_name)) {
         orgInstances.push(instance_name);
       }
-      await supabaseAdmin
+      const { error: configUpdateError } = await supabaseAdmin
         .from("integrations")
         .update({ config: { ...(currentConfig as any), instances: orgInstances } })
-        .eq("org_id", org_id)
-        .eq("service_name", "evolution");
+        .eq("id", integration.id);
+
+      if (configUpdateError) {
+        console.error("Failed to persist created instance in config:", configUpdateError);
+      }
 
       return json({
         instance: data.instance,
@@ -136,7 +139,26 @@ Deno.serve(async (req) => {
       }
 
       const data = await response.json();
-      return json({ state: data.instance?.state || data.state || "unknown" });
+      const state = data.instance?.state || data.state || "unknown";
+
+      // Persist connected instance if not already tracked
+      if (state === "open") {
+        const currentConfig = (integration as any).config || {};
+        const orgInstances: string[] = currentConfig.instances || [];
+        if (!orgInstances.includes(instance_name)) {
+          const nextInstances = [...orgInstances, instance_name];
+          const { error: statusPersistError } = await supabaseAdmin
+            .from("integrations")
+            .update({ config: { ...currentConfig, instances: nextInstances } })
+            .eq("id", integration.id);
+
+          if (statusPersistError) {
+            console.error("Failed to persist connected instance in status:", statusPersistError);
+          }
+        }
+      }
+
+      return json({ state });
     }
 
     // ============================================
@@ -146,10 +168,6 @@ Deno.serve(async (req) => {
       // Get org's registered instances from config
       const currentConfig = (integration as any).config || {};
       const orgInstances: string[] = currentConfig.instances || [];
-
-      if (orgInstances.length === 0) {
-        return json({ instances: [] });
-      }
 
       const response = await fetch(`${baseUrl}/instance/fetchInstances`, {
         method: "GET",
@@ -164,16 +182,33 @@ Deno.serve(async (req) => {
 
       const data = await response.json();
       const allInstances = Array.isArray(data) ? data : [];
-      const instances = allInstances
-        .filter((inst: any) => {
-          const name = inst.instance?.instanceName || inst.instanceName;
-          return orgInstances.includes(name);
-        })
-        .map((inst: any) => ({
-          name: inst.instance?.instanceName || inst.instanceName,
-          state: inst.instance?.state || inst.state || "unknown",
-          owner: inst.instance?.owner || null,
-        }));
+
+      // If config is empty (legacy/migration scenario), fallback to all API instances
+      const scopedInstances = orgInstances.length > 0
+        ? allInstances.filter((inst: any) => {
+            const name = inst.instance?.instanceName || inst.instanceName;
+            return orgInstances.includes(name);
+          })
+        : allInstances;
+
+      const instances = scopedInstances.map((inst: any) => ({
+        name: inst.instance?.instanceName || inst.instanceName,
+        state: inst.instance?.state || inst.state || "unknown",
+        owner: inst.instance?.owner || null,
+      }));
+
+      // Keep config in sync when using fallback
+      if (orgInstances.length === 0 && instances.length > 0) {
+        const names = instances.map((i) => i.name).filter(Boolean);
+        const { error: syncConfigError } = await supabaseAdmin
+          .from("integrations")
+          .update({ config: { ...currentConfig, instances: names } })
+          .eq("id", integration.id);
+
+        if (syncConfigError) {
+          console.error("Failed to sync instances into config:", syncConfigError);
+        }
+      }
 
       return json({ instances });
     }
@@ -200,8 +235,7 @@ Deno.serve(async (req) => {
       await supabaseAdmin
         .from("integrations")
         .update({ config: { ...currentConfig, instances: orgInstances } })
-        .eq("org_id", org_id)
-        .eq("service_name", "evolution");
+        .eq("id", integration.id);
 
       return json({ success: true });
     }
