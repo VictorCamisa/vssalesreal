@@ -367,10 +367,19 @@ Deno.serve(async (req) => {
       const contacts = Array.isArray(contactsData) ? contactsData : contactsData?.data || contactsData?.contacts || [];
       console.log(`Found ${contacts.length} total contacts from API`);
 
-      // Filter only individual contacts (not groups)
+      // Log sample to debug contact format
+      if (contacts.length > 0) {
+        console.log("Sample contacts (first 3):", JSON.stringify(contacts.slice(0, 3).map((c: any) => ({ id: c.id, jid: c.jid, remoteJid: c.remoteJid, pushName: c.pushName, name: c.name }))));
+      }
+
+      // Filter only individual contacts (not groups/broadcasts/status)
       const individualContacts = contacts.filter((c: any) => {
-        const id = c.id || c.jid || "";
-        return id.endsWith("@s.whatsapp.net") && !id.startsWith("status@");
+        const id = c.id || c.jid || c.remoteJid || "";
+        // Exclude groups (@g.us), broadcasts (@broadcast), status updates, and newsletter
+        const isGroup = id.includes("@g.us") || id.includes("@broadcast") || id.includes("@newsletter") || id.startsWith("status@") || id === "status";
+        // Accept @s.whatsapp.net OR plain phone numbers (digits only)
+        const isIndividual = id.endsWith("@s.whatsapp.net") || /^\d{10,15}$/.test(id.replace(/@.*/, "").replace(/\D/g, ""));
+        return !isGroup && (isIndividual || (!id.includes("@") && id.length > 0));
       });
       console.log(`Filtered to ${individualContacts.length} individual contacts`);
 
@@ -381,7 +390,7 @@ Deno.serve(async (req) => {
       }
 
       // Extract phones
-      const phones = individualContacts.map((c: any) => formatPhone(c.id || c.jid || "")).filter(Boolean);
+      const phones = individualContacts.map((c: any) => formatPhone(c.id || c.jid || c.remoteJid || "")).filter(Boolean);
 
       // Deduplicate against existing leads
       const { data: existingLeads } = await supabaseAdmin
@@ -400,7 +409,7 @@ Deno.serve(async (req) => {
 
       const newLeads = individualContacts
         .map((c: any) => {
-          const ph = formatPhone(c.id || c.jid || "");
+          const ph = formatPhone(c.id || c.jid || c.remoteJid || "");
           if (!ph || allExistingPhones.has(ph)) return null;
           return {
             org_id,
