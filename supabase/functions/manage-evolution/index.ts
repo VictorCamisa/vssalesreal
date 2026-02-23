@@ -180,24 +180,55 @@ Deno.serve(async (req) => {
         return json({ error: `Erro ao listar instâncias: ${response.status}` }, 502);
       }
 
-      const data = await response.json();
-      const allInstances = Array.isArray(data) ? data : [];
+      const raw = await response.json();
+      const apiInstancesRaw = Array.isArray(raw)
+        ? raw
+        : Array.isArray(raw?.instances)
+          ? raw.instances
+          : Array.isArray(raw?.data)
+            ? raw.data
+            : [];
 
-      // If config is empty (legacy/migration scenario), fallback to all API instances
-      const scopedInstances = orgInstances.length > 0
-        ? allInstances.filter((inst: any) => {
-            const name = inst.instance?.instanceName || inst.instanceName;
-            return orgInstances.includes(name);
+      const apiInstances = apiInstancesRaw.map((inst: any) => ({
+        name: inst?.instance?.instanceName || inst?.instanceName || inst?.name,
+        state: inst?.instance?.state || inst?.state || "unknown",
+        owner: inst?.instance?.owner || inst?.owner || null,
+      })).filter((i: any) => !!i.name);
+
+      // If we already track org instances, always return them, hydrating state from API when possible
+      let instances = orgInstances.length > 0
+        ? orgInstances.map((name) => {
+            const match = apiInstances.find((i: any) => i.name === name);
+            return {
+              name,
+              state: match?.state || "unknown",
+              owner: match?.owner || null,
+            };
           })
-        : allInstances;
+        : apiInstances;
 
-      const instances = scopedInstances.map((inst: any) => ({
-        name: inst.instance?.instanceName || inst.instanceName,
-        state: inst.instance?.state || inst.state || "unknown",
-        owner: inst.instance?.owner || null,
-      }));
+      // For tracked instances not present in fetchInstances, ask connectionState directly
+      if (orgInstances.length > 0) {
+        instances = await Promise.all(instances.map(async (inst) => {
+          if (inst.state !== "unknown") return inst;
+          try {
+            const stateResp = await fetch(`${baseUrl}/instance/connectionState/${inst.name}`, {
+              method: "GET",
+              headers: { apikey: apiKey },
+            });
+            if (!stateResp.ok) return inst;
+            const stateData = await stateResp.json();
+            return {
+              ...inst,
+              state: stateData.instance?.state || stateData.state || "unknown",
+            };
+          } catch {
+            return inst;
+          }
+        }));
+      }
 
-      // Keep config in sync when using fallback
+      // Keep config in sync when it was empty and API returned instances
       if (orgInstances.length === 0 && instances.length > 0) {
         const names = instances.map((i) => i.name).filter(Boolean);
         const { error: syncConfigError } = await supabaseAdmin
