@@ -26,7 +26,7 @@ export default function Prospecting() {
   const [scrapingLoading, setScrapingLoading] = useState(false);
   const [evolutionGroup, setEvolutionGroup] = useState("");
   const [evolutionLoading, setEvolutionLoading] = useState(false);
-  const [whatsappMode, setWhatsappMode] = useState<"group" | "conversation" | "contact">("group");
+  const [whatsappMode, setWhatsappMode] = useState<"group" | "conversation" | "contact" | "all">("all");
   const [evolutionPhone, setEvolutionPhone] = useState("");
   const [manualName, setManualName] = useState("");
   const [manualPhone, setManualPhone] = useState("");
@@ -358,6 +358,7 @@ export default function Prospecting() {
 
             <div className="flex gap-2">
               {[
+                { key: "all" as const, label: "Todos", icon: Smartphone },
                 { key: "group" as const, label: "Grupo", icon: Users2 },
                 { key: "conversation" as const, label: "Conversa", icon: MessageSquare },
                 { key: "contact" as const, label: "Contato", icon: Contact },
@@ -406,7 +407,9 @@ export default function Prospecting() {
                       },
                     });
                     if (error) throw error;
-                    const desc = whatsappMode === "group"
+                    const desc = whatsappMode === "all"
+                      ? `${data?.count || 0} contatos extraídos (${data?.total_contacts || 0} total, ${data?.already_existing || 0} já existiam)`
+                      : whatsappMode === "group"
                       ? `${data?.count || 0} contatos extraídos do grupo ${data?.group || ""}`
                       : whatsappMode === "conversation"
                       ? `${data?.count || 0} contatos extraídos da conversa${data?.contact_name ? ` com ${data.contact_name}` : ""}`
@@ -420,7 +423,7 @@ export default function Prospecting() {
                     setEvolutionLoading(false);
                   }
                 }}
-                disabled={evolutionLoading || !selectedInstance || (whatsappMode === "group" ? !evolutionGroup : !evolutionPhone)}
+                disabled={evolutionLoading || !selectedInstance || (whatsappMode === "group" ? !evolutionGroup : whatsappMode === "all" ? false : !evolutionPhone)}
                 className="rounded-xl gradient-primary hover:opacity-90"
               >
                 {evolutionLoading ? <><Loader2 className="h-4 w-4 animate-spin mr-2" />Extraindo...</> : <><MessageCircle className="h-4 w-4 mr-2" />Extrair Contatos</>}

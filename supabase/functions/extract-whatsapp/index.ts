@@ -342,7 +342,99 @@ Deno.serve(async (req) => {
       });
     }
 
-    return new Response(JSON.stringify({ error: `Modo inválido: ${mode}. Use 'group', 'conversation' ou 'contact'.` }), {
+    // ============================================
+    // MODE: ALL - extract all contacts from the instance
+    // ============================================
+    if (mode === "all") {
+      console.log("Mode: all | Fetching all contacts from instance:", instance);
+
+      // 1. Fetch all contacts
+      const contactsResponse = await fetch(`${baseUrl}/chat/findContacts/${instance}`, {
+        method: "POST",
+        headers: { apikey: apiKey, "Content-Type": "application/json" },
+        body: JSON.stringify({ where: {} }),
+      });
+
+      if (!contactsResponse.ok) {
+        const errText = await contactsResponse.text();
+        console.error("Evolution contacts error:", contactsResponse.status, errText);
+        return new Response(JSON.stringify({ error: `Erro ao buscar contatos: ${contactsResponse.status}` }), {
+          status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const contactsData = await contactsResponse.json();
+      const contacts = Array.isArray(contactsData) ? contactsData : contactsData?.data || contactsData?.contacts || [];
+      console.log(`Found ${contacts.length} total contacts from API`);
+
+      // Filter only individual contacts (not groups)
+      const individualContacts = contacts.filter((c: any) => {
+        const id = c.id || c.jid || "";
+        return id.endsWith("@s.whatsapp.net") && !id.startsWith("status@");
+      });
+      console.log(`Filtered to ${individualContacts.length} individual contacts`);
+
+      if (individualContacts.length === 0) {
+        return new Response(JSON.stringify({ count: 0, message: "Nenhum contato encontrado na instância." }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      // Extract phones
+      const phones = individualContacts.map((c: any) => formatPhone(c.id || c.jid || "")).filter(Boolean);
+
+      // Deduplicate against existing leads
+      const { data: existingLeads } = await supabaseAdmin
+        .from("leads_raw").select("phone").eq("org_id", org_id).in("phone", phones.slice(0, 500));
+      
+      // If more than 500, fetch in batches
+      let allExistingPhones = new Set((existingLeads || []).map((l) => l.phone));
+      if (phones.length > 500) {
+        for (let i = 500; i < phones.length; i += 500) {
+          const batch = phones.slice(i, i + 500);
+          const { data: batchLeads } = await supabaseAdmin
+            .from("leads_raw").select("phone").eq("org_id", org_id).in("phone", batch);
+          (batchLeads || []).forEach((l) => allExistingPhones.add(l.phone));
+        }
+      }
+
+      const newLeads = individualContacts
+        .map((c: any) => {
+          const ph = formatPhone(c.id || c.jid || "");
+          if (!ph || allExistingPhones.has(ph)) return null;
+          return {
+            org_id,
+            name: c.pushName || c.name || c.verifiedName || c.notify || null,
+            phone: ph,
+            source: "whatsapp" as const,
+            status: "pending" as const,
+            enrichment_data: { extraction_type: "all_contacts", profile_pic: c.profilePictureUrl || null },
+          };
+        })
+        .filter(Boolean);
+
+      console.log(`${newLeads.length} new leads to insert (${allExistingPhones.size} already exist)`);
+
+      // Insert in batches of 500
+      let insertedCount = 0;
+      for (let i = 0; i < newLeads.length; i += 500) {
+        const batch = newLeads.slice(i, i + 500);
+        const { error: insertError } = await supabaseAdmin.from("leads_raw").insert(batch);
+        if (insertError) {
+          console.error("Insert error at batch", i, insertError);
+          return new Response(JSON.stringify({ error: insertError.message, partial_count: insertedCount }), {
+            status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+        insertedCount += batch.length;
+      }
+
+      return new Response(JSON.stringify({ count: insertedCount, total_contacts: individualContacts.length, already_existing: allExistingPhones.size }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    return new Response(JSON.stringify({ error: `Modo inválido: ${mode}. Use 'group', 'conversation', 'contact' ou 'all'.` }), {
       status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
 
