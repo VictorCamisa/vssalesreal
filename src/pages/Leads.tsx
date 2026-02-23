@@ -2,7 +2,7 @@ import { useEffect, useState, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
-import { Users, Search, Sparkles, ArrowRight, Trash2, Loader2 } from "lucide-react";
+import { Users, Search, Sparkles, ArrowRight, Trash2, Loader2, Download } from "lucide-react";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
@@ -174,22 +174,39 @@ export default function Leads() {
           </div>
         </div>
 
-        {selected.size > 0 && (
-          <div className="flex items-center gap-2 animate-fade-in">
-            <span className="text-xs text-muted-foreground font-medium px-2 py-1 rounded-lg bg-secondary/50">{selected.size} selecionados</span>
-            <Button size="sm" className="rounded-xl h-8 text-xs" onClick={handleEnrich} disabled={enriching}>
-              {enriching ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <Sparkles className="h-3 w-3 mr-1" />}
-              Enriquecer
-            </Button>
-            <Button size="sm" className="rounded-xl h-8 text-xs gradient-primary" onClick={handleConvertToCRM} disabled={converting}>
-              {converting ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <ArrowRight className="h-3 w-3 mr-1" />}
-              CRM
-            </Button>
-            <Button size="sm" variant="destructive" className="rounded-xl h-8 text-xs" onClick={handleDiscard}>
-              <Trash2 className="h-3 w-3 mr-1" />Descartar
-            </Button>
-          </div>
-        )}
+        <div className="flex items-center gap-2 flex-wrap">
+          <Button size="sm" variant="outline" className="rounded-xl h-8 text-xs" onClick={() => {
+            const rows = [["Nome", "Telefone", "Email", "Fonte", "Status"]];
+            filtered.forEach((l) => rows.push([l.name || "", l.phone || "", l.email || "", l.source, statusLabels[l.status] || l.status]));
+            const csv = rows.map((r) => r.map((v) => `"${v.replace(/"/g, '""')}"`).join(",")).join("\n");
+            const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = `leads_${new Date().toISOString().slice(0, 10)}.csv`;
+            a.click();
+            URL.revokeObjectURL(url);
+          }}>
+            <Download className="h-3 w-3 mr-1" />Exportar CSV
+          </Button>
+
+          {selected.size > 0 && (
+            <>
+              <span className="text-xs text-muted-foreground font-medium px-2 py-1 rounded-lg bg-secondary/50">{selected.size} selecionados</span>
+              <Button size="sm" className="rounded-xl h-8 text-xs" onClick={handleEnrich} disabled={enriching}>
+                {enriching ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <Sparkles className="h-3 w-3 mr-1" />}
+                Enriquecer
+              </Button>
+              <Button size="sm" className="rounded-xl h-8 text-xs gradient-primary" onClick={handleConvertToCRM} disabled={converting}>
+                {converting ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <ArrowRight className="h-3 w-3 mr-1" />}
+                CRM
+              </Button>
+              <Button size="sm" variant="destructive" className="rounded-xl h-8 text-xs" onClick={handleDiscard}>
+                <Trash2 className="h-3 w-3 mr-1" />Descartar
+              </Button>
+            </>
+          )}
+        </div>
       </div>
 
       {/* Filters */}
