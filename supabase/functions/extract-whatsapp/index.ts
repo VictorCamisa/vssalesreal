@@ -37,23 +37,31 @@ Deno.serve(async (req) => {
     }
 
     const body = await req.json();
-    const { org_id, mode = "group", group_name, phone } = body;
+    const { org_id, mode = "group", group_name, phone, instance_name } = body;
 
     if (!org_id) {
       return new Response(JSON.stringify({ error: "org_id is required" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-    const apiKey = Deno.env.get("EVOLUTION_API_KEY");
-    const evolutionUrl = Deno.env.get("EVOLUTION_API_URL");
+    // Get Evolution API credentials from integrations table
+    const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+    const { data: integration } = await supabaseAdmin
+      .from("integrations")
+      .select("api_key, endpoint_url")
+      .eq("org_id", org_id)
+      .eq("service_name", "evolution")
+      .single();
+
+    const apiKey = integration?.api_key || Deno.env.get("EVOLUTION_API_KEY");
+    const evolutionUrl = integration?.endpoint_url || Deno.env.get("EVOLUTION_API_URL");
     if (!apiKey || !evolutionUrl) {
-      return new Response(JSON.stringify({ error: "Evolution API não configurada. Adicione os secrets EVOLUTION_API_KEY e EVOLUTION_API_URL." }), {
+      return new Response(JSON.stringify({ error: "Evolution API não configurada. Vá em Configurações e adicione a API Key e URL." }), {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
     const baseUrl = evolutionUrl.replace(/\/$/, "");
-    const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
-    const instance = "default";
+    const instance = instance_name || "default";
 
     // ============================================
     // MODE: GROUP - extract participants from group
