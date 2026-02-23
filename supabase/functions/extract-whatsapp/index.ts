@@ -373,13 +373,11 @@ Deno.serve(async (req) => {
       }
 
       // Filter only individual contacts (not groups/broadcasts/status)
+      // Use remoteJid as the primary identifier (id is internal DB hash)
       const individualContacts = contacts.filter((c: any) => {
-        const id = c.id || c.jid || c.remoteJid || "";
-        // Exclude groups (@g.us), broadcasts (@broadcast), status updates, and newsletter
-        const isGroup = id.includes("@g.us") || id.includes("@broadcast") || id.includes("@newsletter") || id.startsWith("status@") || id === "status";
-        // Accept @s.whatsapp.net OR plain phone numbers (digits only)
-        const isIndividual = id.endsWith("@s.whatsapp.net") || /^\d{10,15}$/.test(id.replace(/@.*/, "").replace(/\D/g, ""));
-        return !isGroup && (isIndividual || (!id.includes("@") && id.length > 0));
+        const jid = c.remoteJid || c.jid || "";
+        // Only individual contacts ending with @s.whatsapp.net, exclude groups/broadcasts/status
+        return jid.endsWith("@s.whatsapp.net") && !jid.startsWith("0@") && !jid.startsWith("status@");
       });
       console.log(`Filtered to ${individualContacts.length} individual contacts`);
 
@@ -389,8 +387,8 @@ Deno.serve(async (req) => {
         });
       }
 
-      // Extract phones
-      const phones = individualContacts.map((c: any) => formatPhone(c.id || c.jid || c.remoteJid || "")).filter(Boolean);
+      // Extract phones from remoteJid
+      const phones = individualContacts.map((c: any) => formatPhone(c.remoteJid || c.jid || "")).filter(Boolean);
 
       // Deduplicate against existing leads
       const { data: existingLeads } = await supabaseAdmin
@@ -409,7 +407,7 @@ Deno.serve(async (req) => {
 
       const newLeads = individualContacts
         .map((c: any) => {
-          const ph = formatPhone(c.id || c.jid || c.remoteJid || "");
+          const ph = formatPhone(c.remoteJid || c.jid || "");
           if (!ph || allExistingPhones.has(ph)) return null;
           return {
             org_id,
