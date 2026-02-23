@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { Search, Globe, MessageCircle, Loader2, Plus } from "lucide-react";
+import { Search, Globe, MessageCircle, Loader2, Plus, Users2, MessageSquare, Contact } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
@@ -18,6 +18,8 @@ export default function Prospecting() {
   const [scrapingLoading, setScrapingLoading] = useState(false);
   const [evolutionGroup, setEvolutionGroup] = useState("");
   const [evolutionLoading, setEvolutionLoading] = useState(false);
+  const [whatsappMode, setWhatsappMode] = useState<"group" | "conversation" | "contact">("group");
+  const [evolutionPhone, setEvolutionPhone] = useState("");
   const [manualName, setManualName] = useState("");
   const [manualPhone, setManualPhone] = useState("");
   const [manualEmail, setManualEmail] = useState("");
@@ -157,19 +159,101 @@ export default function Prospecting() {
           <div className="glass rounded-2xl p-6 space-y-5">
             <div>
               <h2 className="text-lg font-semibold">Extração via Evolution API</h2>
-              <p className="text-sm text-muted-foreground mt-0.5">Extraia contatos de grupos do WhatsApp</p>
+              <p className="text-sm text-muted-foreground mt-0.5">Extraia contatos do WhatsApp por grupo, conversa ou contato</p>
             </div>
+
+            {/* Sub-options */}
+            <div className="flex gap-2">
+              {[
+                { key: "group" as const, label: "Grupo", icon: Users2 },
+                { key: "conversation" as const, label: "Conversa", icon: MessageSquare },
+                { key: "contact" as const, label: "Contato", icon: Contact },
+              ].map((opt) => (
+                <button
+                  key={opt.key}
+                  onClick={() => setWhatsappMode(opt.key)}
+                  className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-medium transition-all duration-200 border ${
+                    whatsappMode === opt.key
+                      ? "bg-primary/10 border-primary/30 text-primary"
+                      : "bg-secondary/30 border-border/30 text-muted-foreground hover:text-foreground hover:border-border/50"
+                  }`}
+                >
+                  <opt.icon className="h-3.5 w-3.5" />
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+
             <div className="space-y-4">
-              <div className="space-y-2">
-                <Label className="text-xs font-medium">Nome do grupo</Label>
-                <Input
-                  placeholder="Grupo de Vendas Regional"
-                  value={evolutionGroup}
-                  onChange={(e) => setEvolutionGroup(e.target.value)}
-                  className="rounded-xl bg-secondary/30 border-border/30"
-                />
-              </div>
-              <Button onClick={handleEvolution} disabled={evolutionLoading || !evolutionGroup} className="rounded-xl gradient-primary hover:opacity-90">
+              {whatsappMode === "group" && (
+                <div className="space-y-2">
+                  <Label className="text-xs font-medium">Nome do grupo</Label>
+                  <Input
+                    placeholder="Grupo de Vendas Regional"
+                    value={evolutionGroup}
+                    onChange={(e) => setEvolutionGroup(e.target.value)}
+                    className="rounded-xl bg-secondary/30 border-border/30"
+                  />
+                  <p className="text-[11px] text-muted-foreground">Busca parcial pelo nome do grupo na sua instância</p>
+                </div>
+              )}
+
+              {whatsappMode === "conversation" && (
+                <div className="space-y-2">
+                  <Label className="text-xs font-medium">Número do telefone</Label>
+                  <Input
+                    placeholder="+5511999999999"
+                    value={evolutionPhone}
+                    onChange={(e) => setEvolutionPhone(e.target.value)}
+                    className="rounded-xl bg-secondary/30 border-border/30"
+                  />
+                  <p className="text-[11px] text-muted-foreground">Extrai dados de contato de uma conversa direta</p>
+                </div>
+              )}
+
+              {whatsappMode === "contact" && (
+                <div className="space-y-2">
+                  <Label className="text-xs font-medium">Número do contato</Label>
+                  <Input
+                    placeholder="+5511999999999"
+                    value={evolutionPhone}
+                    onChange={(e) => setEvolutionPhone(e.target.value)}
+                    className="rounded-xl bg-secondary/30 border-border/30"
+                  />
+                  <p className="text-[11px] text-muted-foreground">Importa um contato diretamente pelo número</p>
+                </div>
+              )}
+
+              <Button
+                onClick={() => {
+                  if (whatsappMode === "group") {
+                    handleEvolution();
+                  } else {
+                    // For conversation/contact, add directly as lead
+                    if (!profile?.org_id || !evolutionPhone) return;
+                    setEvolutionLoading(true);
+                    const digits = evolutionPhone.replace(/\D/g, "");
+                    const phone = digits.startsWith("+") ? evolutionPhone : `+${digits}`;
+                    supabase.from("leads_raw").insert({
+                      org_id: profile.org_id,
+                      phone,
+                      source: "whatsapp" as const,
+                      status: "pending" as const,
+                      enrichment_data: { extraction_type: whatsappMode },
+                    }).then(({ error }) => {
+                      setEvolutionLoading(false);
+                      if (error) {
+                        toast({ title: "Erro", description: error.message, variant: "destructive" });
+                      } else {
+                        toast({ title: "Contato importado!", description: `${phone} adicionado como lead.` });
+                        setEvolutionPhone("");
+                      }
+                    });
+                  }
+                }}
+                disabled={evolutionLoading || (whatsappMode === "group" ? !evolutionGroup : !evolutionPhone)}
+                className="rounded-xl gradient-primary hover:opacity-90"
+              >
                 {evolutionLoading ? <><Loader2 className="h-4 w-4 animate-spin mr-2" />Extraindo...</> : <><MessageCircle className="h-4 w-4 mr-2" />Extrair Contatos</>}
               </Button>
             </div>
