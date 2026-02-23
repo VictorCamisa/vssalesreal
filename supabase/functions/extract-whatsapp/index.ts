@@ -34,22 +34,16 @@ Deno.serve(async (req) => {
 
     const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
-    // Get Evolution API credentials from integrations table
-    const { data: integration } = await supabaseAdmin
-      .from("integrations")
-      .select("api_key, endpoint_url")
-      .eq("org_id", org_id)
-      .eq("service_name", "evolution")
-      .single();
-
-    if (!integration?.api_key || !integration?.endpoint_url) {
-      return new Response(JSON.stringify({ error: "Evolution API não configurada. Vá em Configurações para adicionar URL e API Key." }), {
+    // Get Evolution API credentials from environment secrets
+    const apiKey = Deno.env.get("EVOLUTION_API_KEY");
+    const evolutionUrl = Deno.env.get("EVOLUTION_API_URL");
+    if (!apiKey || !evolutionUrl) {
+      return new Response(JSON.stringify({ error: "Evolution API não configurada. Adicione os secrets EVOLUTION_API_KEY e EVOLUTION_API_URL." }), {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    const baseUrl = integration.endpoint_url.replace(/\/$/, "");
-    const apiKey = integration.api_key;
+    const baseUrl = evolutionUrl.replace(/\/$/, "");
 
     console.log("Fetching groups from Evolution API:", baseUrl);
 
