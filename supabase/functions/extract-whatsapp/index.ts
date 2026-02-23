@@ -194,7 +194,18 @@ Deno.serve(async (req) => {
 
       if (messagesResponse.ok) {
         const messagesData = await messagesResponse.json();
-        const messages = Array.isArray(messagesData) ? messagesData : messagesData?.messages || [];
+        let messages: any[] = [];
+        if (Array.isArray(messagesData)) {
+          messages = messagesData;
+        } else if (messagesData?.messages && Array.isArray(messagesData.messages)) {
+          messages = messagesData.messages;
+        } else if (messagesData?.data && Array.isArray(messagesData.data)) {
+          messages = messagesData.data;
+        } else if (typeof messagesData === "object" && messagesData !== null) {
+          // Wrap single message object
+          messages = [messagesData];
+        }
+        console.log(`findMessages returned type=${typeof messagesData}, isArray=${Array.isArray(messagesData)}, parsed ${messages.length} messages`);
 
         // Extract phone numbers mentioned in messages
         const phoneRegex = /\+?\d{10,15}/g;
