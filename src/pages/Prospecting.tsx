@@ -43,6 +43,7 @@ export default function Prospecting() {
   const [qrCode, setQrCode] = useState("");
   const [qrLoading, setQrLoading] = useState(false);
   const [qrInstanceName, setQrInstanceName] = useState("");
+  const [connectionStatus, setConnectionStatus] = useState<"waiting" | "connected" | "error">("waiting");
 
   const formatPhone = (phone: string) => {
     const digits = phone.replace(/\D/g, "");
@@ -94,6 +95,7 @@ export default function Prospecting() {
         if (qr) {
           setQrCode(qr);
           setQrInstanceName(newInstanceName.trim());
+          setConnectionStatus("waiting");
           setQrDialogOpen(true);
         }
       }
@@ -114,6 +116,7 @@ export default function Prospecting() {
     setQrInstanceName(instanceName);
     setQrDialogOpen(true);
     setQrCode("");
+    setConnectionStatus("waiting");
     try {
       const { data, error } = await supabase.functions.invoke("manage-evolution", {
         body: { action: "qrcode", org_id: profile.org_id, instance_name: instanceName },
@@ -143,22 +146,41 @@ export default function Prospecting() {
     }
   };
 
-  // Poll status while QR dialog is open
+  // Poll status while QR dialog is open (every 3s) + auto-refresh QR every 25s
   useEffect(() => {
     if (!qrDialogOpen || !qrInstanceName || !profile?.org_id) return;
-    const interval = setInterval(async () => {
+
+    let qrRefreshCount = 0;
+
+    const statusInterval = setInterval(async () => {
       try {
         const { data } = await supabase.functions.invoke("manage-evolution", {
           body: { action: "status", org_id: profile.org_id, instance_name: qrInstanceName },
         });
         if (data?.state === "open") {
-          toast({ title: "WhatsApp conectado!", description: `Instância ${qrInstanceName} online.` });
-          setQrDialogOpen(false);
-          await fetchInstances();
+          setConnectionStatus("connected");
+          toast({ title: "✅ WhatsApp conectado!", description: `Instância ${qrInstanceName} online.` });
+          setTimeout(() => {
+            setQrDialogOpen(false);
+            fetchInstances();
+            setSelectedInstance(qrInstanceName);
+          }, 1500);
         }
       } catch { /* ignore */ }
-    }, 5000);
-    return () => clearInterval(interval);
+
+      // Auto-refresh QR every ~25s (8 cycles of 3s)
+      qrRefreshCount++;
+      if (qrRefreshCount % 8 === 0) {
+        try {
+          const { data } = await supabase.functions.invoke("manage-evolution", {
+            body: { action: "qrcode", org_id: profile.org_id, instance_name: qrInstanceName },
+          });
+          if (data?.qrcode) setQrCode(data.qrcode);
+        } catch { /* ignore */ }
+      }
+    }, 3000);
+
+    return () => clearInterval(statusInterval);
   }, [qrDialogOpen, qrInstanceName, profile?.org_id]);
 
   const handleScrape = async () => {
@@ -453,7 +475,15 @@ export default function Prospecting() {
             </DialogDescription>
           </DialogHeader>
           <div className="flex flex-col items-center py-4 space-y-4">
-            {qrLoading ? (
+            {connectionStatus === "connected" ? (
+              <div className="flex flex-col items-center gap-3 py-8">
+                <div className="h-16 w-16 rounded-full bg-success/15 flex items-center justify-center animate-pulse">
+                  <CheckCircle2 className="h-8 w-8 text-success" />
+                </div>
+                <p className="text-sm font-medium text-success">WhatsApp conectado com sucesso!</p>
+                <p className="text-xs text-muted-foreground">Fechando automaticamente...</p>
+              </div>
+            ) : qrLoading ? (
               <div className="flex flex-col items-center gap-3 py-8">
                 <Loader2 className="h-8 w-8 animate-spin text-primary" />
                 <p className="text-sm text-muted-foreground">Gerando QR Code...</p>
@@ -462,6 +492,10 @@ export default function Prospecting() {
               <>
                 <div className="bg-white p-4 rounded-2xl">
                   <img src={qrCode.startsWith("data:") ? qrCode : `data:image/png;base64,${qrCode}`} alt="QR Code WhatsApp" className="w-64 h-64" />
+                </div>
+                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <div className="h-2 w-2 rounded-full bg-warning animate-pulse" />
+                  Aguardando leitura do QR Code...
                 </div>
                 <p className="text-xs text-muted-foreground text-center">Abra o WhatsApp → Dispositivos conectados → Conectar dispositivo</p>
                 <Button variant="outline" size="sm" onClick={() => handleGetQR(qrInstanceName)} className="rounded-xl border-border/50">
