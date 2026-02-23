@@ -39,7 +39,7 @@ Deno.serve(async (req) => {
     const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
     const { data: integration } = await supabaseAdmin
       .from("integrations")
-      .select("api_key, endpoint_url")
+      .select("api_key, endpoint_url, config")
       .eq("org_id", org_id)
       .eq("service_name", "evolution")
       .single();
@@ -77,6 +77,18 @@ Deno.serve(async (req) => {
 
       const data = await response.json();
       console.log("Instance created:", JSON.stringify(data));
+
+      // Save instance name to org's integration config
+      const currentConfig = integration.config || {};
+      const orgInstances: string[] = (currentConfig as any).instances || [];
+      if (!orgInstances.includes(instance_name)) {
+        orgInstances.push(instance_name);
+      }
+      await supabaseAdmin
+        .from("integrations")
+        .update({ config: { ...(currentConfig as any), instances: orgInstances } })
+        .eq("org_id", org_id)
+        .eq("service_name", "evolution");
 
       return json({
         instance: data.instance,
@@ -131,6 +143,14 @@ Deno.serve(async (req) => {
     // ACTION: list - List all instances
     // ============================================
     if (action === "list") {
+      // Get org's registered instances from config
+      const currentConfig = (integration as any).config || {};
+      const orgInstances: string[] = currentConfig.instances || [];
+
+      if (orgInstances.length === 0) {
+        return json({ instances: [] });
+      }
+
       const response = await fetch(`${baseUrl}/instance/fetchInstances`, {
         method: "GET",
         headers: { apikey: apiKey },
@@ -143,11 +163,17 @@ Deno.serve(async (req) => {
       }
 
       const data = await response.json();
-      const instances = (Array.isArray(data) ? data : []).map((inst: any) => ({
-        name: inst.instance?.instanceName || inst.instanceName,
-        state: inst.instance?.state || inst.state || "unknown",
-        owner: inst.instance?.owner || null,
-      }));
+      const allInstances = Array.isArray(data) ? data : [];
+      const instances = allInstances
+        .filter((inst: any) => {
+          const name = inst.instance?.instanceName || inst.instanceName;
+          return orgInstances.includes(name);
+        })
+        .map((inst: any) => ({
+          name: inst.instance?.instanceName || inst.instanceName,
+          state: inst.instance?.state || inst.state || "unknown",
+          owner: inst.instance?.owner || null,
+        }));
 
       return json({ instances });
     }
@@ -167,6 +193,15 @@ Deno.serve(async (req) => {
         const errText = await response.text();
         return json({ error: `Erro ao deletar: ${response.status} - ${errText}` }, 502);
       }
+
+      // Remove instance from org config
+      const currentConfig = (integration as any).config || {};
+      const orgInstances: string[] = (currentConfig.instances || []).filter((n: string) => n !== instance_name);
+      await supabaseAdmin
+        .from("integrations")
+        .update({ config: { ...currentConfig, instances: orgInstances } })
+        .eq("org_id", org_id)
+        .eq("service_name", "evolution");
 
       return json({ success: true });
     }
