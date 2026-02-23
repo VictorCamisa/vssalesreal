@@ -3,7 +3,6 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import { Settings, Plug, TestTube, Eye, EyeOff, Loader2, CheckCircle2, XCircle } from "lucide-react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
@@ -17,6 +16,7 @@ type IntegrationConfig = {
   service: IntegrationService;
   label: string;
   description: string;
+  emoji: string;
   fields: { key: string; label: string; placeholder: string; type: "api_key" | "endpoint_url" }[];
 };
 
@@ -24,7 +24,8 @@ const integrationConfigs: IntegrationConfig[] = [
   {
     service: "firecrawl",
     label: "Firecrawl",
-    description: "Web scraping e extração de dados de sites",
+    description: "Web scraping e extração de dados",
+    emoji: "🔥",
     fields: [
       { key: "api_key", label: "API Key", placeholder: "fc-...", type: "api_key" },
     ],
@@ -32,7 +33,8 @@ const integrationConfigs: IntegrationConfig[] = [
   {
     service: "hasdata",
     label: "Hasdata",
-    description: "Scraping de Google Maps e diretórios",
+    description: "Scraping de Google Maps",
+    emoji: "📍",
     fields: [
       { key: "api_key", label: "API Key", placeholder: "Sua chave Hasdata", type: "api_key" },
     ],
@@ -40,7 +42,8 @@ const integrationConfigs: IntegrationConfig[] = [
   {
     service: "evolution",
     label: "Evolution API",
-    description: "Integração com WhatsApp para extração de contatos",
+    description: "WhatsApp para extração",
+    emoji: "💬",
     fields: [
       { key: "api_key", label: "API Key", placeholder: "Sua chave da instância", type: "api_key" },
       { key: "endpoint_url", label: "URL da Instância", placeholder: "https://sua-instancia.evolution-api.com", type: "endpoint_url" },
@@ -49,17 +52,19 @@ const integrationConfigs: IntegrationConfig[] = [
   {
     service: "perplexity",
     label: "Perplexity AI",
-    description: "Enriquecimento de leads com inteligência artificial",
+    description: "Enriquecimento com IA",
+    emoji: "🧠",
     fields: [
       { key: "api_key", label: "API Key", placeholder: "pplx-...", type: "api_key" },
     ],
   },
   {
     service: "supabase_external",
-    label: "Supabase Externo",
-    description: "Conecte o banco de dados do seu cliente",
+    label: "Banco Externo",
+    description: "Conecte o DB do cliente",
+    emoji: "🗄️",
     fields: [
-      { key: "endpoint_url", label: "Supabase URL", placeholder: "https://xxx.supabase.co", type: "endpoint_url" },
+      { key: "endpoint_url", label: "URL", placeholder: "https://xxx.supabase.co", type: "endpoint_url" },
       { key: "api_key", label: "Anon Key", placeholder: "eyJ...", type: "api_key" },
     ],
   },
@@ -126,17 +131,10 @@ export default function SettingsPage() {
       };
 
       if (data?.id) {
-        const { error } = await supabase
-          .from("integrations")
-          .update(payload)
-          .eq("id", data.id);
+        const { error } = await supabase.from("integrations").update(payload).eq("id", data.id);
         if (error) throw error;
       } else {
-        const { data: inserted, error } = await supabase
-          .from("integrations")
-          .insert(payload)
-          .select()
-          .single();
+        const { data: inserted, error } = await supabase.from("integrations").insert(payload).select().single();
         if (error) throw error;
         setIntegrations((prev) => ({
           ...prev,
@@ -144,7 +142,7 @@ export default function SettingsPage() {
         }));
       }
 
-      toast({ title: "Salvo!", description: "Integração atualizada com sucesso." });
+      toast({ title: "Salvo!", description: "Integração atualizada." });
     } catch (error: any) {
       toast({ title: "Erro", description: error.message, variant: "destructive" });
     } finally {
@@ -154,14 +152,10 @@ export default function SettingsPage() {
 
   const handleTest = async (service: IntegrationService) => {
     setTesting((p) => ({ ...p, [service]: true }));
-    // Simulate a connection test (real test would be an edge function)
     await new Promise((r) => setTimeout(r, 1500));
     const hasKey = integrations[service]?.api_key;
     if (hasKey) {
-      setIntegrations((prev) => ({
-        ...prev,
-        [service]: { ...prev[service], status: "active" },
-      }));
+      setIntegrations((prev) => ({ ...prev, [service]: { ...prev[service], status: "active" } }));
       toast({ title: "Conexão OK", description: `${service} está acessível.` });
     } else {
       toast({ title: "Falha", description: "Preencha a API key primeiro.", variant: "destructive" });
@@ -171,64 +165,62 @@ export default function SettingsPage() {
 
   const statusBadge = (service: string) => {
     const status = integrations[service]?.status;
-    if (status === "active") return <Badge className="bg-success/10 text-success border-success/20" variant="outline"><CheckCircle2 className="h-3 w-3 mr-1" />Ativo</Badge>;
-    if (status === "error") return <Badge className="bg-destructive/10 text-destructive border-destructive/20" variant="outline"><XCircle className="h-3 w-3 mr-1" />Erro</Badge>;
-    return <Badge variant="outline" className="text-muted-foreground">Pendente</Badge>;
+    if (status === "active") return <Badge className="bg-success/10 text-success border-success/30 rounded-lg text-[10px]" variant="outline"><CheckCircle2 className="h-3 w-3 mr-1" />Ativo</Badge>;
+    if (status === "error") return <Badge className="bg-destructive/10 text-destructive border-destructive/30 rounded-lg text-[10px]" variant="outline"><XCircle className="h-3 w-3 mr-1" />Erro</Badge>;
+    return <Badge variant="outline" className="text-muted-foreground rounded-lg text-[10px]">Pendente</Badge>;
   };
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
-          <Settings className="h-6 w-6 text-primary" />
-          Configurações
-        </h1>
-        <p className="text-muted-foreground text-sm mt-1">
-          Gerencie integrações e chaves de API
-        </p>
+    <div className="space-y-6 max-w-3xl">
+      <div className="flex items-center gap-3">
+        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/15">
+          <Settings className="h-5 w-5 text-primary" />
+        </div>
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">Configurações</h1>
+          <p className="text-muted-foreground text-sm">Integrações e chaves de API</p>
+        </div>
       </div>
 
       <Tabs defaultValue="firecrawl">
-        <TabsList className="bg-secondary/50">
+        <TabsList className="bg-secondary/30 rounded-xl p-1 h-auto flex-wrap">
           {integrationConfigs.map((cfg) => (
-            <TabsTrigger key={cfg.service} value={cfg.service} className="text-xs">
-              {cfg.label}
+            <TabsTrigger key={cfg.service} value={cfg.service} className="rounded-lg text-xs data-[state=active]:bg-primary/10 data-[state=active]:text-primary py-2 px-3">
+              <span className="mr-1.5">{cfg.emoji}</span>{cfg.label}
             </TabsTrigger>
           ))}
         </TabsList>
 
         {integrationConfigs.map((cfg) => (
-          <TabsContent key={cfg.service} value={cfg.service}>
-            <Card className="border-border/50 bg-card/80">
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 border border-primary/20">
-                      <Plug className="h-5 w-5 text-primary" />
-                    </div>
-                    <div>
-                      <CardTitle className="text-lg">{cfg.label}</CardTitle>
-                      <CardDescription>{cfg.description}</CardDescription>
-                    </div>
+          <TabsContent key={cfg.service} value={cfg.service} className="mt-4">
+            <div className="glass rounded-2xl p-6 space-y-5">
+              <div className="flex items-start justify-between">
+                <div className="flex items-center gap-3">
+                  <span className="text-3xl">{cfg.emoji}</span>
+                  <div>
+                    <h2 className="text-lg font-semibold">{cfg.label}</h2>
+                    <p className="text-sm text-muted-foreground">{cfg.description}</p>
                   </div>
-                  {statusBadge(cfg.service)}
                 </div>
-              </CardHeader>
-              <CardContent className="space-y-4">
+                {statusBadge(cfg.service)}
+              </div>
+
+              <div className="space-y-4">
                 {cfg.fields.map((field) => (
                   <div key={field.key} className="space-y-2">
-                    <Label>{field.label}</Label>
+                    <Label className="text-xs font-medium">{field.label}</Label>
                     <div className="relative">
                       <Input
                         type={field.type === "api_key" && !showKeys[cfg.service] ? "password" : "text"}
                         placeholder={field.placeholder}
                         value={getField(cfg.service, field.key)}
                         onChange={(e) => setField(cfg.service, field.key, e.target.value)}
+                        className="rounded-xl bg-secondary/30 border-border/30 pr-10"
                       />
                       {field.type === "api_key" && (
                         <button
                           type="button"
-                          className="absolute right-3 top-3 text-muted-foreground hover:text-foreground"
+                          className="absolute right-3 top-3 text-muted-foreground hover:text-foreground transition-colors"
                           onClick={() => setShowKeys((p) => ({ ...p, [cfg.service]: !p[cfg.service] }))}
                         >
                           {showKeys[cfg.service] ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
@@ -237,16 +229,17 @@ export default function SettingsPage() {
                     </div>
                   </div>
                 ))}
-                <div className="flex gap-3 pt-2">
-                  <Button onClick={() => handleSave(cfg.service)} disabled={saving[cfg.service]}>
-                    {saving[cfg.service] ? <><Loader2 className="h-4 w-4 animate-spin mr-2" />Salvando...</> : "Salvar"}
-                  </Button>
-                  <Button variant="outline" onClick={() => handleTest(cfg.service)} disabled={testing[cfg.service]}>
-                    {testing[cfg.service] ? <><Loader2 className="h-4 w-4 animate-spin mr-2" />Testando...</> : <><TestTube className="h-4 w-4 mr-2" />Testar Conexão</>}
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
+              </div>
+
+              <div className="flex gap-3 pt-1">
+                <Button onClick={() => handleSave(cfg.service)} disabled={saving[cfg.service]} className="rounded-xl gradient-primary hover:opacity-90">
+                  {saving[cfg.service] ? <><Loader2 className="h-4 w-4 animate-spin mr-2" />Salvando...</> : "Salvar"}
+                </Button>
+                <Button variant="outline" onClick={() => handleTest(cfg.service)} disabled={testing[cfg.service]} className="rounded-xl border-border/50">
+                  {testing[cfg.service] ? <><Loader2 className="h-4 w-4 animate-spin mr-2" />Testando...</> : <><TestTube className="h-4 w-4 mr-2" />Testar</>}
+                </Button>
+              </div>
+            </div>
           </TabsContent>
         ))}
       </Tabs>

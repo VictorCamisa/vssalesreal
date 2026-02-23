@@ -3,7 +3,6 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import { Kanban, Loader2, GripVertical } from "lucide-react";
-import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { DragDropContext, Droppable, Draggable, type DropResult } from "@hello-pangea/dnd";
 
@@ -61,7 +60,6 @@ export default function CRM() {
     const { draggableId, destination } = result;
     const newStageId = destination.droppableId;
 
-    // Optimistic update
     setOpportunities((prev) =>
       prev.map((o) => (o.id === draggableId ? { ...o, stage_id: newStageId } : o))
     );
@@ -88,35 +86,45 @@ export default function CRM() {
     );
   }
 
+  const stageColors = [
+    "border-t-primary/60",
+    "border-t-chart-4/60", 
+    "border-t-warning/60",
+    "border-t-success/60",
+    "border-t-destructive/60",
+  ];
+
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
-          <Kanban className="h-6 w-6 text-primary" />
-          CRM Pipeline
-        </h1>
-        <p className="text-muted-foreground text-sm mt-1">
-          Gestão de oportunidades com Kanban — {opportunities.length} oportunidades
-        </p>
+      <div className="flex items-center gap-3">
+        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/15">
+          <Kanban className="h-5 w-5 text-primary" />
+        </div>
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">CRM Pipeline</h1>
+          <p className="text-muted-foreground text-sm">
+            {opportunities.length} oportunidades em {stages.length} estágios
+          </p>
+        </div>
       </div>
 
       {stages.length === 0 ? (
-        <div className="rounded-lg border border-dashed border-border/50 p-12 text-center text-muted-foreground">
+        <div className="glass rounded-2xl p-12 text-center text-muted-foreground">
           Nenhum estágio configurado. Crie estágios no onboarding ou configurações.
         </div>
       ) : (
         <DragDropContext onDragEnd={handleDragEnd}>
-          <div className="flex gap-4 overflow-x-auto pb-4">
-            {stages.map((stage) => {
+          <div className="flex gap-4 overflow-x-auto pb-4 -mx-2 px-2">
+            {stages.map((stage, idx) => {
               const stageOpps = getOppsByStage(stage.id);
               return (
                 <div key={stage.id} className="flex-shrink-0 w-72">
-                  <div className="mb-3 flex items-center justify-between">
-                    <h3 className="text-sm font-semibold">{stage.name}</h3>
+                  <div className="mb-3 flex items-center justify-between px-1">
+                    <h3 className="text-sm font-bold">{stage.name}</h3>
                     <div className="flex items-center gap-2">
-                      <Badge variant="outline" className="text-xs">{stageOpps.length}</Badge>
+                      <Badge variant="outline" className="text-[10px] rounded-md font-medium">{stageOpps.length}</Badge>
                       {stageTotal(stage.id) > 0 && (
-                        <span className="text-xs text-muted-foreground">
+                        <span className="text-[10px] text-muted-foreground font-mono">
                           {formatCurrency(stageTotal(stage.id))}
                         </span>
                       )}
@@ -128,10 +136,10 @@ export default function CRM() {
                       <div
                         ref={provided.innerRef}
                         {...provided.droppableProps}
-                        className={`min-h-[200px] space-y-2 rounded-lg border p-2 transition-colors ${
+                        className={`min-h-[200px] space-y-2.5 rounded-2xl border-t-2 p-3 transition-all duration-200 ${stageColors[idx % stageColors.length]} ${
                           snapshot.isDraggingOver
-                            ? "border-primary/50 bg-primary/5"
-                            : "border-border/30 bg-secondary/20"
+                            ? "bg-primary/5 border border-primary/20"
+                            : "glass-subtle"
                         }`}
                       >
                         {stageOpps.map((opp, index) => (
@@ -142,40 +150,38 @@ export default function CRM() {
                                 {...provided.draggableProps}
                                 {...provided.dragHandleProps}
                               >
-                                <Card
-                                  className={`border-border/50 bg-card/90 transition-shadow ${
-                                    snapshot.isDragging ? "shadow-lg ring-1 ring-primary/30" : ""
+                                <div
+                                  className={`glass rounded-xl p-3.5 space-y-2 transition-all duration-200 cursor-grab active:cursor-grabbing ${
+                                    snapshot.isDragging ? "shadow-xl ring-1 ring-primary/30 scale-[1.02]" : "hover:border-primary/20"
                                   }`}
                                 >
-                                  <CardContent className="p-3 space-y-2">
-                                    <div className="flex items-start justify-between">
-                                      <p className="text-sm font-medium leading-tight">
-                                        {opp.lead?.name || "Lead sem nome"}
-                                      </p>
-                                      <GripVertical className="h-4 w-4 text-muted-foreground/50 shrink-0" />
-                                    </div>
-                                    {opp.lead?.phone && (
-                                      <p className="text-xs text-muted-foreground font-mono">
-                                        {opp.lead.phone}
-                                      </p>
-                                    )}
-                                    <div className="flex items-center gap-2">
-                                      {opp.value ? (
-                                        <Badge variant="outline" className="text-xs bg-success/10 text-success border-success/20">
-                                          {formatCurrency(opp.value)}
-                                        </Badge>
-                                      ) : null}
-                                      {opp.probability ? (
-                                        <Badge variant="outline" className="text-xs">
-                                          {opp.probability}%
-                                        </Badge>
-                                      ) : null}
-                                    </div>
-                                    {opp.notes && (
-                                      <p className="text-xs text-muted-foreground line-clamp-2">{opp.notes}</p>
-                                    )}
-                                  </CardContent>
-                                </Card>
+                                  <div className="flex items-start justify-between">
+                                    <p className="text-sm font-semibold leading-tight">
+                                      {opp.lead?.name || "Lead sem nome"}
+                                    </p>
+                                    <GripVertical className="h-3.5 w-3.5 text-muted-foreground/30 shrink-0" />
+                                  </div>
+                                  {opp.lead?.phone && (
+                                    <p className="text-[11px] text-muted-foreground font-mono">
+                                      {opp.lead.phone}
+                                    </p>
+                                  )}
+                                  <div className="flex items-center gap-1.5 flex-wrap">
+                                    {opp.value ? (
+                                      <Badge variant="outline" className="text-[10px] bg-success/10 text-success border-success/20 rounded-md">
+                                        {formatCurrency(opp.value)}
+                                      </Badge>
+                                    ) : null}
+                                    {opp.probability ? (
+                                      <Badge variant="outline" className="text-[10px] rounded-md">
+                                        {opp.probability}%
+                                      </Badge>
+                                    ) : null}
+                                  </div>
+                                  {opp.notes && (
+                                    <p className="text-[11px] text-muted-foreground line-clamp-2">{opp.notes}</p>
+                                  )}
+                                </div>
                               </div>
                             )}
                           </Draggable>

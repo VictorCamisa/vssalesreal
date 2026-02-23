@@ -26,10 +26,10 @@ type Lead = {
 };
 
 const statusColors: Record<string, string> = {
-  pending: "bg-warning/10 text-warning border-warning/20",
-  enriched: "bg-primary/10 text-primary border-primary/20",
-  converted: "bg-success/10 text-success border-success/20",
-  discarded: "bg-destructive/10 text-destructive border-destructive/20",
+  pending: "bg-warning/10 text-warning border-warning/30",
+  enriched: "bg-primary/10 text-primary border-primary/30",
+  converted: "bg-success/10 text-success border-success/30",
+  discarded: "bg-destructive/10 text-destructive border-destructive/30",
 };
 
 const statusLabels: Record<string, string> = {
@@ -116,7 +116,6 @@ export default function Leads() {
     if (!profile?.org_id || selected.size === 0) return;
     setConverting(true);
     try {
-      // Get first stage
       const { data: stages } = await supabase
         .from("crm_stages")
         .select("id")
@@ -161,36 +160,39 @@ export default function Leads() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 max-w-6xl">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
-            <Users className="h-6 w-6 text-primary" />
-            Leads Raspados
-          </h1>
-          <p className="text-muted-foreground text-sm mt-1">
-            Inbox de triagem e qualificação — {leads.length} leads
-          </p>
+        <div className="flex items-center gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/15">
+            <Users className="h-5 w-5 text-primary" />
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight">Leads</h1>
+            <p className="text-muted-foreground text-sm">
+              Triagem e qualificação — {leads.length} leads
+            </p>
+          </div>
         </div>
 
         {selected.size > 0 && (
-          <div className="flex items-center gap-2">
-            <span className="text-sm text-muted-foreground">{selected.size} selecionados</span>
-            <Button size="sm" onClick={handleEnrich} disabled={enriching}>
-              {enriching ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> : <Sparkles className="h-3.5 w-3.5 mr-1" />}
+          <div className="flex items-center gap-2 animate-fade-in">
+            <span className="text-xs text-muted-foreground font-medium px-2 py-1 rounded-lg bg-secondary/50">{selected.size} selecionados</span>
+            <Button size="sm" className="rounded-xl h-8 text-xs" onClick={handleEnrich} disabled={enriching}>
+              {enriching ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <Sparkles className="h-3 w-3 mr-1" />}
               Enriquecer
             </Button>
-            <Button size="sm" variant="default" onClick={handleConvertToCRM} disabled={converting}>
-              {converting ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> : <ArrowRight className="h-3.5 w-3.5 mr-1" />}
-              Enviar ao CRM
+            <Button size="sm" className="rounded-xl h-8 text-xs gradient-primary" onClick={handleConvertToCRM} disabled={converting}>
+              {converting ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <ArrowRight className="h-3 w-3 mr-1" />}
+              CRM
             </Button>
-            <Button size="sm" variant="destructive" onClick={handleDiscard}>
-              <Trash2 className="h-3.5 w-3.5 mr-1" />Descartar
+            <Button size="sm" variant="destructive" className="rounded-xl h-8 text-xs" onClick={handleDiscard}>
+              <Trash2 className="h-3 w-3 mr-1" />Descartar
             </Button>
           </div>
         )}
       </div>
 
+      {/* Filters */}
       <div className="flex flex-col gap-3 sm:flex-row">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
@@ -198,12 +200,12 @@ export default function Leads() {
             placeholder="Buscar por nome, telefone ou email..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-10"
+            className="pl-10 rounded-xl bg-secondary/30 border-border/30"
           />
         </div>
         <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="w-[140px]"><SelectValue placeholder="Status" /></SelectTrigger>
-          <SelectContent>
+          <SelectTrigger className="w-[140px] rounded-xl bg-secondary/30 border-border/30"><SelectValue placeholder="Status" /></SelectTrigger>
+          <SelectContent className="rounded-xl">
             <SelectItem value="all">Todos</SelectItem>
             <SelectItem value="pending">Pendente</SelectItem>
             <SelectItem value="enriched">Enriquecido</SelectItem>
@@ -212,8 +214,8 @@ export default function Leads() {
           </SelectContent>
         </Select>
         <Select value={sourceFilter} onValueChange={setSourceFilter}>
-          <SelectTrigger className="w-[130px]"><SelectValue placeholder="Fonte" /></SelectTrigger>
-          <SelectContent>
+          <SelectTrigger className="w-[130px] rounded-xl bg-secondary/30 border-border/30"><SelectValue placeholder="Fonte" /></SelectTrigger>
+          <SelectContent className="rounded-xl">
             <SelectItem value="all">Todas</SelectItem>
             <SelectItem value="web">Web</SelectItem>
             <SelectItem value="whatsapp">WhatsApp</SelectItem>
@@ -223,51 +225,52 @@ export default function Leads() {
         </Select>
       </div>
 
+      {/* Table */}
       {loading ? (
         <div className="flex justify-center p-12">
           <Loader2 className="h-6 w-6 animate-spin text-primary" />
         </div>
       ) : filtered.length === 0 ? (
-        <div className="rounded-lg border border-dashed border-border/50 p-12 text-center text-muted-foreground">
+        <div className="glass rounded-2xl p-12 text-center text-muted-foreground">
           {leads.length === 0
             ? "Nenhum lead capturado ainda. Inicie uma prospecção primeiro."
             : "Nenhum lead encontrado com os filtros aplicados."}
         </div>
       ) : (
-        <div className="rounded-lg border border-border/50 overflow-hidden">
+        <div className="glass rounded-2xl overflow-hidden">
           <Table>
             <TableHeader>
-              <TableRow>
+              <TableRow className="border-border/30 hover:bg-transparent">
                 <TableHead className="w-10">
                   <Checkbox
                     checked={selected.size === filtered.length && filtered.length > 0}
                     onCheckedChange={toggleAll}
                   />
                 </TableHead>
-                <TableHead>Nome</TableHead>
-                <TableHead>Telefone</TableHead>
-                <TableHead>Email</TableHead>
-                <TableHead>Fonte</TableHead>
-                <TableHead>Status</TableHead>
+                <TableHead className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Nome</TableHead>
+                <TableHead className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Telefone</TableHead>
+                <TableHead className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Email</TableHead>
+                <TableHead className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Fonte</TableHead>
+                <TableHead className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Status</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {filtered.map((lead) => (
-                <TableRow key={lead.id} className={selected.has(lead.id) ? "bg-primary/5" : ""}>
+                <TableRow key={lead.id} className={`border-border/20 transition-colors ${selected.has(lead.id) ? "bg-primary/5" : "hover:bg-secondary/30"}`}>
                   <TableCell>
                     <Checkbox
                       checked={selected.has(lead.id)}
                       onCheckedChange={() => toggleSelect(lead.id)}
                     />
                   </TableCell>
-                  <TableCell className="font-medium">{lead.name || "—"}</TableCell>
-                  <TableCell className="font-mono text-sm">{lead.phone || "—"}</TableCell>
-                  <TableCell>{lead.email || "—"}</TableCell>
+                  <TableCell className="font-medium text-sm">{lead.name || "—"}</TableCell>
+                  <TableCell className="font-mono text-xs text-muted-foreground">{lead.phone || "—"}</TableCell>
+                  <TableCell className="text-sm">{lead.email || "—"}</TableCell>
                   <TableCell>
-                    <Badge variant="outline" className="capitalize">{lead.source}</Badge>
+                    <Badge variant="outline" className="capitalize rounded-lg text-[10px] font-medium">{lead.source}</Badge>
                   </TableCell>
                   <TableCell>
-                    <Badge className={statusColors[lead.status] || ""} variant="outline">
+                    <Badge className={`${statusColors[lead.status] || ""} rounded-lg text-[10px] font-medium`} variant="outline">
                       {statusLabels[lead.status] || lead.status}
                     </Badge>
                   </TableCell>
