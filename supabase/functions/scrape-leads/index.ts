@@ -59,24 +59,28 @@ Deno.serve(async (req) => {
       },
       body: JSON.stringify({
         url: formattedUrl,
-        formats: [{ type: "json", prompt: `Extract all contact information (name, phone, email, company, role) from this page. ${keywords ? `Focus on: ${keywords}` : ""}`, schema: {
-          type: "object",
-          properties: {
-            contacts: {
-              type: "array",
-              items: {
-                type: "object",
-                properties: {
-                  name: { type: "string" },
-                  phone: { type: "string" },
-                  email: { type: "string" },
-                  company: { type: "string" },
-                  role: { type: "string" },
+        formats: ["extract"],
+        extract: {
+          prompt: `Extract all contact information (name, phone, email, company, role) from this page. ${keywords ? `Focus on: ${keywords}` : ""}`,
+          schema: {
+            type: "object",
+            properties: {
+              contacts: {
+                type: "array",
+                items: {
+                  type: "object",
+                  properties: {
+                    name: { type: "string" },
+                    phone: { type: "string" },
+                    email: { type: "string" },
+                    company: { type: "string" },
+                    role: { type: "string" },
+                  },
                 },
               },
             },
           },
-        }}],
+        },
         onlyMainContent: true,
       }),
     });
@@ -94,9 +98,9 @@ Deno.serve(async (req) => {
 
     // Extract contacts from JSON extraction
     let contacts: any[] = [];
-    const jsonData = firecrawlData?.data?.json;
-    if (jsonData?.contacts && Array.isArray(jsonData.contacts)) {
-      contacts = jsonData.contacts;
+    const extractData = firecrawlData?.data?.extract || firecrawlData?.extract;
+    if (extractData?.contacts && Array.isArray(extractData.contacts)) {
+      contacts = extractData.contacts;
     }
 
     if (contacts.length === 0) {
