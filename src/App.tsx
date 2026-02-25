@@ -36,15 +36,6 @@ function AppRoutes() {
     );
   }
 
-  if (!profile?.org_id) {
-    return (
-      <Routes>
-        <Route path="/onboarding" element={<Onboarding />} />
-        <Route path="*" element={<Navigate to="/onboarding" replace />} />
-      </Routes>
-    );
-  }
-
   return (
     <Routes>
       <Route element={<AppLayout />}>

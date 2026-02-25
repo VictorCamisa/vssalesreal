@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useAuth } from "@/contexts/AuthContext";
+import { OnboardingDialog } from "@/components/OnboardingDialog";
 import {
   Sidebar,
   SidebarContent,
@@ -82,7 +83,10 @@ export function AppSidebar() {
             {profile?.full_name?.charAt(0)?.toUpperCase() || "U"}
           </div>
           <div className="flex-1 min-w-0 group-data-[collapsible=icon]:hidden">
-            <p className="text-xs font-semibold truncate">{profile?.full_name || "Usuário"}</p>
+            <div className="flex items-center gap-1.5">
+              <p className="text-xs font-semibold truncate">{profile?.full_name || "Usuário"}</p>
+              <OnboardingDialog />
+            </div>
             <p className="text-[10px] text-muted-foreground truncate">Admin</p>
           </div>
           <Button
