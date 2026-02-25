@@ -6,6 +6,12 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
+const json = (data: unknown, status = 200) =>
+  new Response(JSON.stringify(data), {
+    status,
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
+
 const formatPhone = (jid: string) => {
   const digits = jid.replace(/@.*/, "").replace(/\D/g, "");
   return digits ? `+${digits}` : null;
@@ -24,26 +30,19 @@ Deno.serve(async (req) => {
     const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
     const authHeader = req.headers.get("authorization");
-    if (!authHeader?.startsWith("Bearer ")) {
-      return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-    }
+    if (!authHeader?.startsWith("Bearer ")) return json({ error: "Unauthorized" }, 401);
 
     const supabaseUser = createClient(SUPABASE_URL, Deno.env.get("SUPABASE_ANON_KEY")!, {
       global: { headers: { Authorization: authHeader } },
     });
     const { data: { user }, error: authError } = await supabaseUser.auth.getUser();
-    if (authError || !user) {
-      return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-    }
+    if (authError || !user) return json({ error: "Unauthorized" }, 401);
 
     const body = await req.json();
-    const { org_id, mode = "group", group_name, phone, instance_name } = body;
+    const { org_id, mode = "group", group_ids, instance_name } = body;
 
-    if (!org_id) {
-      return new Response(JSON.stringify({ error: "org_id is required" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-    }
+    if (!org_id) return json({ error: "org_id is required" }, 400);
 
-    // Get Evolution API credentials from integrations table
     const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
     const { data: integration } = await supabaseAdmin
       .from("integrations")
@@ -55,23 +54,17 @@ Deno.serve(async (req) => {
     const apiKey = integration?.api_key || Deno.env.get("EVOLUTION_API_KEY");
     const evolutionUrl = integration?.endpoint_url || Deno.env.get("EVOLUTION_API_URL");
     if (!apiKey || !evolutionUrl) {
-      return new Response(JSON.stringify({ error: "Evolution API não configurada. Vá em Configurações e adicione a API Key e URL." }), {
-        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return json({ error: "Evolution API não configurada. Vá em Configurações e adicione a API Key e URL." }, 400);
     }
 
     const baseUrl = evolutionUrl.replace(/\/$/, "");
     const instance = instance_name || "default";
 
     // ============================================
-    // MODE: GROUP - extract participants from group
+    // MODE: list_groups - Return all groups for selection
     // ============================================
-    if (mode === "group") {
-      if (!group_name) {
-        return new Response(JSON.stringify({ error: "group_name is required for group mode" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-      }
-
-      console.log("Mode: group | Fetching groups from:", baseUrl);
+    if (mode === "list_groups") {
+      console.log("Mode: list_groups | Fetching groups from:", baseUrl);
 
       const groupsResponse = await fetch(`${baseUrl}/group/fetchAllGroups/${instance}`, {
         method: "GET",
@@ -81,274 +74,103 @@ Deno.serve(async (req) => {
       if (!groupsResponse.ok) {
         const errText = await groupsResponse.text();
         console.error("Evolution groups error:", groupsResponse.status, errText);
-        return new Response(JSON.stringify({ error: `Evolution API error: ${groupsResponse.status}` }), {
-          status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
+        return json({ error: `Erro ao buscar grupos: ${groupsResponse.status}` }, 502);
       }
 
       const groups = await groupsResponse.json();
-      const targetGroup = (Array.isArray(groups) ? groups : []).find(
-        (g: any) => g.subject?.toLowerCase().includes(group_name.toLowerCase())
-      );
+      const groupList = (Array.isArray(groups) ? groups : []).map((g: any) => ({
+        id: g.id,
+        name: g.subject || g.name || "Sem nome",
+        size: g.size || g.participants?.length || 0,
+      }));
 
-      if (!targetGroup) {
-        return new Response(JSON.stringify({ error: `Grupo "${group_name}" não encontrado. Disponíveis: ${(groups || []).slice(0, 5).map((g: any) => g.subject).join(", ")}` }), {
-          status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
+      return json({ groups: groupList });
+    }
+
+    // ============================================
+    // MODE: group - Extract participants from selected groups
+    // ============================================
+    if (mode === "group") {
+      if (!group_ids || !Array.isArray(group_ids) || group_ids.length === 0) {
+        return json({ error: "group_ids (array) is required for group mode" }, 400);
       }
 
-      console.log("Found group:", targetGroup.subject);
+      console.log("Mode: group | Extracting from groups:", group_ids.length);
 
-      const participantsResponse = await fetch(`${baseUrl}/group/participants/${instance}?groupJid=${targetGroup.id}`, {
+      // Fetch all groups to get metadata
+      const groupsResponse = await fetch(`${baseUrl}/group/fetchAllGroups/${instance}`, {
         method: "GET",
         headers: { apikey: apiKey },
       });
 
-      if (!participantsResponse.ok) {
-        return new Response(JSON.stringify({ error: "Erro ao buscar participantes do grupo." }), {
-          status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      if (!groupsResponse.ok) {
+        return json({ error: `Erro ao buscar grupos: ${groupsResponse.status}` }, 502);
+      }
+
+      const allGroups = await groupsResponse.json();
+      const groupsArr = Array.isArray(allGroups) ? allGroups : [];
+
+      let totalNew = 0;
+      let totalParticipants = 0;
+      const groupNames: string[] = [];
+
+      for (const groupId of group_ids) {
+        const targetGroup = groupsArr.find((g: any) => g.id === groupId);
+        const groupName = targetGroup?.subject || groupId;
+        groupNames.push(groupName);
+
+        const participantsResponse = await fetch(`${baseUrl}/group/participants/${instance}?groupJid=${groupId}`, {
+          method: "GET",
+          headers: { apikey: apiKey },
         });
-      }
 
-      const participantsData = await participantsResponse.json();
-      const participants = participantsData?.participants || participantsData || [];
+        if (!participantsResponse.ok) {
+          console.error(`Failed to get participants for ${groupId}`);
+          continue;
+        }
 
-      if (!Array.isArray(participants) || participants.length === 0) {
-        return new Response(JSON.stringify({ count: 0, message: "Nenhum participante encontrado." }), {
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
+        const participantsData = await participantsResponse.json();
+        const participants = participantsData?.participants || participantsData || [];
+        if (!Array.isArray(participants)) continue;
 
-      const phones = participants.map((p: any) => formatPhone(p.id || "")).filter(Boolean);
-      const { data: existingLeads } = await supabaseAdmin
-        .from("leads_raw").select("phone").eq("org_id", org_id).in("phone", phones);
-      const existingPhones = new Set((existingLeads || []).map((l) => l.phone));
+        totalParticipants += participants.length;
 
-      const newLeads = participants
-        .map((p: any) => {
-          const ph = formatPhone(p.id || "");
-          if (!ph || existingPhones.has(ph)) return null;
-          return {
-            org_id,
-            name: p.name || p.notify || null,
-            phone: ph,
-            source: "whatsapp" as const,
-            status: "pending" as const,
-            enrichment_data: { group: targetGroup.subject, group_id: targetGroup.id, extraction_type: "group" },
-          };
-        })
-        .filter(Boolean);
+        const phones = participants.map((p: any) => formatPhone(p.id || "")).filter(Boolean);
+        const { data: existingLeads } = await supabaseAdmin
+          .from("leads_raw").select("phone").eq("org_id", org_id).in("phone", phones);
+        const existingPhones = new Set((existingLeads || []).map((l) => l.phone));
 
-      if (newLeads.length > 0) {
-        const { error: insertError } = await supabaseAdmin.from("leads_raw").insert(newLeads);
-        if (insertError) {
-          console.error("Insert error:", insertError);
-          return new Response(JSON.stringify({ error: insertError.message }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        const newLeads = participants
+          .map((p: any) => {
+            const ph = formatPhone(p.id || "");
+            if (!ph || existingPhones.has(ph)) return null;
+            return {
+              org_id,
+              name: p.name || p.notify || null,
+              phone: ph,
+              source: "whatsapp" as const,
+              status: "pending" as const,
+              enrichment_data: { group: groupName, group_id: groupId, extraction_type: "group" },
+            };
+          })
+          .filter(Boolean);
+
+        if (newLeads.length > 0) {
+          const { error: insertError } = await supabaseAdmin.from("leads_raw").insert(newLeads);
+          if (insertError) console.error("Insert error:", insertError);
+          else totalNew += newLeads.length;
         }
       }
 
-      return new Response(JSON.stringify({ count: newLeads.length, total_participants: participants.length, group: targetGroup.subject }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    // ==================================================
-    // MODE: CONVERSATION - extract contacts from a chat
-    // ==================================================
-    if (mode === "conversation") {
-      if (!phone) {
-        return new Response(JSON.stringify({ error: "phone is required for conversation mode" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-      }
-
-      const remoteJid = formatJid(phone);
-      console.log("Mode: conversation | Fetching messages with:", remoteJid);
-
-      // 1. Get contact profile info
-      const contactResponse = await fetch(`${baseUrl}/chat/findContacts/${instance}`, {
-        method: "POST",
-        headers: { apikey: apiKey, "Content-Type": "application/json" },
-        body: JSON.stringify({ where: { id: remoteJid } }),
-      });
-
-      let contactName: string | null = null;
-      if (contactResponse.ok) {
-        const contacts = await contactResponse.json();
-        const contact = Array.isArray(contacts) ? contacts[0] : contacts;
-        contactName = contact?.pushName || contact?.name || contact?.verifiedName || null;
-        console.log("Contact found:", contactName);
-      }
-
-      // 2. Fetch messages from the conversation to extract mentioned numbers
-      const messagesResponse = await fetch(`${baseUrl}/chat/findMessages/${instance}`, {
-        method: "POST",
-        headers: { apikey: apiKey, "Content-Type": "application/json" },
-        body: JSON.stringify({
-          where: { key: { remoteJid } },
-          limit: 200,
-        }),
-      });
-
-      let extractedPhones = new Set<string>();
-      const formattedPhone = formatPhone(remoteJid);
-      if (formattedPhone) extractedPhones.add(formattedPhone);
-
-      if (messagesResponse.ok) {
-        const messagesData = await messagesResponse.json();
-        let messages: any[] = [];
-        if (Array.isArray(messagesData)) {
-          messages = messagesData;
-        } else if (messagesData?.messages && Array.isArray(messagesData.messages)) {
-          messages = messagesData.messages;
-        } else if (messagesData?.data && Array.isArray(messagesData.data)) {
-          messages = messagesData.data;
-        } else if (typeof messagesData === "object" && messagesData !== null) {
-          // Wrap single message object
-          messages = [messagesData];
-        }
-        console.log(`findMessages returned type=${typeof messagesData}, isArray=${Array.isArray(messagesData)}, parsed ${messages.length} messages`);
-
-        // Extract phone numbers mentioned in messages
-        const phoneRegex = /\+?\d{10,15}/g;
-        for (const msg of messages) {
-          const text = msg?.message?.conversation || msg?.message?.extendedTextMessage?.text || "";
-          const vcard = msg?.message?.contactMessage?.vcard || msg?.message?.contactsArrayMessage?.contacts?.map((c: any) => c.vcard).join(" ") || "";
-
-          const combined = `${text} ${vcard}`;
-          const matches = combined.match(phoneRegex);
-          if (matches) {
-            for (const m of matches) {
-              const ph = formatPhone(m);
-              if (ph) extractedPhones.add(ph);
-            }
-          }
-
-          // Also extract from vCard TEL fields
-          const telMatches = vcard.match(/TEL[^:]*:([+\d\s-]+)/gi);
-          if (telMatches) {
-            for (const t of telMatches) {
-              const num = t.replace(/TEL[^:]*:/i, "").trim();
-              const ph = formatPhone(num);
-              if (ph) extractedPhones.add(ph);
-            }
-          }
-        }
-
-        console.log(`Extracted ${extractedPhones.size} unique phones from conversation`);
-      }
-
-      // 3. Deduplicate and insert
-      const phonesArr = Array.from(extractedPhones);
-      const { data: existingLeads } = await supabaseAdmin
-        .from("leads_raw").select("phone").eq("org_id", org_id).in("phone", phonesArr);
-      const existingPhones = new Set((existingLeads || []).map((l) => l.phone));
-
-      const newLeads = phonesArr
-        .filter((ph) => !existingPhones.has(ph))
-        .map((ph) => ({
-          org_id,
-          name: ph === formattedPhone ? contactName : null,
-          phone: ph,
-          source: "whatsapp" as const,
-          status: "pending" as const,
-          enrichment_data: { extraction_type: "conversation", conversation_with: formattedPhone },
-        }));
-
-      if (newLeads.length > 0) {
-        const { error: insertError } = await supabaseAdmin.from("leads_raw").insert(newLeads);
-        if (insertError) {
-          console.error("Insert error:", insertError);
-          return new Response(JSON.stringify({ error: insertError.message }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-        }
-      }
-
-      return new Response(JSON.stringify({ count: newLeads.length, total_found: extractedPhones.size, contact_name: contactName }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return json({ count: totalNew, total_participants: totalParticipants, groups: groupNames });
     }
 
     // ============================================
-    // MODE: CONTACT - import a single contact
+    // MODE: list_conversations - Return all chats (name + phone)
     // ============================================
-    if (mode === "contact") {
-      if (!phone) {
-        return new Response(JSON.stringify({ error: "phone is required for contact mode" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-      }
+    if (mode === "list_conversations") {
+      console.log("Mode: list_conversations | Fetching all chats from:", instance);
 
-      const remoteJid = formatJid(phone);
-      console.log("Mode: contact | Fetching contact:", remoteJid);
-
-      // Fetch contact info from Evolution
-      const contactResponse = await fetch(`${baseUrl}/chat/findContacts/${instance}`, {
-        method: "POST",
-        headers: { apikey: apiKey, "Content-Type": "application/json" },
-        body: JSON.stringify({ where: { id: remoteJid } }),
-      });
-
-      let contactName: string | null = null;
-      let profilePicUrl: string | null = null;
-
-      if (contactResponse.ok) {
-        const contacts = await contactResponse.json();
-        const contact = Array.isArray(contacts) ? contacts[0] : contacts;
-        contactName = contact?.pushName || contact?.name || contact?.verifiedName || null;
-        profilePicUrl = contact?.profilePictureUrl || null;
-        console.log("Contact found:", contactName);
-      }
-
-      // Also try to fetch profile picture
-      try {
-        const picResponse = await fetch(`${baseUrl}/chat/fetchProfilePictureUrl/${instance}`, {
-          method: "POST",
-          headers: { apikey: apiKey, "Content-Type": "application/json" },
-          body: JSON.stringify({ number: phone.replace(/\D/g, "") }),
-        });
-        if (picResponse.ok) {
-          const picData = await picResponse.json();
-          profilePicUrl = picData?.profilePictureUrl || picData?.url || profilePicUrl;
-        }
-      } catch (_) { /* ignore */ }
-
-      const formattedPhone = formatPhone(remoteJid);
-      if (!formattedPhone) {
-        return new Response(JSON.stringify({ error: "Número inválido." }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-      }
-
-      // Check if already exists
-      const { data: existing } = await supabaseAdmin
-        .from("leads_raw").select("id").eq("org_id", org_id).eq("phone", formattedPhone).limit(1);
-
-      if (existing && existing.length > 0) {
-        return new Response(JSON.stringify({ count: 0, message: "Contato já existe na base.", contact_name: contactName }), {
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-
-      const { error: insertError } = await supabaseAdmin.from("leads_raw").insert({
-        org_id,
-        name: contactName,
-        phone: formattedPhone,
-        source: "whatsapp" as const,
-        status: "pending" as const,
-        enrichment_data: { extraction_type: "contact", profile_pic: profilePicUrl },
-      });
-
-      if (insertError) {
-        console.error("Insert error:", insertError);
-        return new Response(JSON.stringify({ error: insertError.message }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-      }
-
-      return new Response(JSON.stringify({ count: 1, contact_name: contactName, phone: formattedPhone }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    // ============================================
-    // MODE: ALL - extract all contacts from the instance
-    // ============================================
-    if (mode === "all") {
-      console.log("Mode: all | Fetching all contacts from instance:", instance);
-
-      // 1. Fetch all contacts
       const contactsResponse = await fetch(`${baseUrl}/chat/findContacts/${instance}`, {
         method: "POST",
         headers: { apikey: apiKey, "Content-Type": "application/json" },
@@ -356,53 +178,59 @@ Deno.serve(async (req) => {
       });
 
       if (!contactsResponse.ok) {
-        const errText = await contactsResponse.text();
-        console.error("Evolution contacts error:", contactsResponse.status, errText);
-        return new Response(JSON.stringify({ error: `Erro ao buscar contatos: ${contactsResponse.status}` }), {
-          status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
+        return json({ error: `Erro ao buscar conversas: ${contactsResponse.status}` }, 502);
       }
 
       const contactsData = await contactsResponse.json();
       const contacts = Array.isArray(contactsData) ? contactsData : contactsData?.data || contactsData?.contacts || [];
-      console.log(`Found ${contacts.length} total contacts from API`);
 
-      // Log sample to debug contact format
-      if (contacts.length > 0) {
-        console.log("Sample contacts (first 3):", JSON.stringify(contacts.slice(0, 3).map((c: any) => ({ id: c.id, jid: c.jid, remoteJid: c.remoteJid, pushName: c.pushName, name: c.name }))));
+      const conversations = contacts
+        .filter((c: any) => {
+          const jid = c.remoteJid || c.jid || "";
+          return jid.endsWith("@s.whatsapp.net") && !jid.startsWith("0@") && !jid.startsWith("status@");
+        })
+        .map((c: any) => ({
+          phone: formatPhone(c.remoteJid || c.jid || ""),
+          name: c.pushName || c.name || c.verifiedName || c.notify || null,
+        }))
+        .filter((c: any) => c.phone);
+
+      return json({ conversations });
+    }
+
+    // ============================================
+    // MODE: conversation - Extract ALL conversations as leads
+    // ============================================
+    if (mode === "conversation") {
+      console.log("Mode: conversation | Extracting all conversations from:", instance);
+
+      const contactsResponse = await fetch(`${baseUrl}/chat/findContacts/${instance}`, {
+        method: "POST",
+        headers: { apikey: apiKey, "Content-Type": "application/json" },
+        body: JSON.stringify({ where: {} }),
+      });
+
+      if (!contactsResponse.ok) {
+        return json({ error: `Erro ao buscar conversas: ${contactsResponse.status}` }, 502);
       }
 
-      // Filter only individual contacts (not groups/broadcasts/status)
-      // Use remoteJid as the primary identifier (id is internal DB hash)
+      const contactsData = await contactsResponse.json();
+      const contacts = Array.isArray(contactsData) ? contactsData : contactsData?.data || contactsData?.contacts || [];
+
       const individualContacts = contacts.filter((c: any) => {
         const jid = c.remoteJid || c.jid || "";
-        // Only individual contacts ending with @s.whatsapp.net, exclude groups/broadcasts/status
         return jid.endsWith("@s.whatsapp.net") && !jid.startsWith("0@") && !jid.startsWith("status@");
       });
-      console.log(`Filtered to ${individualContacts.length} individual contacts`);
 
-      if (individualContacts.length === 0) {
-        return new Response(JSON.stringify({ count: 0, message: "Nenhum contato encontrado na instância." }), {
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-
-      // Extract phones from remoteJid
       const phones = individualContacts.map((c: any) => formatPhone(c.remoteJid || c.jid || "")).filter(Boolean);
 
-      // Deduplicate against existing leads
-      const { data: existingLeads } = await supabaseAdmin
-        .from("leads_raw").select("phone").eq("org_id", org_id).in("phone", phones.slice(0, 500));
-      
-      // If more than 500, fetch in batches
-      let allExistingPhones = new Set((existingLeads || []).map((l) => l.phone));
-      if (phones.length > 500) {
-        for (let i = 500; i < phones.length; i += 500) {
-          const batch = phones.slice(i, i + 500);
-          const { data: batchLeads } = await supabaseAdmin
-            .from("leads_raw").select("phone").eq("org_id", org_id).in("phone", batch);
-          (batchLeads || []).forEach((l) => allExistingPhones.add(l.phone));
-        }
+      // Deduplicate in batches
+      let allExistingPhones = new Set<string | null>();
+      for (let i = 0; i < phones.length; i += 500) {
+        const batch = phones.slice(i, i + 500);
+        const { data: existingLeads } = await supabaseAdmin
+          .from("leads_raw").select("phone").eq("org_id", org_id).in("phone", batch);
+        (existingLeads || []).forEach((l) => allExistingPhones.add(l.phone));
       }
 
       const newLeads = individualContacts
@@ -415,40 +243,94 @@ Deno.serve(async (req) => {
             phone: ph,
             source: "whatsapp" as const,
             status: "pending" as const,
-            enrichment_data: { extraction_type: "all_contacts", profile_pic: c.profilePictureUrl || null },
+            enrichment_data: { extraction_type: "conversation" },
           };
         })
         .filter(Boolean);
 
-      console.log(`${newLeads.length} new leads to insert (${allExistingPhones.size} already exist)`);
-
-      // Insert in batches of 500
       let insertedCount = 0;
       for (let i = 0; i < newLeads.length; i += 500) {
         const batch = newLeads.slice(i, i + 500);
         const { error: insertError } = await supabaseAdmin.from("leads_raw").insert(batch);
         if (insertError) {
           console.error("Insert error at batch", i, insertError);
-          return new Response(JSON.stringify({ error: insertError.message, partial_count: insertedCount }), {
-            status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
-          });
+          return json({ error: insertError.message, partial_count: insertedCount }, 500);
         }
         insertedCount += batch.length;
       }
 
-      return new Response(JSON.stringify({ count: insertedCount, total_contacts: individualContacts.length, already_existing: allExistingPhones.size }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return json({ count: insertedCount, total_conversations: individualContacts.length, already_existing: allExistingPhones.size });
     }
 
-    return new Response(JSON.stringify({ error: `Modo inválido: ${mode}. Use 'group', 'conversation', 'contact' ou 'all'.` }), {
-      status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    // ============================================
+    // MODE: contact - Import all saved contacts
+    // ============================================
+    if (mode === "contact") {
+      console.log("Mode: contact | Fetching all saved contacts from:", instance);
+
+      const contactsResponse = await fetch(`${baseUrl}/chat/findContacts/${instance}`, {
+        method: "POST",
+        headers: { apikey: apiKey, "Content-Type": "application/json" },
+        body: JSON.stringify({ where: {} }),
+      });
+
+      if (!contactsResponse.ok) {
+        return json({ error: `Erro ao buscar contatos: ${contactsResponse.status}` }, 502);
+      }
+
+      const contactsData = await contactsResponse.json();
+      const contacts = Array.isArray(contactsData) ? contactsData : contactsData?.data || contactsData?.contacts || [];
+
+      // Saved contacts are ones that have a name (pushName/name/verifiedName)
+      const savedContacts = contacts.filter((c: any) => {
+        const jid = c.remoteJid || c.jid || "";
+        const hasName = c.pushName || c.name || c.verifiedName;
+        return jid.endsWith("@s.whatsapp.net") && !jid.startsWith("0@") && !jid.startsWith("status@") && hasName;
+      });
+
+      const phones = savedContacts.map((c: any) => formatPhone(c.remoteJid || c.jid || "")).filter(Boolean);
+
+      let allExistingPhones = new Set<string | null>();
+      for (let i = 0; i < phones.length; i += 500) {
+        const batch = phones.slice(i, i + 500);
+        const { data: existingLeads } = await supabaseAdmin
+          .from("leads_raw").select("phone").eq("org_id", org_id).in("phone", batch);
+        (existingLeads || []).forEach((l) => allExistingPhones.add(l.phone));
+      }
+
+      const newLeads = savedContacts
+        .map((c: any) => {
+          const ph = formatPhone(c.remoteJid || c.jid || "");
+          if (!ph || allExistingPhones.has(ph)) return null;
+          return {
+            org_id,
+            name: c.pushName || c.name || c.verifiedName || null,
+            phone: ph,
+            source: "whatsapp" as const,
+            status: "pending" as const,
+            enrichment_data: { extraction_type: "contact", profile_pic: c.profilePictureUrl || null },
+          };
+        })
+        .filter(Boolean);
+
+      let insertedCount = 0;
+      for (let i = 0; i < newLeads.length; i += 500) {
+        const batch = newLeads.slice(i, i + 500);
+        const { error: insertError } = await supabaseAdmin.from("leads_raw").insert(batch);
+        if (insertError) {
+          console.error("Insert error at batch", i, insertError);
+          return json({ error: insertError.message, partial_count: insertedCount }, 500);
+        }
+        insertedCount += batch.length;
+      }
+
+      return json({ count: insertedCount, total_contacts: savedContacts.length, already_existing: allExistingPhones.size });
+    }
+
+    return json({ error: `Modo inválido: ${mode}. Use 'list_groups', 'group', 'list_conversations', 'conversation' ou 'contact'.` }, 400);
 
   } catch (e) {
     console.error("extract-whatsapp error:", e);
-    return new Response(JSON.stringify({ error: e instanceof Error ? e.message : "Unknown error" }), {
-      status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    return json({ error: e instanceof Error ? e.message : "Unknown error" }, 500);
   }
 });

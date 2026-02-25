@@ -84,9 +84,7 @@ export default function Prospecting() {
   const [keywordInput, setKeywordInput] = useState("");
 
   // WhatsApp state
-  const [whatsappMode, setWhatsappMode] = useState<"group" | "conversation" | "contact" | "all">("all");
-  const [evolutionGroup, setEvolutionGroup] = useState("");
-  const [evolutionPhone, setEvolutionPhone] = useState("");
+  const [whatsappMode, setWhatsappMode] = useState<"group" | "conversation" | "contact">("group");
   const [evolutionLoading, setEvolutionLoading] = useState(false);
   const [instances, setInstances] = useState<EvolutionInstance[]>([]);
   const [instancesLoading, setInstancesLoading] = useState(false);
@@ -98,6 +96,10 @@ export default function Prospecting() {
   const [qrLoading, setQrLoading] = useState(false);
   const [qrInstanceName, setQrInstanceName] = useState("");
   const [connectionStatus, setConnectionStatus] = useState<"waiting" | "connected" | "error">("waiting");
+  // Groups selection
+  const [availableGroups, setAvailableGroups] = useState<{ id: string; name: string; size: number }[]>([]);
+  const [selectedGroupIds, setSelectedGroupIds] = useState<Set<string>>(new Set());
+  const [groupsLoading, setGroupsLoading] = useState(false);
 
   // Manual state
   const [manualName, setManualName] = useState("");
@@ -260,27 +262,55 @@ export default function Prospecting() {
   };
 
   // === WhatsApp Extract ===
+  // Fetch available groups for selection
+  const handleFetchGroups = async () => {
+    if (!profile?.org_id || !selectedInstance) return;
+    setGroupsLoading(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("extract-whatsapp", {
+        body: { org_id: profile.org_id, mode: "list_groups", instance_name: selectedInstance },
+      });
+      if (error) throw error;
+      setAvailableGroups(data?.groups || []);
+      setSelectedGroupIds(new Set());
+    } catch (error: any) {
+      toast({ title: "Erro ao buscar grupos", description: error.message, variant: "destructive" });
+    } finally { setGroupsLoading(false); }
+  };
+
+  const toggleGroupSelection = (groupId: string) => {
+    setSelectedGroupIds(prev => {
+      const next = new Set(prev);
+      if (next.has(groupId)) next.delete(groupId);
+      else next.add(groupId);
+      return next;
+    });
+  };
+
+  const selectAllGroups = () => {
+    if (selectedGroupIds.size === availableGroups.length) setSelectedGroupIds(new Set());
+    else setSelectedGroupIds(new Set(availableGroups.map(g => g.id)));
+  };
+
   const handleWhatsappExtract = async () => {
     if (!profile?.org_id) return;
     setEvolutionLoading(true);
     try {
-      const { data, error } = await supabase.functions.invoke("extract-whatsapp", {
-        body: {
-          org_id: profile.org_id, mode: whatsappMode, instance_name: selectedInstance || undefined,
-          group_name: whatsappMode === "group" ? evolutionGroup : undefined,
-          phone: whatsappMode !== "group" ? evolutionPhone : undefined,
-        },
-      });
+      const body: any = {
+        org_id: profile.org_id, mode: whatsappMode, instance_name: selectedInstance || undefined,
+      };
+      if (whatsappMode === "group") {
+        body.group_ids = Array.from(selectedGroupIds);
+      }
+      const { data, error } = await supabase.functions.invoke("extract-whatsapp", { body });
       if (error) throw error;
-      const desc = whatsappMode === "all"
-        ? `${data?.count || 0} contatos extraídos (${data?.total_contacts || 0} total, ${data?.already_existing || 0} já existiam)`
-        : whatsappMode === "group"
-        ? `${data?.count || 0} contatos extraídos do grupo ${data?.group || ""}`
+      const desc = whatsappMode === "group"
+        ? `${data?.count || 0} contatos extraídos de ${data?.groups?.length || 0} grupo(s)`
         : whatsappMode === "conversation"
-        ? `${data?.count || 0} contatos extraídos da conversa${data?.contact_name ? ` com ${data.contact_name}` : ""}`
-        : `${data?.count || 0} contato importado${data?.contact_name ? `: ${data.contact_name}` : ""}`;
+        ? `${data?.count || 0} conversas extraídas (${data?.total_conversations || 0} total, ${data?.already_existing || 0} já existiam)`
+        : `${data?.count || 0} contatos importados (${data?.total_contacts || 0} total, ${data?.already_existing || 0} já existiam)`;
       toast({ title: "Extração concluída!", description: desc });
-      setEvolutionGroup(""); setEvolutionPhone("");
+      setSelectedGroupIds(new Set());
     } catch (error: any) {
       toast({ title: "Erro na extração", description: error.message, variant: "destructive" });
     } finally { setEvolutionLoading(false); }
@@ -494,21 +524,20 @@ export default function Prospecting() {
           {/* Extraction options */}
           <div className="glass rounded-2xl p-6 space-y-5">
             <div>
-              <h2 className="text-lg font-semibold">Extração via Evolution API</h2>
+              <h2 className="text-lg font-semibold">Extração de Contatos</h2>
               <p className="text-sm text-muted-foreground mt-0.5">
-                Extraia contatos do WhatsApp por grupo, conversa ou contato
+                Extraia contatos do WhatsApp
                 {selectedInstance && <span className="text-primary ml-1">• {selectedInstance}</span>}
               </p>
             </div>
 
             <div className="flex gap-2 flex-wrap">
               {[
-                { key: "all" as const, label: "Todos", icon: Smartphone },
-                { key: "group" as const, label: "Grupo", icon: Users2 },
-                { key: "conversation" as const, label: "Conversa", icon: MessageSquare },
-                { key: "contact" as const, label: "Contato", icon: Contact },
+                { key: "group" as const, label: "Grupos", icon: Users2, desc: "Selecione grupos e extraia membros" },
+                { key: "conversation" as const, label: "Conversas", icon: MessageSquare, desc: "Todas as conversas (nome + telefone)" },
+                { key: "contact" as const, label: "Contatos Salvos", icon: Contact, desc: "Contatos salvos no telefone" },
               ].map((opt) => (
-                <button key={opt.key} onClick={() => setWhatsappMode(opt.key)}
+                <button key={opt.key} onClick={() => { setWhatsappMode(opt.key); if (opt.key === "group" && availableGroups.length === 0 && selectedInstance) handleFetchGroups(); }}
                   className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-medium transition-all border ${
                     whatsappMode === opt.key ? "bg-primary/10 border-primary/30 text-primary" : "bg-secondary/30 border-border/30 text-muted-foreground hover:text-foreground hover:border-border/50"
                   }`}>
@@ -518,24 +547,93 @@ export default function Prospecting() {
             </div>
 
             <div className="space-y-4">
+              {/* GROUP MODE: Show selectable group list */}
               {whatsappMode === "group" && (
-                <div className="space-y-2">
-                  <Label className="text-xs font-medium">Nome do grupo</Label>
-                  <Input placeholder="Grupo de Vendas Regional" value={evolutionGroup} onChange={(e) => setEvolutionGroup(e.target.value)} className="rounded-xl bg-secondary/30 border-border/30" />
-                  <p className="text-[11px] text-muted-foreground">Busca parcial pelo nome do grupo na sua instância</p>
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-xs font-medium">Selecione os grupos</Label>
+                    <div className="flex gap-2">
+                      {availableGroups.length > 0 && (
+                        <Button variant="ghost" size="sm" onClick={selectAllGroups} className="text-xs h-7 rounded-lg">
+                          {selectedGroupIds.size === availableGroups.length ? "Desmarcar todos" : "Selecionar todos"}
+                        </Button>
+                      )}
+                      <Button variant="outline" size="sm" onClick={handleFetchGroups} disabled={groupsLoading || !selectedInstance} className="text-xs h-7 rounded-lg gap-1">
+                        <RefreshCw className={`h-3 w-3 ${groupsLoading ? "animate-spin" : ""}`} />
+                        {availableGroups.length === 0 ? "Carregar Grupos" : "Atualizar"}
+                      </Button>
+                    </div>
+                  </div>
+
+                  {groupsLoading ? (
+                    <div className="flex items-center justify-center py-8 text-muted-foreground">
+                      <Loader2 className="h-5 w-5 animate-spin mr-2" />
+                      <span className="text-sm">Buscando grupos...</span>
+                    </div>
+                  ) : availableGroups.length > 0 ? (
+                    <ScrollArea className="h-[280px] rounded-xl border border-border/30 bg-secondary/10">
+                      <div className="p-2 space-y-1">
+                        {availableGroups.map((group) => (
+                          <div
+                            key={group.id}
+                            onClick={() => toggleGroupSelection(group.id)}
+                            className={`flex items-center gap-3 p-3 rounded-lg cursor-pointer transition-all ${
+                              selectedGroupIds.has(group.id) ? "bg-primary/10 border border-primary/30" : "hover:bg-muted/50 border border-transparent"
+                            }`}
+                          >
+                            <Checkbox checked={selectedGroupIds.has(group.id)} className="pointer-events-none" />
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium truncate">{group.name}</p>
+                              <p className="text-[11px] text-muted-foreground">{group.size} participantes</p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </ScrollArea>
+                  ) : !selectedInstance ? (
+                    <p className="text-xs text-warning py-4 text-center">⚠ Selecione uma instância conectada acima</p>
+                  ) : (
+                    <p className="text-xs text-muted-foreground py-4 text-center">Clique em "Carregar Grupos" para ver os grupos disponíveis</p>
+                  )}
+
+                  {selectedGroupIds.size > 0 && (
+                    <p className="text-xs text-primary font-medium">{selectedGroupIds.size} grupo(s) selecionado(s)</p>
+                  )}
                 </div>
               )}
-              {(whatsappMode === "conversation" || whatsappMode === "contact") && (
-                <div className="space-y-2">
-                  <Label className="text-xs font-medium">{whatsappMode === "conversation" ? "Número do telefone" : "Número do contato"}</Label>
-                  <Input placeholder="+5511999999999" value={evolutionPhone} onChange={(e) => setEvolutionPhone(e.target.value)} className="rounded-xl bg-secondary/30 border-border/30" />
+
+              {/* CONVERSATION MODE: Simple description */}
+              {whatsappMode === "conversation" && (
+                <div className="glass rounded-xl p-4 space-y-2">
+                  <div className="flex items-center gap-2">
+                    <MessageSquare className="h-4 w-4 text-primary" />
+                    <p className="text-sm font-medium">Extrair todas as conversas</p>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Puxa nome e telefone de todas as pessoas com quem você conversou nesta instância. Sem conteúdo das mensagens.
+                  </p>
+                </div>
+              )}
+
+              {/* CONTACT MODE: Simple description */}
+              {whatsappMode === "contact" && (
+                <div className="glass rounded-xl p-4 space-y-2">
+                  <div className="flex items-center gap-2">
+                    <Contact className="h-4 w-4 text-primary" />
+                    <p className="text-sm font-medium">Importar contatos salvos</p>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Importa todos os contatos salvos no telefone conectado a esta instância (apenas os que possuem nome).
+                  </p>
                 </div>
               )}
 
               <Button onClick={handleWhatsappExtract}
-                disabled={evolutionLoading || !selectedInstance || (whatsappMode === "group" ? !evolutionGroup : whatsappMode === "all" ? false : !evolutionPhone)}
-                className="rounded-xl gradient-primary hover:opacity-90">
-                {evolutionLoading ? <><Loader2 className="h-4 w-4 animate-spin mr-2" />Extraindo...</> : <><MessageCircle className="h-4 w-4 mr-2" />Extrair Contatos</>}
+                disabled={evolutionLoading || !selectedInstance || (whatsappMode === "group" && selectedGroupIds.size === 0)}
+                className="rounded-xl gradient-primary hover:opacity-90 w-full sm:w-auto">
+                {evolutionLoading ? <><Loader2 className="h-4 w-4 animate-spin mr-2" />Extraindo...</> : <><MessageCircle className="h-4 w-4 mr-2" />
+                  {whatsappMode === "group" ? `Extrair de ${selectedGroupIds.size} grupo(s)` : whatsappMode === "conversation" ? "Extrair Todas as Conversas" : "Importar Contatos Salvos"}
+                </>}
               </Button>
 
               {!selectedInstance && instances.length === 0 && (
