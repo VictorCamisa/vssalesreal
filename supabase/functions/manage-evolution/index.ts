@@ -30,12 +30,12 @@ Deno.serve(async (req) => {
     const { data: { user }, error: authError } = await supabaseUser.auth.getUser();
     if (authError || !user) return json({ error: "Unauthorized" }, 401);
 
+    const userId = user.id;
     const body = await req.json();
     const { action, org_id, instance_name } = body;
 
     if (!org_id) return json({ error: "org_id is required" }, 400);
 
-    // Get Evolution API credentials from integrations table
     const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
     const { data: integration } = await supabaseAdmin
       .from("integrations")
@@ -50,14 +50,26 @@ Deno.serve(async (req) => {
 
     const baseUrl = integration.endpoint_url.replace(/\/$/, "");
     const apiKey = integration.api_key;
+    const currentConfig = (integration.config as any) || {};
+
+    // Helper: get/set per-user instances from config.instances_by_user
+    const getUserInstances = (): string[] => {
+      return currentConfig.instances_by_user?.[userId] || [];
+    };
+    const setUserInstances = async (names: string[]) => {
+      const byUser = currentConfig.instances_by_user || {};
+      byUser[userId] = names;
+      await supabaseAdmin
+        .from("integrations")
+        .update({ config: { ...currentConfig, instances_by_user: byUser } })
+        .eq("id", integration.id);
+    };
 
     // ============================================
-    // ACTION: create - Create a new instance
+    // ACTION: create
     // ============================================
     if (action === "create") {
       if (!instance_name) return json({ error: "instance_name is required" }, 400);
-
-      console.log("Creating instance:", instance_name);
 
       const response = await fetch(`${baseUrl}/instance/create`, {
         method: "POST",
@@ -71,42 +83,26 @@ Deno.serve(async (req) => {
 
       if (!response.ok) {
         const errText = await response.text();
-        console.error("Create instance error:", response.status, errText);
         return json({ error: `Erro ao criar instância: ${response.status} - ${errText}` }, 502);
       }
 
       const data = await response.json();
-      console.log("Instance created:", JSON.stringify(data));
 
-      // Save instance name to org's integration config
-      const currentConfig = integration.config || {};
-      const orgInstances: string[] = (currentConfig as any).instances || [];
-      if (!orgInstances.includes(instance_name)) {
-        orgInstances.push(instance_name);
-      }
-      const { error: configUpdateError } = await supabaseAdmin
-        .from("integrations")
-        .update({ config: { ...(currentConfig as any), instances: orgInstances } })
-        .eq("id", integration.id);
-
-      if (configUpdateError) {
-        console.error("Failed to persist created instance in config:", configUpdateError);
+      // Persist to user's instance list
+      const userInst = getUserInstances();
+      if (!userInst.includes(instance_name)) {
+        userInst.push(instance_name);
+        await setUserInstances(userInst);
       }
 
-      return json({
-        instance: data.instance,
-        qrcode: data.qrcode,
-        hash: data.hash,
-      });
+      return json({ instance: data.instance, qrcode: data.qrcode, hash: data.hash });
     }
 
     // ============================================
-    // ACTION: qrcode - Get QR code for connection
+    // ACTION: qrcode
     // ============================================
     if (action === "qrcode") {
       if (!instance_name) return json({ error: "instance_name is required" }, 400);
-
-      console.log("Fetching QR code for:", instance_name);
 
       const response = await fetch(`${baseUrl}/instance/connect/${instance_name}`, {
         method: "GET",
@@ -115,7 +111,6 @@ Deno.serve(async (req) => {
 
       if (!response.ok) {
         const errText = await response.text();
-        console.error("QR code error:", response.status, errText);
         return json({ error: `Erro ao obter QR code: ${response.status}` }, 502);
       }
 
@@ -124,7 +119,7 @@ Deno.serve(async (req) => {
     }
 
     // ============================================
-    // ACTION: status - Check instance connection
+    // ACTION: status
     // ============================================
     if (action === "status") {
       if (!instance_name) return json({ error: "instance_name is required" }, 400);
@@ -134,27 +129,17 @@ Deno.serve(async (req) => {
         headers: { apikey: apiKey },
       });
 
-      if (!response.ok) {
-        return json({ state: "unknown" });
-      }
+      if (!response.ok) return json({ state: "unknown" });
 
       const data = await response.json();
       const state = data.instance?.state || data.state || "unknown";
 
-      // Persist connected instance if not already tracked
+      // Persist if connected and not tracked
       if (state === "open") {
-        const currentConfig = (integration as any).config || {};
-        const orgInstances: string[] = currentConfig.instances || [];
-        if (!orgInstances.includes(instance_name)) {
-          const nextInstances = [...orgInstances, instance_name];
-          const { error: statusPersistError } = await supabaseAdmin
-            .from("integrations")
-            .update({ config: { ...currentConfig, instances: nextInstances } })
-            .eq("id", integration.id);
-
-          if (statusPersistError) {
-            console.error("Failed to persist connected instance in status:", statusPersistError);
-          }
+        const userInst = getUserInstances();
+        if (!userInst.includes(instance_name)) {
+          userInst.push(instance_name);
+          await setUserInstances(userInst);
         }
       }
 
@@ -162,90 +147,59 @@ Deno.serve(async (req) => {
     }
 
     // ============================================
-    // ACTION: list - List all instances
+    // ACTION: list - List only THIS user's instances
     // ============================================
     if (action === "list") {
-      // Get org's registered instances from config
-      const currentConfig = (integration as any).config || {};
-      const orgInstances: string[] = currentConfig.instances || [];
+      const userInstances = getUserInstances();
 
-      const response = await fetch(`${baseUrl}/instance/fetchInstances`, {
-        method: "GET",
-        headers: { apikey: apiKey },
-      });
-
-      if (!response.ok) {
-        const errText = await response.text();
-        console.error("List instances error:", response.status, errText);
-        return json({ error: `Erro ao listar instâncias: ${response.status}` }, 502);
-      }
-
-      const raw = await response.json();
-      const apiInstancesRaw = Array.isArray(raw)
-        ? raw
-        : Array.isArray(raw?.instances)
-          ? raw.instances
-          : Array.isArray(raw?.data)
-            ? raw.data
-            : [];
-
-      const apiInstances = apiInstancesRaw.map((inst: any) => ({
-        name: inst?.instance?.instanceName || inst?.instanceName || inst?.name,
-        state: inst?.instance?.state || inst?.state || "unknown",
-        owner: inst?.instance?.owner || inst?.owner || null,
-      })).filter((i: any) => !!i.name);
-
-      // If we already track org instances, always return them, hydrating state from API when possible
-      let instances = orgInstances.length > 0
-        ? orgInstances.map((name) => {
-            const match = apiInstances.find((i: any) => i.name === name);
-            return {
-              name,
-              state: match?.state || "unknown",
-              owner: match?.owner || null,
-            };
-          })
-        : apiInstances;
-
-      // For tracked instances not present in fetchInstances, ask connectionState directly
-      if (orgInstances.length > 0) {
-        instances = await Promise.all(instances.map(async (inst) => {
-          if (inst.state !== "unknown") return inst;
-          try {
-            const stateResp = await fetch(`${baseUrl}/instance/connectionState/${inst.name}`, {
-              method: "GET",
-              headers: { apikey: apiKey },
-            });
-            if (!stateResp.ok) return inst;
-            const stateData = await stateResp.json();
-            return {
-              ...inst,
-              state: stateData.instance?.state || stateData.state || "unknown",
-            };
-          } catch {
-            return inst;
+      // Fetch all from Evolution API to hydrate state
+      let apiMap: Record<string, { state: string; owner: string | null }> = {};
+      try {
+        const response = await fetch(`${baseUrl}/instance/fetchInstances`, {
+          method: "GET",
+          headers: { apikey: apiKey },
+        });
+        if (response.ok) {
+          const raw = await response.json();
+          const arr = Array.isArray(raw) ? raw : Array.isArray(raw?.instances) ? raw.instances : Array.isArray(raw?.data) ? raw.data : [];
+          for (const inst of arr) {
+            const name = inst?.instance?.instanceName || inst?.instanceName || inst?.name;
+            if (name) {
+              apiMap[name] = {
+                state: inst?.instance?.state || inst?.state || "unknown",
+                owner: inst?.instance?.owner || inst?.owner || null,
+              };
+            }
           }
-        }));
-      }
-
-      // Keep config in sync when it was empty and API returned instances
-      if (orgInstances.length === 0 && instances.length > 0) {
-        const names = instances.map((i) => i.name).filter(Boolean);
-        const { error: syncConfigError } = await supabaseAdmin
-          .from("integrations")
-          .update({ config: { ...currentConfig, instances: names } })
-          .eq("id", integration.id);
-
-        if (syncConfigError) {
-          console.error("Failed to sync instances into config:", syncConfigError);
         }
-      }
+      } catch { /* ignore */ }
+
+      // Only return instances belonging to this user
+      let instances = userInstances.map((name) => ({
+        name,
+        state: apiMap[name]?.state || "unknown",
+        owner: apiMap[name]?.owner || null,
+      }));
+
+      // For unknown states, check individually
+      instances = await Promise.all(instances.map(async (inst) => {
+        if (inst.state !== "unknown") return inst;
+        try {
+          const stateResp = await fetch(`${baseUrl}/instance/connectionState/${inst.name}`, {
+            method: "GET",
+            headers: { apikey: apiKey },
+          });
+          if (!stateResp.ok) return inst;
+          const stateData = await stateResp.json();
+          return { ...inst, state: stateData.instance?.state || stateData.state || "unknown" };
+        } catch { return inst; }
+      }));
 
       return json({ instances });
     }
 
     // ============================================
-    // ACTION: delete - Delete an instance
+    // ACTION: delete
     // ============================================
     if (action === "delete") {
       if (!instance_name) return json({ error: "instance_name is required" }, 400);
@@ -260,18 +214,14 @@ Deno.serve(async (req) => {
         return json({ error: `Erro ao deletar: ${response.status} - ${errText}` }, 502);
       }
 
-      // Remove instance from org config
-      const currentConfig = (integration as any).config || {};
-      const orgInstances: string[] = (currentConfig.instances || []).filter((n: string) => n !== instance_name);
-      await supabaseAdmin
-        .from("integrations")
-        .update({ config: { ...currentConfig, instances: orgInstances } })
-        .eq("id", integration.id);
+      // Remove from user's list
+      const userInst = getUserInstances().filter((n) => n !== instance_name);
+      await setUserInstances(userInst);
 
       return json({ success: true });
     }
 
-    return json({ error: `Ação inválida: ${action}. Use 'create', 'qrcode', 'status', 'list' ou 'delete'.` }, 400);
+    return json({ error: `Ação inválida: ${action}` }, 400);
 
   } catch (e) {
     console.error("manage-evolution error:", e);
