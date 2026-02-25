@@ -12,6 +12,7 @@ import Prospecting from "./pages/Prospecting";
 import Leads from "./pages/Leads";
 import CRM from "./pages/CRM";
 import SettingsPage from "./pages/SettingsPage";
+import AIPage from "./pages/AIPage";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -43,6 +44,7 @@ function AppRoutes() {
         <Route path="/prospecting" element={<Prospecting />} />
         <Route path="/leads" element={<Leads />} />
         <Route path="/crm" element={<CRM />} />
+        <Route path="/ai" element={<AIPage />} />
         <Route path="/settings" element={<SettingsPage />} />
       </Route>
       <Route path="/auth" element={<Navigate to="/" replace />} />

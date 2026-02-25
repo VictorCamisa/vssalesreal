@@ -11,3 +11,9 @@ verify_jwt = false
 
 [functions.manage-evolution]
 verify_jwt = false
+
+[functions.ai-chat]
+verify_jwt = false
+
+[functions.ai-whatsapp-hook]
+verify_jwt = false
