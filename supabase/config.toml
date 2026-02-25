@@ -17,3 +17,6 @@ verify_jwt = false
 
 [functions.ai-whatsapp-hook]
 verify_jwt = false
+
+[functions.process-knowledge]
+verify_jwt = false

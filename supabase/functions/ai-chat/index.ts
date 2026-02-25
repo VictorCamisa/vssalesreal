@@ -31,16 +31,78 @@ serve(async (req) => {
       .eq("config_type", configType)
       .maybeSingle();
 
-    // Fetch knowledge base docs for context
+    // Smart knowledge retrieval using keywords
+    const userQuery = messages[messages.length - 1]?.content?.toLowerCase() || "";
+    const queryWords = userQuery.split(/\W+/).filter((w: string) => w.length > 3);
+
+    // Fetch all processed docs with keywords
     const { data: kbDocs } = await supabaseAdmin
       .from("ai_knowledge_docs")
-      .select("title, content")
-      .eq("org_id", org_id)
-      .limit(20);
+      .select("title, content, summary, keywords, chunks, processed")
+      .eq("org_id", org_id);
 
-    const knowledgeContext = kbDocs?.length
-      ? `\n\n--- BASE DE CONHECIMENTO ---\n${kbDocs.map((d) => `## ${d.title}\n${d.content}`).join("\n\n")}\n--- FIM DA BASE ---`
-      : "";
+    let knowledgeContext = "";
+    if (kbDocs?.length) {
+      // Score docs by keyword overlap with user query
+      const scoredDocs = kbDocs.map((doc: any) => {
+        let score = 0;
+        if (doc.processed && doc.keywords?.length) {
+          for (const kw of doc.keywords) {
+            if (queryWords.some((qw: string) => kw.includes(qw) || qw.includes(kw))) {
+              score += 2;
+            }
+          }
+          // Also check title match
+          const titleWords = doc.title.toLowerCase().split(/\W+/);
+          for (const tw of titleWords) {
+            if (queryWords.some((qw: string) => tw.includes(qw) || qw.includes(tw))) {
+              score += 3;
+            }
+          }
+        } else {
+          score = 1; // unprocessed docs get base score
+        }
+        return { ...doc, score };
+      });
+
+      // Sort by relevance, take top docs
+      scoredDocs.sort((a: any, b: any) => b.score - a.score);
+      const relevantDocs = scoredDocs.filter((d: any) => d.score > 0).slice(0, 5);
+
+      // For processed docs, find the most relevant chunks
+      const contextParts: string[] = [];
+      for (const doc of relevantDocs) {
+        if (doc.processed && doc.chunks?.length) {
+          // Score chunks by local keyword overlap
+          const scoredChunks = doc.chunks.map((chunk: any) => {
+            let chunkScore = 0;
+            const chunkText = (chunk.text || "").toLowerCase();
+            for (const qw of queryWords) {
+              if (chunkText.includes(qw)) chunkScore++;
+            }
+            return { ...chunk, chunkScore };
+          });
+          scoredChunks.sort((a: any, b: any) => b.chunkScore - a.chunkScore);
+          const topChunks = scoredChunks.slice(0, 3);
+          const chunkTexts = topChunks.map((c: any) => c.text).join("\n\n");
+          contextParts.push(`## ${doc.title}\n${doc.summary ? `Resumo: ${doc.summary}\n\n` : ""}${chunkTexts}`);
+        } else {
+          // Unprocessed: include full content (truncated)
+          contextParts.push(`## ${doc.title}\n${doc.content.substring(0, 2000)}`);
+        }
+      }
+
+      // If no relevant docs found, include summaries of all docs
+      if (relevantDocs.length === 0 && kbDocs.length > 0) {
+        for (const doc of kbDocs.slice(0, 10)) {
+          contextParts.push(`## ${(doc as any).title}\n${(doc as any).summary || (doc as any).content.substring(0, 500)}`);
+        }
+      }
+
+      if (contextParts.length > 0) {
+        knowledgeContext = `\n\n--- BASE DE CONHECIMENTO (trechos relevantes) ---\n${contextParts.join("\n\n")}\n--- FIM DA BASE ---`;
+      }
+    }
 
     let systemPrompt = "";
 
