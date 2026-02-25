@@ -6,7 +6,8 @@ import ReactMarkdown from "react-markdown";
 import {
   Bot, Brain, MessageSquare, Sparkles, Save, Loader2, Plus, Trash2,
   Clock, Send, FileText, Zap, Copy, Check, RefreshCw,
-  Mail, Phone, Linkedin, MessageCircle, Target, TrendingUp, Users, Lightbulb
+  Mail, Phone, Linkedin, MessageCircle, Target, TrendingUp, Users, Lightbulb,
+  BookOpen, Download
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -609,6 +610,7 @@ function KnowledgeBaseTab({ orgId }: { orgId: string }) {
   const [newContent, setNewContent] = useState("");
   const [saving, setSaving] = useState(false);
   const [processingIds, setProcessingIds] = useState<Set<string>>(new Set());
+  const [loadingTemplates, setLoadingTemplates] = useState(false);
 
   const loadDocs = useCallback(async () => {
     const { data } = await supabase.from("ai_knowledge_docs").select("*").eq("org_id", orgId).order("created_at", { ascending: false });
@@ -663,8 +665,57 @@ function KnowledgeBaseTab({ orgId }: { orgId: string }) {
     for (const doc of unprocessed) { if (doc.id) await processDoc(doc.id); }
   };
 
+  const loadSalesTemplates = async () => {
+    setLoadingTemplates(true);
+    try {
+      const { SALES_KNOWLEDGE_TEMPLATES } = await import("@/data/salesKnowledgeTemplates");
+      const existingTitles = new Set(docs.map((d) => d.title));
+      const newTemplates = SALES_KNOWLEDGE_TEMPLATES.filter((t) => !existingTitles.has(t.title));
+
+      if (newTemplates.length === 0) {
+        toast({ title: "Templates já carregados", description: "Todos os templates de vendas já estão na base." });
+        setLoadingTemplates(false);
+        return;
+      }
+
+      const inserts = newTemplates.map((t) => ({ org_id: orgId, title: t.title, content: t.content }));
+      const { data } = await supabase.from("ai_knowledge_docs").insert(inserts).select();
+
+      toast({ title: `${newTemplates.length} templates adicionados!`, description: "Processando automaticamente..." });
+      await loadDocs();
+
+      // Process each in background
+      if (data) {
+        for (const doc of data) {
+          processDoc(doc.id);
+        }
+      }
+    } catch (e: any) {
+      toast({ title: "Erro", description: e.message, variant: "destructive" });
+    }
+    setLoadingTemplates(false);
+  };
+
   return (
     <div className="space-y-5">
+      {/* Sales Templates Banner */}
+      <div className="glass rounded-2xl p-5 border border-primary/20 bg-primary/5">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/15">
+              <BookOpen className="h-5 w-5 text-primary" />
+            </div>
+            <div>
+              <h3 className="font-semibold text-sm">Base de Vendas Especialista</h3>
+              <p className="text-xs text-muted-foreground">10 documentos com metodologias, scripts, objeções, métricas e frameworks de vendas</p>
+            </div>
+          </div>
+          <Button onClick={loadSalesTemplates} disabled={loadingTemplates} size="sm" className="rounded-xl gradient-primary shrink-0">
+            {loadingTemplates ? <><Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />Carregando...</> : <><Download className="h-3.5 w-3.5 mr-1.5" />Carregar Templates</>}
+          </Button>
+        </div>
+      </div>
+
       <div className="flex items-center justify-between">
         <p className="text-sm text-muted-foreground">Documentos processados automaticamente com chunking e keywords para busca inteligente.</p>
         <Button variant="outline" size="sm" className="rounded-xl text-xs shrink-0" onClick={reprocessAll}>
