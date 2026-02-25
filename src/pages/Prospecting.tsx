@@ -434,62 +434,61 @@ export default function Prospecting() {
 
         {/* ===== WHATSAPP TAB ===== */}
         <TabsContent value="whatsapp" className="space-y-4">
-          {/* Instance Management */}
+          {/* Simple Instance Creation */}
           <div className="glass rounded-2xl p-6 space-y-5">
             <div className="flex items-center justify-between">
               <div>
                 <h2 className="text-lg font-semibold flex items-center gap-2">
                   <Smartphone className="h-5 w-5 text-primary" />
-                  Instâncias WhatsApp
+                  Conectar WhatsApp
                 </h2>
-                <p className="text-sm text-muted-foreground mt-0.5">Gerencie suas conexões com o WhatsApp</p>
+                <p className="text-sm text-muted-foreground mt-0.5">Escolha um nome e conecte seu WhatsApp instantaneamente</p>
               </div>
-              <Button variant="ghost" size="icon" onClick={fetchInstances} disabled={instancesLoading} className="rounded-xl">
-                <RefreshCw className={`h-4 w-4 ${instancesLoading ? "animate-spin" : ""}`} />
-              </Button>
+              {instances.length > 0 && (
+                <Button variant="ghost" size="icon" onClick={fetchInstances} disabled={instancesLoading} className="rounded-xl">
+                  <RefreshCw className={`h-4 w-4 ${instancesLoading ? "animate-spin" : ""}`} />
+                </Button>
+              )}
             </div>
 
-            <div className="flex gap-2">
-              <Input placeholder="Nome da nova instância" value={newInstanceName} onChange={(e) => setNewInstanceName(e.target.value)}
-                className="rounded-xl bg-secondary/30 border-border/30" onKeyDown={(e) => e.key === "Enter" && handleCreateInstance()} />
-              <Button onClick={handleCreateInstance} disabled={creatingInstance || !newInstanceName.trim()} className="rounded-xl gradient-primary hover:opacity-90 shrink-0">
-                {creatingInstance ? <Loader2 className="h-4 w-4 animate-spin" /> : <><Plus className="h-4 w-4 mr-1" />Criar</>}
-              </Button>
-            </div>
-
-            {instances.length > 0 ? (
+            {/* Connected instances summary */}
+            {instances.length > 0 && (
               <div className="space-y-2">
                 {instances.map((inst) => (
                   <div key={inst.name}
-                    className={`flex items-center justify-between p-3 rounded-xl border transition-all cursor-pointer ${
-                      selectedInstance === inst.name ? "bg-primary/5 border-primary/30" : "bg-secondary/20 border-border/30 hover:border-border/50"
+                    className={`flex items-center justify-between p-3 rounded-xl border transition-all ${
+                      selectedInstance === inst.name ? "bg-primary/5 border-primary/30" : "bg-secondary/20 border-border/30"
                     }`}
-                    onClick={() => setSelectedInstance(inst.name)}
                   >
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-3 cursor-pointer flex-1" onClick={() => setSelectedInstance(inst.name)}>
                       {selectedInstance === inst.name && <CheckCircle2 className="h-4 w-4 text-primary shrink-0" />}
-                      <div>
-                        <p className="text-sm font-medium">{inst.name}</p>
-                        {inst.owner && <p className="text-[11px] text-muted-foreground">{inst.owner}</p>}
-                      </div>
+                      <p className="text-sm font-medium">{inst.name}</p>
                     </div>
                     <div className="flex items-center gap-2">
                       {instanceState(inst.state)}
                       {inst.state !== "open" && (
-                        <Button variant="ghost" size="icon" className="h-7 w-7 rounded-lg" onClick={(e) => { e.stopPropagation(); handleGetQR(inst.name); }}>
+                        <Button variant="ghost" size="icon" className="h-7 w-7 rounded-lg" onClick={() => handleGetQR(inst.name)}>
                           <QrCode className="h-3.5 w-3.5" />
                         </Button>
                       )}
-                      <Button variant="ghost" size="icon" className="h-7 w-7 rounded-lg text-destructive hover:text-destructive" onClick={(e) => { e.stopPropagation(); handleDeleteInstance(inst.name); }}>
+                      <Button variant="ghost" size="icon" className="h-7 w-7 rounded-lg text-destructive hover:text-destructive" onClick={() => handleDeleteInstance(inst.name)}>
                         <Trash2 className="h-3.5 w-3.5" />
                       </Button>
                     </div>
                   </div>
                 ))}
               </div>
-            ) : !instancesLoading ? (
-              <p className="text-sm text-muted-foreground text-center py-4">Nenhuma instância encontrada. Crie uma para começar.</p>
-            ) : null}
+            )}
+
+            {/* Create new instance - always visible */}
+            <div className="flex gap-2">
+              <Input placeholder="Nome da instância (ex: meu-whatsapp)" value={newInstanceName} onChange={(e) => setNewInstanceName(e.target.value)}
+                className="rounded-xl bg-secondary/30 border-border/30" onKeyDown={(e) => e.key === "Enter" && handleCreateInstance()} />
+              <Button onClick={handleCreateInstance} disabled={creatingInstance || !newInstanceName.trim()} className="rounded-xl gradient-primary hover:opacity-90 shrink-0 gap-1.5">
+                {creatingInstance ? <Loader2 className="h-4 w-4 animate-spin" /> : <><Plus className="h-4 w-4" />Criar e Conectar</>}
+              </Button>
+            </div>
+            <p className="text-[11px] text-muted-foreground">Ao criar, o QR Code será exibido automaticamente para você escanear com o WhatsApp.</p>
           </div>
 
           {/* Extraction options */}
