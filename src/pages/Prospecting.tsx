@@ -2,14 +2,27 @@ import { useState, useEffect, useCallback } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { Search, Globe, MessageCircle, Loader2, Plus, Users2, MessageSquare, Contact, Smartphone, QrCode, RefreshCw, Trash2, Wifi, WifiOff, CheckCircle2 } from "lucide-react";
+import {
+  Search, Globe, MessageCircle, Loader2, Plus, Users2, MessageSquare,
+  Contact, Smartphone, QrCode, RefreshCw, Trash2, Wifi, WifiOff,
+  CheckCircle2, MapPin, Tag, X, Zap, ChevronRight, Eye, Download,
+  ArrowRight, Sparkles, MoreVertical, Phone, Building2, User
+} from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Progress } from "@/components/ui/progress";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
+} from "@/components/ui/dialog";
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 type EvolutionInstance = {
   name: string;
@@ -17,23 +30,64 @@ type EvolutionInstance = {
   owner: string | null;
 };
 
+type ScrapeResult = {
+  name: string | null;
+  phone: string | null;
+  email: string | null;
+  company: string | null;
+  role: string | null;
+};
+
+type ScrapeJob = {
+  id: string;
+  url: string;
+  keywords: string;
+  status: "running" | "completed" | "failed";
+  results: ScrapeResult[];
+  results_count: number;
+  created_at: string;
+  error_message?: string;
+};
+
+const PRESET_NICHES = [
+  { label: "Imobiliárias", value: "imobiliárias", icon: "🏠" },
+  { label: "Clínicas Médicas", value: "clínicas médicas", icon: "🏥" },
+  { label: "Escritórios de Advocacia", value: "escritórios de advocacia", icon: "⚖️" },
+  { label: "Restaurantes", value: "restaurantes", icon: "🍽️" },
+  { label: "Academias", value: "academias e fitness", icon: "💪" },
+  { label: "E-commerces", value: "lojas online e-commerce", icon: "🛒" },
+  { label: "Odontologia", value: "clínicas odontológicas", icon: "🦷" },
+  { label: "Contabilidade", value: "escritórios de contabilidade", icon: "📊" },
+  { label: "Educação", value: "escolas e cursos", icon: "📚" },
+  { label: "Agências de Marketing", value: "agências de marketing digital", icon: "📢" },
+  { label: "Pet Shops", value: "pet shops e veterinários", icon: "🐾" },
+  { label: "Tecnologia", value: "empresas de tecnologia e SaaS", icon: "💻" },
+];
+
 export default function Prospecting() {
   const { profile } = useAuth();
   const { toast } = useToast();
 
-  const [scrapeUrl, setScrapeUrl] = useState("");
-  const [scrapeKeywords, setScrapeKeywords] = useState("");
+  // Scraping state
+  const [scrapeJobs, setScrapeJobs] = useState<ScrapeJob[]>([]);
   const [scrapingLoading, setScrapingLoading] = useState(false);
-  const [evolutionGroup, setEvolutionGroup] = useState("");
-  const [evolutionLoading, setEvolutionLoading] = useState(false);
-  const [whatsappMode, setWhatsappMode] = useState<"group" | "conversation" | "contact" | "all">("all");
-  const [evolutionPhone, setEvolutionPhone] = useState("");
-  const [manualName, setManualName] = useState("");
-  const [manualPhone, setManualPhone] = useState("");
-  const [manualEmail, setManualEmail] = useState("");
-  const [manualLoading, setManualLoading] = useState(false);
+  const [viewResults, setViewResults] = useState<ScrapeJob | null>(null);
+  const [selectedResults, setSelectedResults] = useState<Set<number>>(new Set());
 
-  // Instance management
+  // Wizard state
+  const [wizardOpen, setWizardOpen] = useState(false);
+  const [wizardStep, setWizardStep] = useState(1);
+  const [wizardUrl, setWizardUrl] = useState("");
+  const [selectedNiche, setSelectedNiche] = useState("");
+  const [customNiche, setCustomNiche] = useState("");
+  const [keywords, setKeywords] = useState<string[]>([]);
+  const [keywordInput, setKeywordInput] = useState("");
+
+  // WhatsApp state
+  const [whatsappMode, setWhatsappMode] = useState<"group" | "conversation" | "contact" | "all">("all");
+  const [evolutionGroup, setEvolutionGroup] = useState("");
+  const [evolutionPhone, setEvolutionPhone] = useState("");
+  const [evolutionLoading, setEvolutionLoading] = useState(false);
   const [instances, setInstances] = useState<EvolutionInstance[]>([]);
   const [instancesLoading, setInstancesLoading] = useState(false);
   const [selectedInstance, setSelectedInstance] = useState("");
@@ -45,6 +99,12 @@ export default function Prospecting() {
   const [qrInstanceName, setQrInstanceName] = useState("");
   const [connectionStatus, setConnectionStatus] = useState<"waiting" | "connected" | "error">("waiting");
 
+  // Manual state
+  const [manualName, setManualName] = useState("");
+  const [manualPhone, setManualPhone] = useState("");
+  const [manualEmail, setManualEmail] = useState("");
+  const [manualLoading, setManualLoading] = useState(false);
+
   const formatPhone = (phone: string) => {
     const digits = phone.replace(/\D/g, "");
     if (digits.startsWith("55") && digits.length >= 12) return `+${digits}`;
@@ -55,6 +115,7 @@ export default function Prospecting() {
   const capitalizeName = (name: string) =>
     name.replace(/\b\w/g, (c) => c.toUpperCase()).trim();
 
+  // === Instance Management ===
   const fetchInstances = useCallback(async () => {
     if (!profile?.org_id) return;
     setInstancesLoading(true);
@@ -68,16 +129,11 @@ export default function Prospecting() {
         const connected = data.instances.find((i: EvolutionInstance) => i.state === "open");
         setSelectedInstance(connected?.name || data.instances[0].name);
       }
-    } catch {
-      // silently fail
-    } finally {
-      setInstancesLoading(false);
-    }
+    } catch { /* silently fail */ }
+    finally { setInstancesLoading(false); }
   }, [profile?.org_id, selectedInstance]);
 
-  useEffect(() => {
-    fetchInstances();
-  }, [fetchInstances]);
+  useEffect(() => { fetchInstances(); }, [fetchInstances]);
 
   const handleCreateInstance = async () => {
     if (!profile?.org_id || !newInstanceName.trim()) return;
@@ -87,36 +143,22 @@ export default function Prospecting() {
         body: { action: "create", org_id: profile.org_id, instance_name: newInstanceName.trim() },
       });
       if (error) throw error;
-
       toast({ title: "Instância criada!", description: `${newInstanceName} pronta para conexão.` });
-
       if (data?.qrcode?.base64 || data?.qrcode) {
         const qr = typeof data.qrcode === "string" ? data.qrcode : data.qrcode.base64;
-        if (qr) {
-          setQrCode(qr);
-          setQrInstanceName(newInstanceName.trim());
-          setConnectionStatus("waiting");
-          setQrDialogOpen(true);
-        }
+        if (qr) { setQrCode(qr); setQrInstanceName(newInstanceName.trim()); setConnectionStatus("waiting"); setQrDialogOpen(true); }
       }
-
       setNewInstanceName("");
       await fetchInstances();
       setSelectedInstance(newInstanceName.trim());
     } catch (error: any) {
       toast({ title: "Erro ao criar instância", description: error.message, variant: "destructive" });
-    } finally {
-      setCreatingInstance(false);
-    }
+    } finally { setCreatingInstance(false); }
   };
 
   const handleGetQR = async (instanceName: string) => {
     if (!profile?.org_id) return;
-    setQrLoading(true);
-    setQrInstanceName(instanceName);
-    setQrDialogOpen(true);
-    setQrCode("");
-    setConnectionStatus("waiting");
+    setQrLoading(true); setQrInstanceName(instanceName); setQrDialogOpen(true); setQrCode(""); setConnectionStatus("waiting");
     try {
       const { data, error } = await supabase.functions.invoke("manage-evolution", {
         body: { action: "qrcode", org_id: profile.org_id, instance_name: instanceName },
@@ -126,9 +168,7 @@ export default function Prospecting() {
     } catch (error: any) {
       toast({ title: "Erro ao obter QR Code", description: error.message, variant: "destructive" });
       setQrDialogOpen(false);
-    } finally {
-      setQrLoading(false);
-    }
+    } finally { setQrLoading(false); }
   };
 
   const handleDeleteInstance = async (instanceName: string) => {
@@ -141,17 +181,13 @@ export default function Prospecting() {
       toast({ title: "Instância removida" });
       if (selectedInstance === instanceName) setSelectedInstance("");
       await fetchInstances();
-    } catch (error: any) {
-      toast({ title: "Erro", description: error.message, variant: "destructive" });
-    }
+    } catch (error: any) { toast({ title: "Erro", description: error.message, variant: "destructive" }); }
   };
 
-  // Poll status while QR dialog is open (every 3s) + auto-refresh QR every 25s
+  // Poll status while QR dialog is open
   useEffect(() => {
     if (!qrDialogOpen || !qrInstanceName || !profile?.org_id) return;
-
     let qrRefreshCount = 0;
-
     const statusInterval = setInterval(async () => {
       try {
         const { data } = await supabase.functions.invoke("manage-evolution", {
@@ -160,15 +196,9 @@ export default function Prospecting() {
         if (data?.state === "open") {
           setConnectionStatus("connected");
           toast({ title: "✅ WhatsApp conectado!", description: `Instância ${qrInstanceName} online.` });
-          setTimeout(() => {
-            setQrDialogOpen(false);
-            fetchInstances();
-            setSelectedInstance(qrInstanceName);
-          }, 1500);
+          setTimeout(() => { setQrDialogOpen(false); fetchInstances(); setSelectedInstance(qrInstanceName); }, 1500);
         }
       } catch { /* ignore */ }
-
-      // Auto-refresh QR every ~25s (8 cycles of 3s)
       qrRefreshCount++;
       if (qrRefreshCount % 8 === 0) {
         try {
@@ -179,51 +209,100 @@ export default function Prospecting() {
         } catch { /* ignore */ }
       }
     }, 3000);
-
     return () => clearInterval(statusInterval);
   }, [qrDialogOpen, qrInstanceName, profile?.org_id]);
 
-  const handleScrape = async () => {
-    if (!profile?.org_id || !scrapeUrl) return;
-    setScrapingLoading(true);
-    try {
-      const { data, error } = await supabase.functions.invoke("scrape-leads", {
-        body: { org_id: profile.org_id, url: scrapeUrl, keywords: scrapeKeywords },
-      });
-      if (error) throw error;
-      toast({ title: "Prospecção concluída!", description: `${data?.count || 0} leads capturados.` });
-      setScrapeUrl("");
-      setScrapeKeywords("");
-    } catch (error: any) {
-      toast({ title: "Erro no scraping", description: error.message, variant: "destructive" });
-    } finally {
-      setScrapingLoading(false);
+  // === Web Scraping ===
+  const activeNiche = customNiche || selectedNiche;
+
+  const resetWizard = () => {
+    setWizardStep(1); setWizardUrl(""); setSelectedNiche(""); setCustomNiche("");
+    setKeywords([]); setKeywordInput("");
+  };
+
+  const addKeyword = () => {
+    if (keywordInput.trim() && !keywords.includes(keywordInput.trim())) {
+      setKeywords(prev => [...prev, keywordInput.trim()]);
+      setKeywordInput("");
     }
   };
 
+  const handleScrape = async () => {
+    if (!profile?.org_id || !wizardUrl) return;
+    setScrapingLoading(true);
+    setWizardOpen(false);
+
+    const jobId = crypto.randomUUID();
+    const newJob: ScrapeJob = {
+      id: jobId, url: wizardUrl, keywords: [...keywords, activeNiche].filter(Boolean).join(", "),
+      status: "running", results: [], results_count: 0, created_at: new Date().toISOString(),
+    };
+    setScrapeJobs(prev => [newJob, ...prev]);
+
+    try {
+      const { data, error } = await supabase.functions.invoke("scrape-leads", {
+        body: { org_id: profile.org_id, url: wizardUrl, keywords: [...keywords, activeNiche].filter(Boolean).join(", ") },
+      });
+      if (error) throw error;
+
+      setScrapeJobs(prev => prev.map(j => j.id === jobId ? {
+        ...j, status: "completed" as const, results_count: data?.count || 0,
+        results: data?.results || [],
+      } : j));
+      toast({ title: "Prospecção concluída!", description: `${data?.count || 0} leads capturados.` });
+      resetWizard();
+    } catch (error: any) {
+      setScrapeJobs(prev => prev.map(j => j.id === jobId ? {
+        ...j, status: "failed" as const, error_message: error.message,
+      } : j));
+      toast({ title: "Erro no scraping", description: error.message, variant: "destructive" });
+    } finally { setScrapingLoading(false); }
+  };
+
+  // === WhatsApp Extract ===
+  const handleWhatsappExtract = async () => {
+    if (!profile?.org_id) return;
+    setEvolutionLoading(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("extract-whatsapp", {
+        body: {
+          org_id: profile.org_id, mode: whatsappMode, instance_name: selectedInstance || undefined,
+          group_name: whatsappMode === "group" ? evolutionGroup : undefined,
+          phone: whatsappMode !== "group" ? evolutionPhone : undefined,
+        },
+      });
+      if (error) throw error;
+      const desc = whatsappMode === "all"
+        ? `${data?.count || 0} contatos extraídos (${data?.total_contacts || 0} total, ${data?.already_existing || 0} já existiam)`
+        : whatsappMode === "group"
+        ? `${data?.count || 0} contatos extraídos do grupo ${data?.group || ""}`
+        : whatsappMode === "conversation"
+        ? `${data?.count || 0} contatos extraídos da conversa${data?.contact_name ? ` com ${data.contact_name}` : ""}`
+        : `${data?.count || 0} contato importado${data?.contact_name ? `: ${data.contact_name}` : ""}`;
+      toast({ title: "Extração concluída!", description: desc });
+      setEvolutionGroup(""); setEvolutionPhone("");
+    } catch (error: any) {
+      toast({ title: "Erro na extração", description: error.message, variant: "destructive" });
+    } finally { setEvolutionLoading(false); }
+  };
+
+  // === Manual Add ===
   const handleManualAdd = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!profile?.org_id) return;
     setManualLoading(true);
     try {
       const { error } = await supabase.from("leads_raw").insert({
-        org_id: profile.org_id,
-        name: capitalizeName(manualName),
-        phone: formatPhone(manualPhone),
-        email: manualEmail || null,
-        source: "manual" as const,
-        status: "pending" as const,
+        org_id: profile.org_id, name: capitalizeName(manualName),
+        phone: formatPhone(manualPhone), email: manualEmail || null,
+        source: "manual" as const, status: "pending" as const,
       });
       if (error) throw error;
       toast({ title: "Lead adicionado!", description: `${manualName} salvo com sucesso.` });
-      setManualName("");
-      setManualPhone("");
-      setManualEmail("");
+      setManualName(""); setManualPhone(""); setManualEmail("");
     } catch (error: any) {
       toast({ title: "Erro", description: error.message, variant: "destructive" });
-    } finally {
-      setManualLoading(false);
-    }
+    } finally { setManualLoading(false); }
   };
 
   const instanceState = (state: string) => {
@@ -232,8 +311,17 @@ export default function Prospecting() {
     return <Badge variant="outline" className="text-muted-foreground rounded-lg text-[10px]">Aguardando</Badge>;
   };
 
+  const statusConfig: Record<string, { color: string; label: string }> = {
+    running: { color: "bg-warning/15 text-warning", label: "Raspando..." },
+    completed: { color: "bg-success/15 text-success", label: "Concluído" },
+    failed: { color: "bg-destructive/15 text-destructive", label: "Falhou" },
+  };
+
+  const completedJobs = scrapeJobs.filter(j => j.status === "completed").length;
+  const totalResults = scrapeJobs.reduce((a, j) => a + (j.results_count || 0), 0);
+
   return (
-    <div className="space-y-6 max-w-3xl">
+    <div className="space-y-6">
       <div className="flex items-center gap-3">
         <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/15">
           <Search className="h-5 w-5 text-primary" />
@@ -244,42 +332,108 @@ export default function Prospecting() {
         </div>
       </div>
 
-      <Tabs defaultValue="web">
-        <TabsList className="bg-secondary/30 rounded-xl p-1 h-auto">
-          <TabsTrigger value="web" className="rounded-lg text-xs data-[state=active]:bg-primary/10 data-[state=active]:text-primary py-2 px-4">
-            <Globe className="h-3.5 w-3.5 mr-1.5" />Web Scraping
-          </TabsTrigger>
-          <TabsTrigger value="whatsapp" className="rounded-lg text-xs data-[state=active]:bg-primary/10 data-[state=active]:text-primary py-2 px-4">
-            <MessageCircle className="h-3.5 w-3.5 mr-1.5" />WhatsApp
-          </TabsTrigger>
-          <TabsTrigger value="manual" className="rounded-lg text-xs data-[state=active]:bg-primary/10 data-[state=active]:text-primary py-2 px-4">
-            <Plus className="h-3.5 w-3.5 mr-1.5" />Manual
-          </TabsTrigger>
+      <Tabs defaultValue="web" className="space-y-6">
+        <TabsList className="glass rounded-xl p-1.5 h-auto gap-1.5 flex-wrap">
+          {[
+            { id: "web", label: "Web Scraping", icon: Globe, desc: "Raspagem inteligente de leads" },
+            { id: "whatsapp", label: "WhatsApp", icon: MessageCircle, desc: "Extração via Evolution API" },
+            { id: "manual", label: "Manual", icon: Plus, desc: "Adicionar lead manualmente" },
+          ].map(tab => (
+            <TabsTrigger
+              key={tab.id}
+              value={tab.id}
+              className="gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground px-4 py-2.5 flex-col sm:flex-row items-start sm:items-center rounded-lg"
+            >
+              <tab.icon className="h-4 w-4" />
+              <div className="text-left">
+                <span className="block text-sm font-medium">{tab.label}</span>
+                <span className="block text-[10px] opacity-70 sm:hidden">{tab.desc}</span>
+              </div>
+            </TabsTrigger>
+          ))}
         </TabsList>
 
-        <TabsContent value="web" className="mt-4">
-          <div className="glass rounded-2xl p-6 space-y-5">
-            <div>
-              <h2 className="text-lg font-semibold">Web Scraping via Firecrawl</h2>
-              <p className="text-sm text-muted-foreground mt-0.5">Insira a URL e palavras-chave para extrair contatos</p>
-            </div>
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <Label className="text-xs font-medium">URL alvo</Label>
-                <Input placeholder="https://exemplo.com/contatos" value={scrapeUrl} onChange={(e) => setScrapeUrl(e.target.value)} className="rounded-xl bg-secondary/30 border-border/30" />
+        {/* ===== WEB SCRAPING TAB ===== */}
+        <TabsContent value="web" className="space-y-6">
+          {/* Stats */}
+          <div className="grid grid-cols-3 gap-4">
+            {[
+              { label: "Raspagens", value: scrapeJobs.length, icon: Search, color: "text-primary" },
+              { label: "Concluídas", value: completedJobs, icon: CheckCircle2, color: "text-success" },
+              { label: "Leads Encontrados", value: totalResults, icon: Users2, color: "text-chart-4" },
+            ].map(m => (
+              <div key={m.label} className="glass rounded-xl p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">{m.label}</p>
+                    <p className="text-2xl font-bold mt-1">{m.value}</p>
+                  </div>
+                  <m.icon className={`h-5 w-5 ${m.color}`} />
+                </div>
               </div>
-              <div className="space-y-2">
-                <Label className="text-xs font-medium">Palavras-chave (opcional)</Label>
-                <Textarea placeholder="vendas, marketing, diretor..." value={scrapeKeywords} onChange={(e) => setScrapeKeywords(e.target.value)} rows={2} className="rounded-xl bg-secondary/30 border-border/30 resize-none" />
-              </div>
-              <Button onClick={handleScrape} disabled={scrapingLoading || !scrapeUrl} className="rounded-xl gradient-primary hover:opacity-90">
-                {scrapingLoading ? <><Loader2 className="h-4 w-4 animate-spin mr-2" />Prospectando...</> : <><Search className="h-4 w-4 mr-2" />Iniciar Prospecção</>}
+            ))}
+          </div>
+
+          {/* Header + Action */}
+          <div className="flex items-center justify-between">
+            <h3 className="text-lg font-semibold flex items-center gap-2">
+              <Zap className="h-5 w-5 text-primary" /> Gerador de Demanda
+            </h3>
+            <Button className="gap-2 rounded-xl" onClick={() => { resetWizard(); setWizardOpen(true); }}>
+              <Plus className="h-4 w-4" /> Nova Pesquisa
+            </Button>
+          </div>
+
+          {/* Jobs List */}
+          {scrapeJobs.length === 0 ? (
+            <div className="glass rounded-2xl p-12 text-center">
+              <Search className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+              <h3 className="text-lg font-semibold">Nenhuma pesquisa realizada</h3>
+              <p className="text-sm text-muted-foreground mt-1 mb-4">Use o Gerador de Demanda para encontrar leads por URL, nicho e palavras-chave.</p>
+              <Button onClick={() => { resetWizard(); setWizardOpen(true); }} className="gap-2 rounded-xl">
+                <Sparkles className="h-4 w-4" /> Iniciar Pesquisa
               </Button>
             </div>
-          </div>
+          ) : (
+            <div className="grid gap-3">
+              {scrapeJobs.map(job => {
+                const cfg = statusConfig[job.status] || statusConfig.running;
+                return (
+                  <div key={job.id} className="glass rounded-xl p-5 transition-all hover:border-primary/20">
+                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-3 mb-1.5">
+                          <h3 className="font-semibold truncate">{job.url}</h3>
+                          <Badge className={cfg.color} variant="secondary">{cfg.label}</Badge>
+                          {job.results_count > 0 && (
+                            <Badge variant="outline" className="gap-1 rounded-lg"><Users2 className="h-3 w-3" />{job.results_count} leads</Badge>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-4 text-sm text-muted-foreground flex-wrap">
+                          <span className="flex items-center gap-1"><Globe className="h-3.5 w-3.5" /> {job.url}</span>
+                          {job.keywords && <span className="flex items-center gap-1"><Tag className="h-3.5 w-3.5" /> {job.keywords}</span>}
+                          <span className="text-xs">{new Date(job.created_at).toLocaleDateString("pt-BR")}</span>
+                        </div>
+                        {job.error_message && <p className="text-xs text-destructive mt-1">{job.error_message}</p>}
+                        {job.status === "running" && <div className="mt-2 max-w-md"><Progress value={45} className="h-1.5" /></div>}
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        {job.status === "completed" && job.results_count > 0 && (
+                          <Button variant="outline" size="sm" className="gap-1.5 rounded-lg" onClick={() => { setViewResults(job); setSelectedResults(new Set()); }}>
+                            <Eye className="h-3.5 w-3.5" /> Ver Leads
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </TabsContent>
 
-        <TabsContent value="whatsapp" className="mt-4 space-y-4">
+        {/* ===== WHATSAPP TAB ===== */}
+        <TabsContent value="whatsapp" className="space-y-4">
           {/* Instance Management */}
           <div className="glass rounded-2xl p-6 space-y-5">
             <div className="flex items-center justify-between">
@@ -295,26 +449,18 @@ export default function Prospecting() {
               </Button>
             </div>
 
-            {/* Create new instance */}
             <div className="flex gap-2">
-              <Input
-                placeholder="Nome da nova instância"
-                value={newInstanceName}
-                onChange={(e) => setNewInstanceName(e.target.value)}
-                className="rounded-xl bg-secondary/30 border-border/30"
-                onKeyDown={(e) => e.key === "Enter" && handleCreateInstance()}
-              />
+              <Input placeholder="Nome da nova instância" value={newInstanceName} onChange={(e) => setNewInstanceName(e.target.value)}
+                className="rounded-xl bg-secondary/30 border-border/30" onKeyDown={(e) => e.key === "Enter" && handleCreateInstance()} />
               <Button onClick={handleCreateInstance} disabled={creatingInstance || !newInstanceName.trim()} className="rounded-xl gradient-primary hover:opacity-90 shrink-0">
                 {creatingInstance ? <Loader2 className="h-4 w-4 animate-spin" /> : <><Plus className="h-4 w-4 mr-1" />Criar</>}
               </Button>
             </div>
 
-            {/* Instance list */}
             {instances.length > 0 ? (
               <div className="space-y-2">
                 {instances.map((inst) => (
-                  <div
-                    key={inst.name}
+                  <div key={inst.name}
                     className={`flex items-center justify-between p-3 rounded-xl border transition-all cursor-pointer ${
                       selectedInstance === inst.name ? "bg-primary/5 border-primary/30" : "bg-secondary/20 border-border/30 hover:border-border/50"
                     }`}
@@ -356,22 +502,18 @@ export default function Prospecting() {
               </p>
             </div>
 
-            <div className="flex gap-2">
+            <div className="flex gap-2 flex-wrap">
               {[
                 { key: "all" as const, label: "Todos", icon: Smartphone },
                 { key: "group" as const, label: "Grupo", icon: Users2 },
                 { key: "conversation" as const, label: "Conversa", icon: MessageSquare },
                 { key: "contact" as const, label: "Contato", icon: Contact },
               ].map((opt) => (
-                <button
-                  key={opt.key}
-                  onClick={() => setWhatsappMode(opt.key)}
-                  className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-medium transition-all duration-200 border ${
+                <button key={opt.key} onClick={() => setWhatsappMode(opt.key)}
+                  className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-medium transition-all border ${
                     whatsappMode === opt.key ? "bg-primary/10 border-primary/30 text-primary" : "bg-secondary/30 border-border/30 text-muted-foreground hover:text-foreground hover:border-border/50"
-                  }`}
-                >
-                  <opt.icon className="h-3.5 w-3.5" />
-                  {opt.label}
+                  }`}>
+                  <opt.icon className="h-3.5 w-3.5" />{opt.label}
                 </button>
               ))}
             </div>
@@ -388,44 +530,12 @@ export default function Prospecting() {
                 <div className="space-y-2">
                   <Label className="text-xs font-medium">{whatsappMode === "conversation" ? "Número do telefone" : "Número do contato"}</Label>
                   <Input placeholder="+5511999999999" value={evolutionPhone} onChange={(e) => setEvolutionPhone(e.target.value)} className="rounded-xl bg-secondary/30 border-border/30" />
-                  <p className="text-[11px] text-muted-foreground">{whatsappMode === "conversation" ? "Extrai dados de contato de uma conversa direta" : "Importa um contato diretamente pelo número"}</p>
                 </div>
               )}
 
-              <Button
-                onClick={async () => {
-                  if (!profile?.org_id) return;
-                  setEvolutionLoading(true);
-                  try {
-                    const { data, error } = await supabase.functions.invoke("extract-whatsapp", {
-                      body: {
-                        org_id: profile.org_id,
-                        mode: whatsappMode,
-                        instance_name: selectedInstance || undefined,
-                        group_name: whatsappMode === "group" ? evolutionGroup : undefined,
-                        phone: whatsappMode !== "group" ? evolutionPhone : undefined,
-                      },
-                    });
-                    if (error) throw error;
-                    const desc = whatsappMode === "all"
-                      ? `${data?.count || 0} contatos extraídos (${data?.total_contacts || 0} total, ${data?.already_existing || 0} já existiam)`
-                      : whatsappMode === "group"
-                      ? `${data?.count || 0} contatos extraídos do grupo ${data?.group || ""}`
-                      : whatsappMode === "conversation"
-                      ? `${data?.count || 0} contatos extraídos da conversa${data?.contact_name ? ` com ${data.contact_name}` : ""}`
-                      : `${data?.count || 0} contato importado${data?.contact_name ? `: ${data.contact_name}` : ""}`;
-                    toast({ title: "Extração concluída!", description: desc });
-                    setEvolutionGroup("");
-                    setEvolutionPhone("");
-                  } catch (error: any) {
-                    toast({ title: "Erro na extração", description: error.message, variant: "destructive" });
-                  } finally {
-                    setEvolutionLoading(false);
-                  }
-                }}
+              <Button onClick={handleWhatsappExtract}
                 disabled={evolutionLoading || !selectedInstance || (whatsappMode === "group" ? !evolutionGroup : whatsappMode === "all" ? false : !evolutionPhone)}
-                className="rounded-xl gradient-primary hover:opacity-90"
-              >
+                className="rounded-xl gradient-primary hover:opacity-90">
                 {evolutionLoading ? <><Loader2 className="h-4 w-4 animate-spin mr-2" />Extraindo...</> : <><MessageCircle className="h-4 w-4 mr-2" />Extrair Contatos</>}
               </Button>
 
@@ -436,6 +546,7 @@ export default function Prospecting() {
           </div>
         </TabsContent>
 
+        {/* ===== MANUAL TAB ===== */}
         <TabsContent value="manual" className="mt-4">
           <div className="glass rounded-2xl p-6 space-y-5">
             <div>
@@ -465,7 +576,185 @@ export default function Prospecting() {
         </TabsContent>
       </Tabs>
 
-      {/* QR Code Dialog */}
+      {/* ===== WIZARD DIALOG ===== */}
+      <Dialog open={wizardOpen} onOpenChange={v => { if (!scrapingLoading) setWizardOpen(v); }}>
+        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto glass border-border/50">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-3">
+              <Sparkles className="h-5 w-5 text-primary" />
+              Nova Pesquisa de Demanda
+            </DialogTitle>
+            <DialogDescription>
+              {wizardStep === 1 && "Insira a URL e escolha o segmento de mercado"}
+              {wizardStep === 2 && "Adicione palavras-chave para refinar os resultados"}
+              {wizardStep === 3 && "Revise e inicie a pesquisa"}
+            </DialogDescription>
+          </DialogHeader>
+
+          {/* Step indicator */}
+          <div className="flex items-center gap-2 mb-2">
+            {[1, 2, 3].map(s => (
+              <div key={s} className="flex items-center gap-2 flex-1">
+                <div className={`h-8 w-8 rounded-full flex items-center justify-center text-xs font-bold transition-all ${
+                  s < wizardStep ? "bg-primary text-primary-foreground" :
+                  s === wizardStep ? "bg-primary text-primary-foreground ring-4 ring-primary/20" :
+                  "bg-muted text-muted-foreground"
+                }`}>
+                  {s < wizardStep ? <CheckCircle2 className="h-4 w-4" /> : s}
+                </div>
+                {s < 3 && <div className={`flex-1 h-0.5 rounded-full transition-all ${s < wizardStep ? "bg-primary" : "bg-muted"}`} />}
+              </div>
+            ))}
+          </div>
+
+          {/* Step 1: URL + Niche */}
+          {wizardStep === 1 && (
+            <div className="space-y-5">
+              <div className="space-y-2">
+                <Label className="text-sm font-semibold">URL para Raspagem *</Label>
+                <Input value={wizardUrl} onChange={e => setWizardUrl(e.target.value)} placeholder="https://exemplo.com/contatos"
+                  className="rounded-xl bg-secondary/30 border-border/30" />
+              </div>
+              <div>
+                <Label className="text-sm font-semibold">Segmento / Nicho (opcional)</Label>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mt-2">
+                  {PRESET_NICHES.map(n => (
+                    <button key={n.value} onClick={() => { setSelectedNiche(n.value); setCustomNiche(""); }}
+                      className={`text-left p-3 rounded-xl border transition-all text-sm ${
+                        selectedNiche === n.value
+                          ? "border-primary bg-primary/10 ring-2 ring-primary/20"
+                          : "border-border/50 hover:border-primary/30 hover:bg-muted/50"
+                      }`}>
+                      <span className="text-lg">{n.icon}</span>
+                      <p className="font-medium mt-1">{n.label}</p>
+                    </button>
+                  ))}
+                </div>
+                <div className="mt-3">
+                  <Label className="text-xs text-muted-foreground">Ou digite um nicho personalizado</Label>
+                  <Input value={customNiche} onChange={e => { setCustomNiche(e.target.value); setSelectedNiche(""); }}
+                    placeholder="Ex: clínicas estéticas, pet shops..." className="mt-1 rounded-xl bg-secondary/30 border-border/30" />
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Step 2: Keywords */}
+          {wizardStep === 2 && (
+            <div className="space-y-4">
+              <Label className="text-sm font-semibold">Palavras-chave (opcional)</Label>
+              <p className="text-xs text-muted-foreground -mt-2">Refine a busca adicionando termos específicos</p>
+              <div className="flex gap-2">
+                <Input value={keywordInput} onChange={e => setKeywordInput(e.target.value)}
+                  placeholder="Ex: vendas, marketing, diretor..." className="flex-1 rounded-xl bg-secondary/30 border-border/30"
+                  onKeyDown={e => e.key === "Enter" && (e.preventDefault(), addKeyword())} />
+                <Button variant="outline" size="sm" onClick={addKeyword} className="rounded-xl">Adicionar</Button>
+              </div>
+              {keywords.length > 0 && (
+                <div className="flex flex-wrap gap-1.5">
+                  {keywords.map(kw => (
+                    <Badge key={kw} variant="outline" className="gap-1 pr-1 rounded-lg">
+                      <Tag className="h-3 w-3" /> {kw}
+                      <button onClick={() => setKeywords(prev => prev.filter(k => k !== kw))} className="ml-1 hover:text-destructive"><X className="h-3 w-3" /></button>
+                    </Badge>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Step 3: Review */}
+          {wizardStep === 3 && (
+            <div className="space-y-4">
+              <div className="glass rounded-xl p-5 space-y-4">
+                <div>
+                  <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium">URL</p>
+                  <p className="text-sm font-semibold mt-1 flex items-center gap-2"><Globe className="h-4 w-4 text-primary" />{wizardUrl}</p>
+                </div>
+                {activeNiche && (
+                  <div>
+                    <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium">Nicho</p>
+                    <p className="text-sm font-semibold mt-1">{activeNiche}</p>
+                  </div>
+                )}
+                {keywords.length > 0 && (
+                  <div>
+                    <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium">Palavras-chave</p>
+                    <div className="flex flex-wrap gap-1.5 mt-1.5">
+                      {keywords.map(kw => <Badge key={kw} variant="outline" className="rounded-lg"><Tag className="h-3 w-3 mr-1" />{kw}</Badge>)}
+                    </div>
+                  </div>
+                )}
+                <div className="border-t border-border/50 pt-3">
+                  <p className="text-xs text-muted-foreground">
+                    A pesquisa irá raspar a página e extrair contatos{activeNiche ? ` focando em ${activeNiche}` : ""}. Os leads encontrados serão adicionados automaticamente à sua base.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Navigation */}
+          <DialogFooter className="flex items-center justify-between gap-3 sm:justify-between">
+            <div>
+              {wizardStep > 1 && !scrapingLoading && (
+                <Button variant="ghost" size="sm" onClick={() => setWizardStep(s => s - 1)} className="rounded-xl">Voltar</Button>
+              )}
+            </div>
+            <div className="flex gap-2">
+              {wizardStep < 3 && (
+                <Button onClick={() => setWizardStep(s => s + 1)} disabled={wizardStep === 1 && !wizardUrl.trim()} className="gap-1.5 rounded-xl">
+                  Próximo <ChevronRight className="h-4 w-4" />
+                </Button>
+              )}
+              {wizardStep === 3 && (
+                <Button onClick={handleScrape} disabled={scrapingLoading} className="gap-2 rounded-xl gradient-primary">
+                  {scrapingLoading ? <><Loader2 className="h-4 w-4 animate-spin" /> Raspando...</> : <><Zap className="h-4 w-4" /> Iniciar Pesquisa</>}
+                </Button>
+              )}
+            </div>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ===== RESULTS DIALOG ===== */}
+      <Dialog open={!!viewResults} onOpenChange={() => { setViewResults(null); setSelectedResults(new Set()); }}>
+        <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto glass border-border/50">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-3">
+              Resultados — {viewResults?.url}
+              <Badge variant="outline" className="rounded-lg">{viewResults?.results_count || 0} encontrados</Badge>
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-2">
+            {viewResults?.results && viewResults.results.length > 0 ? (
+              viewResults.results.map((r, i) => (
+                <div key={i} className="glass rounded-lg p-4 hover:bg-muted/30 transition-all">
+                  <div className="flex items-start gap-3">
+                    <div className="flex-1 min-w-0">
+                      <h4 className="font-medium text-sm flex items-center gap-2">
+                        <User className="h-3.5 w-3.5 text-primary" />
+                        {r.name || `Lead ${i + 1}`}
+                      </h4>
+                      <div className="flex flex-wrap gap-3 mt-1.5 text-xs text-muted-foreground">
+                        {r.phone && <span className="flex items-center gap-1"><Phone className="h-3 w-3" />{r.phone}</span>}
+                        {r.email && <span className="flex items-center gap-1">✉ {r.email}</span>}
+                        {r.company && <span className="flex items-center gap-1"><Building2 className="h-3 w-3" />{r.company}</span>}
+                        {r.role && <span className="flex items-center gap-1">{r.role}</span>}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))
+            ) : (
+              <p className="text-sm text-muted-foreground text-center py-4">Os leads foram salvos diretamente na base. Confira na página de Leads.</p>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ===== QR CODE DIALOG ===== */}
       <Dialog open={qrDialogOpen} onOpenChange={setQrDialogOpen}>
         <DialogContent className="glass border-border/30 sm:max-w-md">
           <DialogHeader>
