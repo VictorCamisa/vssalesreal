@@ -6,7 +6,8 @@ import {
   Search, Globe, MessageCircle, Loader2, Plus, Users2, MessageSquare,
   Contact, Smartphone, QrCode, RefreshCw, Trash2, Wifi, WifiOff,
   CheckCircle2, MapPin, Tag, X, Zap, ChevronRight, Eye, Download,
-  ArrowRight, Sparkles, MoreVertical, Phone, Building2, User
+  ArrowRight, Sparkles, MoreVertical, Phone, Building2, User, Upload,
+  FileSpreadsheet, AlertCircle
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -106,6 +107,11 @@ export default function Prospecting() {
   const [manualPhone, setManualPhone] = useState("");
   const [manualEmail, setManualEmail] = useState("");
   const [manualLoading, setManualLoading] = useState(false);
+
+  // File upload state
+  const [fileUploading, setFileUploading] = useState(false);
+  const [fileParsedLeads, setFileParsedLeads] = useState<{ name: string; phone: string; email: string }[]>([]);
+  const [fileError, setFileError] = useState("");
 
   const formatPhone = (phone: string) => {
     const digits = phone.replace(/\D/g, "");
@@ -335,6 +341,90 @@ export default function Prospecting() {
     } finally { setManualLoading(false); }
   };
 
+  // === File Upload ===
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setFileError("");
+    setFileParsedLeads([]);
+
+    const ext = file.name.split(".").pop()?.toLowerCase();
+    if (!["csv", "txt"].includes(ext || "")) {
+      setFileError("Formato não suportado. Use arquivos .csv ou .txt");
+      return;
+    }
+
+    try {
+      const text = await file.text();
+      const lines = text.split(/\r?\n/).filter(l => l.trim());
+      if (lines.length < 2) {
+        setFileError("Arquivo vazio ou sem dados suficientes.");
+        return;
+      }
+
+      // Detect separator
+      const sep = lines[0].includes(";") ? ";" : lines[0].includes("\t") ? "\t" : ",";
+      const header = lines[0].toLowerCase().split(sep).map(h => h.trim().replace(/"/g, ""));
+
+      // Find column indices
+      const nameIdx = header.findIndex(h => ["nome", "name", "nome completo", "full_name", "fullname"].includes(h));
+      const phoneIdx = header.findIndex(h => ["telefone", "phone", "celular", "whatsapp", "tel", "fone", "numero"].includes(h));
+      const emailIdx = header.findIndex(h => ["email", "e-mail", "e_mail"].includes(h));
+
+      if (phoneIdx === -1 && nameIdx === -1) {
+        setFileError("Não encontrei colunas de 'nome' ou 'telefone' no cabeçalho. Use: nome, telefone, email.");
+        return;
+      }
+
+      const parsed = lines.slice(1).map(line => {
+        const cols = line.split(sep).map(c => c.trim().replace(/^"|"$/g, ""));
+        return {
+          name: nameIdx >= 0 ? cols[nameIdx] || "" : "",
+          phone: phoneIdx >= 0 ? cols[phoneIdx] || "" : "",
+          email: emailIdx >= 0 ? cols[emailIdx] || "" : "",
+        };
+      }).filter(l => l.name || l.phone);
+
+      if (parsed.length === 0) {
+        setFileError("Nenhum lead válido encontrado no arquivo.");
+        return;
+      }
+
+      setFileParsedLeads(parsed);
+    } catch {
+      setFileError("Erro ao ler o arquivo.");
+    }
+    // Reset input
+    e.target.value = "";
+  };
+
+  const handleFileImport = async () => {
+    if (!profile?.org_id || fileParsedLeads.length === 0) return;
+    setFileUploading(true);
+    try {
+      const batch = fileParsedLeads.map(l => ({
+        org_id: profile.org_id!,
+        name: l.name ? capitalizeName(l.name) : null,
+        phone: l.phone ? formatPhone(l.phone) : null,
+        email: l.email || null,
+        source: "import" as const,
+        status: "pending" as const,
+      }));
+
+      // Insert in chunks of 500
+      for (let i = 0; i < batch.length; i += 500) {
+        const chunk = batch.slice(i, i + 500);
+        const { error } = await supabase.from("leads_raw").insert(chunk);
+        if (error) throw error;
+      }
+
+      toast({ title: "Importação concluída!", description: `${batch.length} leads importados do arquivo.` });
+      setFileParsedLeads([]);
+    } catch (error: any) {
+      toast({ title: "Erro na importação", description: error.message, variant: "destructive" });
+    } finally { setFileUploading(false); }
+  };
+
   const instanceState = (state: string) => {
     if (state === "open") return <Badge className="bg-success/10 text-success border-success/30 rounded-lg text-[10px]" variant="outline"><Wifi className="h-3 w-3 mr-1" />Conectado</Badge>;
     if (state === "close" || state === "closed") return <Badge className="bg-warning/10 text-warning border-warning/30 rounded-lg text-[10px]" variant="outline"><WifiOff className="h-3 w-3 mr-1" />Desconectado</Badge>;
@@ -368,6 +458,7 @@ export default function Prospecting() {
             { id: "web", label: "Web Scraping", icon: Globe, desc: "Raspagem inteligente de leads" },
             { id: "whatsapp", label: "WhatsApp", icon: MessageCircle, desc: "Extração via Evolution API" },
             { id: "manual", label: "Manual", icon: Plus, desc: "Adicionar lead manualmente" },
+            { id: "file", label: "Arquivo", icon: Upload, desc: "Importar leads de arquivo" },
           ].map(tab => (
             <TabsTrigger
               key={tab.id}
@@ -669,6 +760,78 @@ export default function Prospecting() {
                 {manualLoading ? <><Loader2 className="h-4 w-4 animate-spin mr-2" />Salvando...</> : <><Plus className="h-4 w-4 mr-2" />Adicionar Lead</>}
               </Button>
             </form>
+          </div>
+        </TabsContent>
+
+        {/* ===== FILE UPLOAD TAB ===== */}
+        <TabsContent value="file" className="mt-4">
+          <div className="glass rounded-2xl p-6 space-y-5">
+            <div>
+              <h2 className="text-lg font-semibold">Importar Leads de Arquivo</h2>
+              <p className="text-sm text-muted-foreground mt-0.5">Envie um arquivo CSV com colunas: nome, telefone, email</p>
+            </div>
+
+            <div className="space-y-4">
+              <label
+                htmlFor="file-upload"
+                className="flex flex-col items-center justify-center gap-3 border-2 border-dashed border-border/50 rounded-xl p-8 cursor-pointer hover:border-primary/50 hover:bg-muted/30 transition-all"
+              >
+                <div className="h-12 w-12 rounded-xl bg-primary/10 flex items-center justify-center">
+                  <FileSpreadsheet className="h-6 w-6 text-primary" />
+                </div>
+                <div className="text-center">
+                  <p className="text-sm font-medium">Clique para selecionar arquivo</p>
+                  <p className="text-xs text-muted-foreground mt-1">Formatos aceitos: .csv, .txt (separado por vírgula, ponto-e-vírgula ou tab)</p>
+                </div>
+                <input
+                  id="file-upload"
+                  type="file"
+                  accept=".csv,.txt"
+                  onChange={handleFileUpload}
+                  className="hidden"
+                />
+              </label>
+
+              {fileError && (
+                <div className="flex items-center gap-2 text-sm text-destructive bg-destructive/10 rounded-xl p-3">
+                  <AlertCircle className="h-4 w-4 shrink-0" />
+                  {fileError}
+                </div>
+              )}
+
+              {fileParsedLeads.length > 0 && (
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm font-medium">{fileParsedLeads.length} leads encontrados no arquivo</p>
+                    <Button variant="ghost" size="sm" onClick={() => setFileParsedLeads([])} className="text-xs text-muted-foreground">
+                      <X className="h-3 w-3 mr-1" />Limpar
+                    </Button>
+                  </div>
+
+                  <ScrollArea className="h-[250px] rounded-xl border border-border/30">
+                    <div className="divide-y divide-border/30">
+                      {fileParsedLeads.slice(0, 100).map((l, i) => (
+                        <div key={i} className="flex items-center gap-3 px-4 py-2.5 text-sm">
+                          <span className="text-xs text-muted-foreground w-6">{i + 1}</span>
+                          <span className="flex-1 truncate font-medium">{l.name || "—"}</span>
+                          <span className="text-muted-foreground text-xs">{l.phone || "—"}</span>
+                          <span className="text-muted-foreground text-xs truncate max-w-[150px]">{l.email || "—"}</span>
+                        </div>
+                      ))}
+                      {fileParsedLeads.length > 100 && (
+                        <div className="px-4 py-2.5 text-xs text-muted-foreground text-center">
+                          ...e mais {fileParsedLeads.length - 100} leads
+                        </div>
+                      )}
+                    </div>
+                  </ScrollArea>
+
+                  <Button onClick={handleFileImport} disabled={fileUploading} className="rounded-xl gradient-primary hover:opacity-90 w-full sm:w-auto">
+                    {fileUploading ? <><Loader2 className="h-4 w-4 animate-spin mr-2" />Importando...</> : <><Upload className="h-4 w-4 mr-2" />Importar {fileParsedLeads.length} Leads</>}
+                  </Button>
+                </div>
+              )}
+            </div>
           </div>
         </TabsContent>
       </Tabs>
