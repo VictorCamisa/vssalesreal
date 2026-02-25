@@ -2,9 +2,11 @@ import { useEffect, useState, useRef, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
+import ReactMarkdown from "react-markdown";
 import {
   Bot, Brain, MessageSquare, Sparkles, Save, Loader2, Plus, Trash2,
-  Clock, ToggleLeft, ToggleRight, Send, FileText, Zap, Copy, Check
+  Clock, Send, FileText, Zap, Copy, Check, RefreshCw,
+  Mail, Phone, Linkedin, MessageCircle, Target, TrendingUp, Users, Lightbulb
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -15,13 +17,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Slider } from "@/components/ui/slider";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Separator } from "@/components/ui/separator";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 
@@ -58,6 +55,131 @@ const DAY_LABELS: Record<number, string> = {
   1: "Seg", 2: "Ter", 3: "Qua", 4: "Qui", 5: "Sex", 6: "Sáb", 7: "Dom",
 };
 
+// ---- Templates ----
+const CHATBOT_TEMPLATES = [
+  {
+    name: "Atendimento Geral",
+    prompt: `Você é a assistente virtual da empresa. Seja simpática, profissional e resolva dúvidas dos clientes.
+
+Regras:
+- Cumprimente o cliente pelo nome
+- Responda de forma clara e objetiva
+- Ofereça alternativas quando não souber
+- Encaminhe para humano se necessário
+- Colete dados de contato quando apropriado`,
+  },
+  {
+    name: "Qualificação de Leads",
+    prompt: `Você é uma SDR virtual. Seu objetivo é qualificar leads via WhatsApp usando BANT (Budget, Authority, Need, Timeline).
+
+Fluxo:
+1. Cumprimente e pergunte como pode ajudar
+2. Identifique a necessidade principal
+3. Faça perguntas de qualificação naturalmente
+4. Classifique como quente/morno/frio
+5. Agende reunião com closer se qualificado
+6. Nunca force venda, seja consultiva`,
+  },
+  {
+    name: "Suporte Técnico",
+    prompt: `Você é um agente de suporte técnico nível 1. Resolva problemas comuns e escale os complexos.
+
+Fluxo:
+1. Identifique o problema do cliente
+2. Consulte a base de conhecimento
+3. Forneça solução passo-a-passo
+4. Se não resolver, abra ticket interno
+5. Sempre confirme se o problema foi resolvido`,
+  },
+  {
+    name: "Pós-venda / Sucesso",
+    prompt: `Você cuida do relacionamento pós-venda. Garanta satisfação e identifique oportunidades de upsell.
+
+Objetivos:
+- Garantir onboarding suave
+- Coletar feedback sobre o produto/serviço
+- Identificar insatisfações antes que virem churn
+- Sugerir produtos/serviços complementares naturalmente
+- Agendar check-ins periódicos`,
+  },
+];
+
+const ASSISTANT_SUGGESTIONS = [
+  { icon: Target, label: "Analisar lead", prompt: "Analise este lead e sugira a melhor abordagem: " },
+  { icon: TrendingUp, label: "Diagnóstico de pipeline", prompt: "Faça um diagnóstico do meu pipeline de vendas. Quais gargalos posso ter e como melhorar a conversão?" },
+  { icon: Users, label: "Script de objeção", prompt: "Crie scripts para contornar as 5 objeções mais comuns em vendas B2B do meu segmento." },
+  { icon: Lightbulb, label: "Estratégia de prospecção", prompt: "Sugira uma estratégia de prospecção outbound para o meu negócio, incluindo canais, frequência e templates." },
+  { icon: MessageCircle, label: "Resumir conversa", prompt: "Resuma esta conversa com o cliente e extraia os próximos passos: " },
+  { icon: RefreshCw, label: "Follow-up inteligente", prompt: "Crie uma cadência de follow-up de 5 toques para um lead que demonstrou interesse mas não respondeu." },
+];
+
+const MSG_TYPES = [
+  { value: "whatsapp", label: "WhatsApp", icon: MessageCircle },
+  { value: "linkedin", label: "LinkedIn", icon: Linkedin },
+  { value: "email", label: "Email", icon: Mail },
+  { value: "cold_call", label: "Ligação", icon: Phone },
+];
+
+// ---- Streaming helper ----
+async function streamAI(
+  url: string,
+  body: any,
+  onDelta: (text: string) => void,
+  onDone: () => void,
+  onError: (msg: string) => void,
+) {
+  try {
+    const resp = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+      },
+      body: JSON.stringify(body),
+    });
+
+    if (!resp.ok) {
+      const errData = await resp.json().catch(() => ({}));
+      onError(errData.error || `Erro ${resp.status}`);
+      return;
+    }
+
+    const reader = resp.body?.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    let full = "";
+
+    while (reader) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+
+      let idx;
+      while ((idx = buffer.indexOf("\n")) !== -1) {
+        let line = buffer.slice(0, idx);
+        buffer = buffer.slice(idx + 1);
+        if (line.endsWith("\r")) line = line.slice(0, -1);
+        if (!line.startsWith("data: ")) continue;
+        const json = line.slice(6).trim();
+        if (json === "[DONE]") break;
+        try {
+          const parsed = JSON.parse(json);
+          const content = parsed.choices?.[0]?.delta?.content;
+          if (content) {
+            full += content;
+            onDelta(full);
+          }
+        } catch {}
+      }
+    }
+  } catch (e: any) {
+    onError(e.message);
+  }
+  onDone();
+}
+
+const AI_CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-chat`;
+
 // ========== CHATBOT TAB ==========
 function ChatbotTab({ orgId }: { orgId: string }) {
   const { toast } = useToast();
@@ -73,52 +195,36 @@ function ChatbotTab({ orgId }: { orgId: string }) {
     setWebhookUrl(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-whatsapp-hook`);
   }, []);
 
-  // Load instances from Evolution integration
   useEffect(() => {
     if (!orgId || !user) return;
     (async () => {
       setLoadingInstances(true);
       try {
         const { data } = await supabase
-          .from("integrations")
-          .select("*")
-          .eq("org_id", orgId)
-          .eq("service_name", "evolution")
-          .maybeSingle();
-
+          .from("integrations").select("*")
+          .eq("org_id", orgId).eq("service_name", "evolution").maybeSingle();
         if (data?.config) {
           const config = data.config as any;
           const byUser = config?.instances_by_user || {};
           const userInstances = byUser[user.id] || [];
           setInstances(userInstances);
-          if (userInstances.length > 0 && !selectedInstance) {
-            setSelectedInstance(userInstances[0]);
-          }
+          if (userInstances.length > 0 && !selectedInstance) setSelectedInstance(userInstances[0]);
         }
-      } catch (e) {
-        console.error(e);
-      }
+      } catch (e) { console.error(e); }
       setLoadingInstances(false);
     })();
   }, [orgId, user]);
 
-  // Load chatbot configs for all instances
   useEffect(() => {
     if (!orgId) return;
-    supabase
-      .from("ai_configs")
-      .select("*")
-      .eq("org_id", orgId)
-      .eq("config_type", "chatbot")
+    supabase.from("ai_configs").select("*").eq("org_id", orgId).eq("config_type", "chatbot")
       .then(({ data }) => {
         const map: Record<string, AiConfig> = {};
         data?.forEach((row: any) => {
           if (row.instance_name) {
             map[row.instance_name] = {
-              ...row,
-              schedule_days: row.schedule_days || [1, 2, 3, 4, 5],
-              temperature: Number(row.temperature) || 0.7,
-              config: row.config || {},
+              ...row, schedule_days: row.schedule_days || [1, 2, 3, 4, 5],
+              temperature: Number(row.temperature) || 0.7, config: row.config || {},
             };
           }
         });
@@ -127,24 +233,14 @@ function ChatbotTab({ orgId }: { orgId: string }) {
   }, [orgId]);
 
   const currentConfig = configs[selectedInstance] || {
-    org_id: orgId,
-    config_type: "chatbot",
-    instance_name: selectedInstance,
-    enabled: false,
-    system_prompt: "",
-    temperature: 0.7,
-    schedule_start: "08:00",
-    schedule_end: "18:00",
-    schedule_days: [1, 2, 3, 4, 5],
-    only_outside_hours: false,
-    config: {},
+    org_id: orgId, config_type: "chatbot", instance_name: selectedInstance,
+    enabled: false, system_prompt: "", temperature: 0.7,
+    schedule_start: "08:00", schedule_end: "18:00",
+    schedule_days: [1, 2, 3, 4, 5], only_outside_hours: false, config: {},
   };
 
   const updateConfig = (partial: Partial<AiConfig>) => {
-    setConfigs((prev) => ({
-      ...prev,
-      [selectedInstance]: { ...currentConfig, ...partial },
-    }));
+    setConfigs((prev) => ({ ...prev, [selectedInstance]: { ...currentConfig, ...partial } }));
   };
 
   const handleSave = async () => {
@@ -152,19 +248,12 @@ function ChatbotTab({ orgId }: { orgId: string }) {
     setSaving(true);
     try {
       const payload = {
-        org_id: orgId,
-        config_type: "chatbot",
-        instance_name: selectedInstance,
-        enabled: currentConfig.enabled,
-        system_prompt: currentConfig.system_prompt,
-        temperature: currentConfig.temperature,
-        schedule_start: currentConfig.schedule_start,
-        schedule_end: currentConfig.schedule_end,
-        schedule_days: currentConfig.schedule_days,
-        only_outside_hours: currentConfig.only_outside_hours,
-        config: currentConfig.config,
+        org_id: orgId, config_type: "chatbot", instance_name: selectedInstance,
+        enabled: currentConfig.enabled, system_prompt: currentConfig.system_prompt,
+        temperature: currentConfig.temperature, schedule_start: currentConfig.schedule_start,
+        schedule_end: currentConfig.schedule_end, schedule_days: currentConfig.schedule_days,
+        only_outside_hours: currentConfig.only_outside_hours, config: currentConfig.config,
       };
-
       if (currentConfig.id) {
         await supabase.from("ai_configs").update(payload).eq("id", currentConfig.id);
       } else {
@@ -185,29 +274,21 @@ function ChatbotTab({ orgId }: { orgId: string }) {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  if (loadingInstances) {
-    return (
-      <div className="flex items-center justify-center py-12">
-        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-      </div>
-    );
-  }
+  if (loadingInstances) return <div className="flex items-center justify-center py-12"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>;
 
   if (instances.length === 0) {
     return (
       <div className="glass rounded-2xl p-8 text-center space-y-3">
         <Bot className="h-12 w-12 mx-auto text-muted-foreground/50" />
         <h3 className="text-lg font-semibold">Nenhuma instância WhatsApp</h3>
-        <p className="text-sm text-muted-foreground max-w-md mx-auto">
-          Crie uma instância WhatsApp na aba de Prospecção para configurar o chatbot.
-        </p>
+        <p className="text-sm text-muted-foreground max-w-md mx-auto">Crie uma instância WhatsApp na aba de Prospecção para configurar o chatbot.</p>
       </div>
     );
   }
 
   return (
     <div className="space-y-5">
-      {/* Instance selector */}
+      {/* Instance selector + toggle */}
       <div className="glass rounded-2xl p-5 space-y-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -220,24 +301,16 @@ function ChatbotTab({ orgId }: { orgId: string }) {
             </div>
           </div>
           <div className="flex items-center gap-3">
-            <Switch
-              checked={currentConfig.enabled}
-              onCheckedChange={(v) => updateConfig({ enabled: v })}
-            />
+            <Switch checked={currentConfig.enabled} onCheckedChange={(v) => updateConfig({ enabled: v })} />
             <Badge variant="outline" className={currentConfig.enabled ? "bg-success/10 text-success border-success/30 text-xs" : "text-xs"}>
               {currentConfig.enabled ? "Ativo" : "Inativo"}
             </Badge>
           </div>
         </div>
-
         <Select value={selectedInstance} onValueChange={setSelectedInstance}>
-          <SelectTrigger className="rounded-xl bg-secondary/30">
-            <SelectValue placeholder="Selecione..." />
-          </SelectTrigger>
+          <SelectTrigger className="rounded-xl bg-secondary/30"><SelectValue placeholder="Selecione..." /></SelectTrigger>
           <SelectContent>
-            {instances.map((name) => (
-              <SelectItem key={name} value={name}>{name}</SelectItem>
-            ))}
+            {instances.map((name) => <SelectItem key={name} value={name}>{name}</SelectItem>)}
           </SelectContent>
         </Select>
       </div>
@@ -248,7 +321,7 @@ function ChatbotTab({ orgId }: { orgId: string }) {
           <Zap className="h-4 w-4 text-warning" />
           <Label className="font-semibold text-sm">Webhook URL</Label>
         </div>
-        <p className="text-xs text-muted-foreground">Configure este URL como webhook da instância na Evolution API para receber mensagens.</p>
+        <p className="text-xs text-muted-foreground">Configure este URL como webhook da instância na Evolution API.</p>
         <div className="flex gap-2">
           <Input readOnly value={webhookUrl} className="rounded-xl bg-secondary/30 font-mono text-xs" />
           <Button variant="outline" size="icon" className="rounded-xl shrink-0" onClick={copyWebhook}>
@@ -257,15 +330,32 @@ function ChatbotTab({ orgId }: { orgId: string }) {
         </div>
       </div>
 
+      {/* Templates */}
+      <div className="glass rounded-2xl p-5 space-y-3">
+        <Label className="font-semibold text-sm">Templates de Agente</Label>
+        <p className="text-xs text-muted-foreground">Clique para aplicar um template pré-configurado como base.</p>
+        <div className="grid grid-cols-2 gap-2">
+          {CHATBOT_TEMPLATES.map((t) => (
+            <Button
+              key={t.name} variant="outline" size="sm"
+              className="rounded-xl text-xs h-auto py-2 justify-start"
+              onClick={() => updateConfig({ system_prompt: t.prompt })}
+            >
+              <Bot className="h-3.5 w-3.5 mr-1.5 shrink-0" />{t.name}
+            </Button>
+          ))}
+        </div>
+      </div>
+
       {/* Prompt */}
       <div className="glass rounded-2xl p-5 space-y-3">
         <Label className="font-semibold text-sm">Prompt / Personalidade do Bot</Label>
         <Textarea
-          placeholder="Ex: Você é a assistente virtual da empresa X. Seja simpática, profissional e ajude com dúvidas sobre nossos produtos..."
+          placeholder="Defina a personalidade, tom de voz, regras e objetivos do chatbot..."
           value={currentConfig.system_prompt}
           onChange={(e) => updateConfig({ system_prompt: e.target.value })}
-          rows={5}
-          className="rounded-xl bg-secondary/30 resize-none"
+          rows={8}
+          className="rounded-xl bg-secondary/30 resize-none font-mono text-xs"
         />
       </div>
 
@@ -275,18 +365,8 @@ function ChatbotTab({ orgId }: { orgId: string }) {
           <Label className="font-semibold text-sm">Criatividade (Temperature)</Label>
           <Badge variant="outline" className="font-mono text-xs">{currentConfig.temperature.toFixed(1)}</Badge>
         </div>
-        <Slider
-          value={[currentConfig.temperature]}
-          min={0}
-          max={1}
-          step={0.1}
-          onValueChange={([v]) => updateConfig({ temperature: v })}
-          className="py-2"
-        />
-        <div className="flex justify-between text-[10px] text-muted-foreground">
-          <span>Preciso</span>
-          <span>Criativo</span>
-        </div>
+        <Slider value={[currentConfig.temperature]} min={0} max={1} step={0.1} onValueChange={([v]) => updateConfig({ temperature: v })} className="py-2" />
+        <div className="flex justify-between text-[10px] text-muted-foreground"><span>Preciso</span><span>Criativo</span></div>
       </div>
 
       {/* Schedule */}
@@ -295,35 +375,20 @@ function ChatbotTab({ orgId }: { orgId: string }) {
           <Clock className="h-4 w-4 text-primary" />
           <Label className="font-semibold text-sm">Horário de Atendimento</Label>
         </div>
-
         <div className="flex items-center gap-3">
-          <Switch
-            checked={currentConfig.only_outside_hours}
-            onCheckedChange={(v) => updateConfig({ only_outside_hours: v })}
-          />
+          <Switch checked={currentConfig.only_outside_hours} onCheckedChange={(v) => updateConfig({ only_outside_hours: v })} />
           <span className="text-sm">Só responder fora do horário comercial</span>
         </div>
-
         {currentConfig.only_outside_hours && (
           <>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label className="text-xs">Início</Label>
-                <Input
-                  type="time"
-                  value={currentConfig.schedule_start || "08:00"}
-                  onChange={(e) => updateConfig({ schedule_start: e.target.value })}
-                  className="rounded-xl bg-secondary/30"
-                />
+                <Input type="time" value={currentConfig.schedule_start || "08:00"} onChange={(e) => updateConfig({ schedule_start: e.target.value })} className="rounded-xl bg-secondary/30" />
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs">Fim</Label>
-                <Input
-                  type="time"
-                  value={currentConfig.schedule_end || "18:00"}
-                  onChange={(e) => updateConfig({ schedule_end: e.target.value })}
-                  className="rounded-xl bg-secondary/30"
-                />
+                <Input type="time" value={currentConfig.schedule_end || "18:00"} onChange={(e) => updateConfig({ schedule_end: e.target.value })} className="rounded-xl bg-secondary/30" />
               </div>
             </div>
             <div className="space-y-2">
@@ -334,9 +399,7 @@ function ChatbotTab({ orgId }: { orgId: string }) {
                     <Checkbox
                       checked={currentConfig.schedule_days.includes(d)}
                       onCheckedChange={(checked) => {
-                        const days = checked
-                          ? [...currentConfig.schedule_days, d]
-                          : currentConfig.schedule_days.filter((x) => x !== d);
+                        const days = checked ? [...currentConfig.schedule_days, d] : currentConfig.schedule_days.filter((x) => x !== d);
                         updateConfig({ schedule_days: days });
                       }}
                     />
@@ -368,98 +431,45 @@ function AssistantTab({ orgId }: { orgId: string }) {
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    supabase
-      .from("ai_configs")
-      .select("*")
-      .eq("org_id", orgId)
-      .eq("config_type", "assistant")
-      .is("instance_name", null)
-      .maybeSingle()
+    supabase.from("ai_configs").select("*").eq("org_id", orgId).eq("config_type", "assistant")
+      .is("instance_name", null).maybeSingle()
       .then(({ data }: any) => {
         if (data) setConfig({ ...data, temperature: Number(data.temperature) || 0.7, schedule_days: data.schedule_days || [] });
       });
   }, [orgId]);
 
-  useEffect(() => {
-    scrollRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+  useEffect(() => { scrollRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
 
-  const sendMessage = async () => {
-    if (!input.trim() || isLoading) return;
-    const userMsg: ChatMessage = { role: "user", content: input.trim() };
+  const sendMessage = async (text?: string) => {
+    const msg = text || input.trim();
+    if (!msg || isLoading) return;
+    const userMsg: ChatMessage = { role: "user", content: msg };
     setMessages((prev) => [...prev, userMsg]);
     setInput("");
     setIsLoading(true);
 
-    let assistantSoFar = "";
     const allMsgs = [...messages, userMsg];
 
-    try {
-      const resp = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-chat`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
-        },
-        body: JSON.stringify({ messages: allMsgs, org_id: orgId, mode: "assistant" }),
-      });
-
-      if (!resp.ok) {
-        const errData = await resp.json().catch(() => ({}));
-        throw new Error(errData.error || `Erro ${resp.status}`);
-      }
-
-      const reader = resp.body?.getReader();
-      const decoder = new TextDecoder();
-      let buffer = "";
-
-      while (reader) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-
-        let idx;
-        while ((idx = buffer.indexOf("\n")) !== -1) {
-          let line = buffer.slice(0, idx);
-          buffer = buffer.slice(idx + 1);
-          if (line.endsWith("\r")) line = line.slice(0, -1);
-          if (!line.startsWith("data: ")) continue;
-          const json = line.slice(6).trim();
-          if (json === "[DONE]") break;
-          try {
-            const parsed = JSON.parse(json);
-            const content = parsed.choices?.[0]?.delta?.content;
-            if (content) {
-              assistantSoFar += content;
-              setMessages((prev) => {
-                const last = prev[prev.length - 1];
-                if (last?.role === "assistant") {
-                  return prev.map((m, i) => i === prev.length - 1 ? { ...m, content: assistantSoFar } : m);
-                }
-                return [...prev, { role: "assistant", content: assistantSoFar }];
-              });
-            }
-          } catch {}
-        }
-      }
-    } catch (e: any) {
-      toast({ title: "Erro", description: e.message, variant: "destructive" });
-    }
-    setIsLoading(false);
+    await streamAI(
+      AI_CHAT_URL,
+      { messages: allMsgs, org_id: orgId, mode: "assistant" },
+      (full) => {
+        setMessages((prev) => {
+          const last = prev[prev.length - 1];
+          if (last?.role === "assistant") return prev.map((m, i) => i === prev.length - 1 ? { ...m, content: full } : m);
+          return [...prev, { role: "assistant", content: full }];
+        });
+      },
+      () => setIsLoading(false),
+      (err) => { toast({ title: "Erro", description: err, variant: "destructive" }); setIsLoading(false); },
+    );
   };
 
   const saveConfig = async () => {
     if (!config) return;
     setSavingConfig(true);
     try {
-      const payload = {
-        org_id: orgId,
-        config_type: "assistant",
-        instance_name: null,
-        enabled: true,
-        system_prompt: config.system_prompt,
-        temperature: config.temperature,
-      };
+      const payload = { org_id: orgId, config_type: "assistant", instance_name: null, enabled: true, system_prompt: config.system_prompt, temperature: config.temperature };
       if (config.id) {
         await supabase.from("ai_configs").update(payload).eq("id", config.id);
       } else {
@@ -473,14 +483,22 @@ function AssistantTab({ orgId }: { orgId: string }) {
     setSavingConfig(false);
   };
 
+  const clearChat = () => setMessages([]);
+
   return (
     <div className="space-y-4">
-      {/* Config toggle */}
       <div className="flex items-center justify-between">
-        <p className="text-sm text-muted-foreground">Assistente IA interno para sua equipe</p>
-        <Button variant="outline" size="sm" className="rounded-xl text-xs" onClick={() => setShowConfig(!showConfig)}>
-          {showConfig ? "Fechar Config" : "⚙️ Configurar"}
-        </Button>
+        <p className="text-sm text-muted-foreground">Assistente IA estratégico para sua equipe de vendas</p>
+        <div className="flex gap-2">
+          {messages.length > 0 && (
+            <Button variant="outline" size="sm" className="rounded-xl text-xs" onClick={clearChat}>
+              <Trash2 className="h-3.5 w-3.5 mr-1" />Limpar
+            </Button>
+          )}
+          <Button variant="outline" size="sm" className="rounded-xl text-xs" onClick={() => setShowConfig(!showConfig)}>
+            {showConfig ? "Fechar Config" : "⚙️ Configurar"}
+          </Button>
+        </div>
       </div>
 
       {showConfig && (
@@ -494,8 +512,7 @@ function AssistantTab({ orgId }: { orgId: string }) {
                 org_id: orgId, config_type: "assistant", enabled: true, system_prompt: e.target.value,
                 temperature: 0.7, schedule_start: null, schedule_end: null, schedule_days: [], only_outside_hours: false, config: {},
               })}
-              rows={4}
-              className="rounded-xl bg-secondary/30 resize-none"
+              rows={4} className="rounded-xl bg-secondary/30 resize-none font-mono text-xs"
             />
           </div>
           <div className="space-y-2">
@@ -503,16 +520,32 @@ function AssistantTab({ orgId }: { orgId: string }) {
               <Label className="text-xs font-semibold">Criatividade</Label>
               <Badge variant="outline" className="font-mono text-xs">{(config?.temperature ?? 0.7).toFixed(1)}</Badge>
             </div>
-            <Slider
-              value={[config?.temperature ?? 0.7]}
-              min={0} max={1} step={0.1}
-              onValueChange={([v]) => setConfig((prev) => prev ? { ...prev, temperature: v } : prev)}
-            />
+            <Slider value={[config?.temperature ?? 0.7]} min={0} max={1} step={0.1} onValueChange={([v]) => setConfig((prev) => prev ? { ...prev, temperature: v } : prev)} />
           </div>
           <Button onClick={saveConfig} disabled={savingConfig} size="sm" className="rounded-xl gradient-primary">
-            {savingConfig ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" /> : <Save className="h-3.5 w-3.5 mr-1.5" />}
-            Salvar
+            {savingConfig ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" /> : <Save className="h-3.5 w-3.5 mr-1.5" />}Salvar
           </Button>
+        </div>
+      )}
+
+      {/* Quick suggestions */}
+      {messages.length === 0 && (
+        <div className="grid grid-cols-2 gap-2">
+          {ASSISTANT_SUGGESTIONS.map((s) => (
+            <Button
+              key={s.label} variant="outline" size="sm"
+              className="rounded-xl text-xs h-auto py-2.5 justify-start text-left"
+              onClick={() => {
+                if (s.prompt.endsWith(": ")) {
+                  setInput(s.prompt);
+                } else {
+                  sendMessage(s.prompt);
+                }
+              }}
+            >
+              <s.icon className="h-3.5 w-3.5 mr-1.5 shrink-0 text-primary" />{s.label}
+            </Button>
+          ))}
         </div>
       )}
 
@@ -528,12 +561,16 @@ function AssistantTab({ orgId }: { orgId: string }) {
           <div className="space-y-3">
             {messages.map((msg, i) => (
               <div key={i} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
-                <div className={`max-w-[80%] rounded-2xl px-4 py-2.5 text-sm whitespace-pre-wrap ${
+                <div className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-sm ${
                   msg.role === "user"
-                    ? "gradient-primary text-primary-foreground"
+                    ? "gradient-primary text-primary-foreground whitespace-pre-wrap"
                     : "bg-secondary/50 text-foreground"
                 }`}>
-                  {msg.content}
+                  {msg.role === "assistant" ? (
+                    <div className="prose prose-sm dark:prose-invert max-w-none prose-p:my-1 prose-headings:my-2 prose-li:my-0.5 prose-ul:my-1">
+                      <ReactMarkdown>{msg.content}</ReactMarkdown>
+                    </div>
+                  ) : msg.content}
                 </div>
               </div>
             ))}
@@ -551,12 +588,11 @@ function AssistantTab({ orgId }: { orgId: string }) {
         <div className="border-t border-border/50 p-3 flex gap-2">
           <Input
             placeholder="Pergunte algo..."
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
+            value={input} onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && sendMessage()}
             className="rounded-xl bg-secondary/30 border-0"
           />
-          <Button onClick={sendMessage} disabled={isLoading || !input.trim()} size="icon" className="rounded-xl gradient-primary shrink-0">
+          <Button onClick={() => sendMessage()} disabled={isLoading || !input.trim()} size="icon" className="rounded-xl gradient-primary shrink-0">
             <Send className="h-4 w-4" />
           </Button>
         </div>
@@ -575,11 +611,7 @@ function KnowledgeBaseTab({ orgId }: { orgId: string }) {
   const [processingIds, setProcessingIds] = useState<Set<string>>(new Set());
 
   const loadDocs = useCallback(async () => {
-    const { data } = await supabase
-      .from("ai_knowledge_docs")
-      .select("*")
-      .eq("org_id", orgId)
-      .order("created_at", { ascending: false });
+    const { data } = await supabase.from("ai_knowledge_docs").select("*").eq("org_id", orgId).order("created_at", { ascending: false });
     if (data) setDocs(data as KnowledgeDoc[]);
   }, [orgId]);
 
@@ -590,10 +622,7 @@ function KnowledgeBaseTab({ orgId }: { orgId: string }) {
     try {
       const resp = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/process-knowledge`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
-        },
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}` },
         body: JSON.stringify({ doc_id: docId }),
       });
       const result = await resp.json();
@@ -610,16 +639,10 @@ function KnowledgeBaseTab({ orgId }: { orgId: string }) {
     if (!newTitle.trim() || !newContent.trim()) return;
     setSaving(true);
     try {
-      const { data } = await supabase.from("ai_knowledge_docs").insert({
-        org_id: orgId,
-        title: newTitle.trim(),
-        content: newContent.trim(),
-      }).select().single();
-      setNewTitle("");
-      setNewContent("");
+      const { data } = await supabase.from("ai_knowledge_docs").insert({ org_id: orgId, title: newTitle.trim(), content: newContent.trim() }).select().single();
+      setNewTitle(""); setNewContent("");
       await loadDocs();
       toast({ title: "Documento adicionado! Processando..." });
-      // Auto-process
       if (data?.id) processDoc(data.id);
     } catch (e: any) {
       toast({ title: "Erro", description: e.message, variant: "destructive" });
@@ -635,53 +658,29 @@ function KnowledgeBaseTab({ orgId }: { orgId: string }) {
 
   const reprocessAll = async () => {
     const unprocessed = docs.filter((d) => !d.processed && d.id);
-    if (unprocessed.length === 0) {
-      toast({ title: "Todos os documentos já estão processados!" });
-      return;
-    }
+    if (unprocessed.length === 0) { toast({ title: "Todos já estão processados!" }); return; }
     toast({ title: `Processando ${unprocessed.length} documento(s)...` });
-    for (const doc of unprocessed) {
-      if (doc.id) await processDoc(doc.id);
-    }
+    for (const doc of unprocessed) { if (doc.id) await processDoc(doc.id); }
   };
 
   return (
     <div className="space-y-5">
       <div className="flex items-center justify-between">
-        <p className="text-sm text-muted-foreground">
-          Adicione documentos que a IA usará como contexto. Documentos são processados automaticamente com chunking e keywords.
-        </p>
+        <p className="text-sm text-muted-foreground">Documentos processados automaticamente com chunking e keywords para busca inteligente.</p>
         <Button variant="outline" size="sm" className="rounded-xl text-xs shrink-0" onClick={reprocessAll}>
           <Zap className="h-3.5 w-3.5 mr-1.5" />Processar Pendentes
         </Button>
       </div>
 
-      {/* Add new doc */}
       <div className="glass rounded-2xl p-5 space-y-3">
-        <div className="flex items-center gap-2">
-          <Plus className="h-4 w-4 text-primary" />
-          <Label className="font-semibold text-sm">Novo Documento</Label>
-        </div>
-        <Input
-          placeholder="Título (ex: FAQ, Tabela de Preços, Sobre a Empresa...)"
-          value={newTitle}
-          onChange={(e) => setNewTitle(e.target.value)}
-          className="rounded-xl bg-secondary/30"
-        />
-        <Textarea
-          placeholder="Cole aqui o conteúdo completo do documento..."
-          value={newContent}
-          onChange={(e) => setNewContent(e.target.value)}
-          rows={6}
-          className="rounded-xl bg-secondary/30 resize-none"
-        />
+        <div className="flex items-center gap-2"><Plus className="h-4 w-4 text-primary" /><Label className="font-semibold text-sm">Novo Documento</Label></div>
+        <Input placeholder="Título (ex: FAQ, Tabela de Preços...)" value={newTitle} onChange={(e) => setNewTitle(e.target.value)} className="rounded-xl bg-secondary/30" />
+        <Textarea placeholder="Cole aqui o conteúdo completo..." value={newContent} onChange={(e) => setNewContent(e.target.value)} rows={6} className="rounded-xl bg-secondary/30 resize-none" />
         <Button onClick={addDoc} disabled={saving || !newTitle.trim() || !newContent.trim()} className="rounded-xl gradient-primary">
-          {saving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Plus className="h-4 w-4 mr-2" />}
-          Adicionar
+          {saving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Plus className="h-4 w-4 mr-2" />}Adicionar
         </Button>
       </div>
 
-      {/* Doc list */}
       <div className="space-y-3">
         {docs.length === 0 && (
           <div className="glass rounded-2xl p-8 text-center">
@@ -698,22 +697,14 @@ function KnowledgeBaseTab({ orgId }: { orgId: string }) {
                   <FileText className="h-4 w-4 text-primary" />
                   <h4 className="font-semibold text-sm">{doc.title}</h4>
                   {doc.processed ? (
-                    <Badge variant="outline" className="text-[10px] bg-success/10 text-success border-success/30">
-                      <Check className="h-2.5 w-2.5 mr-0.5" />Processado
-                    </Badge>
+                    <Badge variant="outline" className="text-[10px] bg-success/10 text-success border-success/30"><Check className="h-2.5 w-2.5 mr-0.5" />Processado</Badge>
                   ) : (
-                    <Badge variant="outline" className="text-[10px] bg-warning/10 text-warning border-warning/30">
-                      Pendente
-                    </Badge>
+                    <Badge variant="outline" className="text-[10px] bg-warning/10 text-warning border-warning/30">Pendente</Badge>
                   )}
                 </div>
                 <div className="flex items-center gap-1">
                   {!doc.processed && doc.id && (
-                    <Button
-                      variant="ghost" size="icon" className="h-7 w-7"
-                      onClick={() => doc.id && processDoc(doc.id)}
-                      disabled={isProcessing}
-                    >
+                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => doc.id && processDoc(doc.id)} disabled={isProcessing}>
                       {isProcessing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Zap className="h-3.5 w-3.5 text-warning" />}
                     </Button>
                   )}
@@ -722,24 +713,14 @@ function KnowledgeBaseTab({ orgId }: { orgId: string }) {
                   </Button>
                 </div>
               </div>
-              {doc.processed && doc.summary && (
-                <p className="text-xs text-muted-foreground italic">{doc.summary}</p>
-              )}
+              {doc.processed && doc.summary && <p className="text-xs text-muted-foreground italic">{doc.summary}</p>}
               {doc.processed && doc.keywords?.length ? (
                 <div className="flex flex-wrap gap-1">
-                  {doc.keywords.slice(0, 12).map((kw, i) => (
-                    <Badge key={i} variant="secondary" className="text-[10px] py-0">{kw}</Badge>
-                  ))}
-                  {doc.keywords.length > 12 && (
-                    <Badge variant="secondary" className="text-[10px] py-0">+{doc.keywords.length - 12}</Badge>
-                  )}
+                  {doc.keywords.slice(0, 12).map((kw, i) => <Badge key={i} variant="secondary" className="text-[10px] py-0">{kw}</Badge>)}
+                  {doc.keywords.length > 12 && <Badge variant="secondary" className="text-[10px] py-0">+{doc.keywords.length - 12}</Badge>}
                 </div>
-              ) : (
-                <p className="text-xs text-muted-foreground line-clamp-3">{doc.content}</p>
-              )}
-              {doc.processed && doc.chunks?.length && (
-                <p className="text-[10px] text-muted-foreground/60">{doc.chunks.length} chunk(s) indexados</p>
-              )}
+              ) : <p className="text-xs text-muted-foreground line-clamp-3">{doc.content}</p>}
+              {doc.processed && doc.chunks?.length && <p className="text-[10px] text-muted-foreground/60">{doc.chunks.length} chunk(s) indexados</p>}
             </div>
           );
         })}
@@ -754,18 +735,14 @@ function MessagesTab({ orgId }: { orgId: string }) {
   const [context, setContext] = useState("");
   const [result, setResult] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [msgType, setMsgType] = useState("whatsapp");
   const [config, setConfig] = useState<AiConfig | null>(null);
   const [savingConfig, setSavingConfig] = useState(false);
   const [showConfig, setShowConfig] = useState(false);
 
   useEffect(() => {
-    supabase
-      .from("ai_configs")
-      .select("*")
-      .eq("org_id", orgId)
-      .eq("config_type", "messages")
-      .is("instance_name", null)
-      .maybeSingle()
+    supabase.from("ai_configs").select("*").eq("org_id", orgId).eq("config_type", "messages")
+      .is("instance_name", null).maybeSingle()
       .then(({ data }: any) => {
         if (data) setConfig({ ...data, temperature: Number(data.temperature) || 0.8, schedule_days: data.schedule_days || [] });
       });
@@ -776,72 +753,22 @@ function MessagesTab({ orgId }: { orgId: string }) {
     setIsLoading(true);
     setResult("");
 
-    let assistantSoFar = "";
+    const enrichedContent = `[TIPO:${msgType}]\n\n${context}`;
 
-    try {
-      const resp = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-chat`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
-        },
-        body: JSON.stringify({
-          messages: [{ role: "user", content: context }],
-          org_id: orgId,
-          mode: "generate_message",
-        }),
-      });
-
-      if (!resp.ok) {
-        const errData = await resp.json().catch(() => ({}));
-        throw new Error(errData.error || `Erro ${resp.status}`);
-      }
-
-      const reader = resp.body?.getReader();
-      const decoder = new TextDecoder();
-      let buffer = "";
-
-      while (reader) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-
-        let idx;
-        while ((idx = buffer.indexOf("\n")) !== -1) {
-          let line = buffer.slice(0, idx);
-          buffer = buffer.slice(idx + 1);
-          if (line.endsWith("\r")) line = line.slice(0, -1);
-          if (!line.startsWith("data: ")) continue;
-          const json = line.slice(6).trim();
-          if (json === "[DONE]") break;
-          try {
-            const parsed = JSON.parse(json);
-            const content = parsed.choices?.[0]?.delta?.content;
-            if (content) {
-              assistantSoFar += content;
-              setResult(assistantSoFar);
-            }
-          } catch {}
-        }
-      }
-    } catch (e: any) {
-      toast({ title: "Erro", description: e.message, variant: "destructive" });
-    }
-    setIsLoading(false);
+    await streamAI(
+      AI_CHAT_URL,
+      { messages: [{ role: "user", content: enrichedContent }], org_id: orgId, mode: "generate_message" },
+      (full) => setResult(full),
+      () => setIsLoading(false),
+      (err) => { toast({ title: "Erro", description: err, variant: "destructive" }); setIsLoading(false); },
+    );
   };
 
   const saveConfig = async () => {
     if (!config) return;
     setSavingConfig(true);
     try {
-      const payload = {
-        org_id: orgId,
-        config_type: "messages",
-        instance_name: null,
-        enabled: true,
-        system_prompt: config.system_prompt,
-        temperature: config.temperature,
-      };
+      const payload = { org_id: orgId, config_type: "messages", instance_name: null, enabled: true, system_prompt: config.system_prompt, temperature: config.temperature };
       if (config.id) {
         await supabase.from("ai_configs").update(payload).eq("id", config.id);
       } else {
@@ -860,7 +787,7 @@ function MessagesTab({ orgId }: { orgId: string }) {
   return (
     <div className="space-y-5">
       <div className="flex items-center justify-between">
-        <p className="text-sm text-muted-foreground">Gere mensagens personalizadas de prospecção com IA</p>
+        <p className="text-sm text-muted-foreground">Gere mensagens de prospecção otimizadas por canal</p>
         <Button variant="outline" size="sm" className="rounded-xl text-xs" onClick={() => setShowConfig(!showConfig)}>
           {showConfig ? "Fechar Config" : "⚙️ Configurar"}
         </Button>
@@ -869,7 +796,7 @@ function MessagesTab({ orgId }: { orgId: string }) {
       {showConfig && (
         <div className="glass rounded-2xl p-5 space-y-4 animate-fade-in">
           <div className="space-y-2">
-            <Label className="text-xs font-semibold">Instruções para geração</Label>
+            <Label className="text-xs font-semibold">Instruções adicionais para geração</Label>
             <Textarea
               placeholder="Ex: Use tom informal, foque nos benefícios do produto X, inclua cases de sucesso..."
               value={config?.system_prompt || ""}
@@ -877,25 +804,40 @@ function MessagesTab({ orgId }: { orgId: string }) {
                 org_id: orgId, config_type: "messages", enabled: true, system_prompt: e.target.value,
                 temperature: 0.8, schedule_start: null, schedule_end: null, schedule_days: [], only_outside_hours: false, config: {},
               })}
-              rows={3}
-              className="rounded-xl bg-secondary/30 resize-none"
+              rows={3} className="rounded-xl bg-secondary/30 resize-none"
             />
           </div>
           <Button onClick={saveConfig} disabled={savingConfig} size="sm" className="rounded-xl gradient-primary">
-            {savingConfig ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" /> : <Save className="h-3.5 w-3.5 mr-1.5" />}
-            Salvar
+            {savingConfig ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" /> : <Save className="h-3.5 w-3.5 mr-1.5" />}Salvar
           </Button>
         </div>
       )}
 
+      {/* Channel selector */}
+      <div className="glass rounded-2xl p-5 space-y-3">
+        <Label className="font-semibold text-sm">Canal de Prospecção</Label>
+        <div className="grid grid-cols-4 gap-2">
+          {MSG_TYPES.map((t) => (
+            <Button
+              key={t.value}
+              variant={msgType === t.value ? "default" : "outline"}
+              size="sm"
+              className={`rounded-xl text-xs h-auto py-2.5 flex-col gap-1 ${msgType === t.value ? "gradient-primary" : ""}`}
+              onClick={() => setMsgType(t.value)}
+            >
+              <t.icon className="h-4 w-4" />{t.label}
+            </Button>
+          ))}
+        </div>
+      </div>
+
       <div className="glass rounded-2xl p-5 space-y-3">
         <Label className="font-semibold text-sm">Contexto do Lead</Label>
         <Textarea
-          placeholder="Cole informações do lead: nome, empresa, segmento, cargo... Quanto mais contexto, melhor a mensagem."
+          placeholder={`Cole informações do lead para gerar mensagem de ${MSG_TYPES.find(t => t.value === msgType)?.label || "prospecção"}:\n\n• Nome, empresa, cargo\n• Segmento e porte\n• Dor/necessidade identificada\n• Como descobriu o lead`}
           value={context}
           onChange={(e) => setContext(e.target.value)}
-          rows={4}
-          className="rounded-xl bg-secondary/30 resize-none"
+          rows={5} className="rounded-xl bg-secondary/30 resize-none"
         />
         <Button onClick={generate} disabled={isLoading || !context.trim()} className="rounded-xl gradient-primary w-full">
           {isLoading ? <><Loader2 className="h-4 w-4 animate-spin mr-2" />Gerando...</> : <><Sparkles className="h-4 w-4 mr-2" />Gerar Mensagens</>}
@@ -908,14 +850,14 @@ function MessagesTab({ orgId }: { orgId: string }) {
             <Label className="font-semibold text-sm">Mensagens Geradas</Label>
             <Button variant="ghost" size="sm" className="text-xs" onClick={() => {
               navigator.clipboard.writeText(result);
-              setCopied(true);
-              setTimeout(() => setCopied(false), 2000);
+              setCopied(true); setTimeout(() => setCopied(false), 2000);
             }}>
-              {copied ? <Check className="h-3.5 w-3.5 mr-1 text-success" /> : <Copy className="h-3.5 w-3.5 mr-1" />}
-              Copiar
+              {copied ? <Check className="h-3.5 w-3.5 mr-1 text-success" /> : <Copy className="h-3.5 w-3.5 mr-1" />}Copiar
             </Button>
           </div>
-          <div className="bg-secondary/30 rounded-xl p-4 text-sm whitespace-pre-wrap">{result}</div>
+          <div className="bg-secondary/30 rounded-xl p-4 text-sm prose prose-sm dark:prose-invert max-w-none">
+            <ReactMarkdown>{result}</ReactMarkdown>
+          </div>
         </div>
       )}
     </div>
@@ -928,11 +870,7 @@ export default function AIPage() {
   const orgId = profile?.org_id;
 
   if (!orgId) {
-    return (
-      <div className="flex items-center justify-center py-20">
-        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-      </div>
-    );
+    return <div className="flex items-center justify-center py-20"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>;
   }
 
   return (
@@ -950,31 +888,23 @@ export default function AIPage() {
       <Tabs defaultValue="chatbot">
         <TabsList className="bg-secondary/30 rounded-xl p-1 h-auto flex-wrap">
           <TabsTrigger value="chatbot" className="rounded-lg text-xs data-[state=active]:bg-primary/10 data-[state=active]:text-primary py-2 px-3">
-            <Bot className="h-3.5 w-3.5 mr-1.5" />Chatbot WhatsApp
+            <Bot className="h-3.5 w-3.5 mr-1.5" />Chatbot
           </TabsTrigger>
           <TabsTrigger value="assistant" className="rounded-lg text-xs data-[state=active]:bg-primary/10 data-[state=active]:text-primary py-2 px-3">
             <Brain className="h-3.5 w-3.5 mr-1.5" />Assistente
           </TabsTrigger>
           <TabsTrigger value="knowledge" className="rounded-lg text-xs data-[state=active]:bg-primary/10 data-[state=active]:text-primary py-2 px-3">
-            <FileText className="h-3.5 w-3.5 mr-1.5" />Base de Conhecimento
+            <FileText className="h-3.5 w-3.5 mr-1.5" />Conhecimento
           </TabsTrigger>
           <TabsTrigger value="messages" className="rounded-lg text-xs data-[state=active]:bg-primary/10 data-[state=active]:text-primary py-2 px-3">
-            <Sparkles className="h-3.5 w-3.5 mr-1.5" />Gerar Mensagens
+            <Sparkles className="h-3.5 w-3.5 mr-1.5" />Mensagens
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="chatbot" className="mt-4">
-          <ChatbotTab orgId={orgId} />
-        </TabsContent>
-        <TabsContent value="assistant" className="mt-4">
-          <AssistantTab orgId={orgId} />
-        </TabsContent>
-        <TabsContent value="knowledge" className="mt-4">
-          <KnowledgeBaseTab orgId={orgId} />
-        </TabsContent>
-        <TabsContent value="messages" className="mt-4">
-          <MessagesTab orgId={orgId} />
-        </TabsContent>
+        <TabsContent value="chatbot" className="mt-4"><ChatbotTab orgId={orgId} /></TabsContent>
+        <TabsContent value="assistant" className="mt-4"><AssistantTab orgId={orgId} /></TabsContent>
+        <TabsContent value="knowledge" className="mt-4"><KnowledgeBaseTab orgId={orgId} /></TabsContent>
+        <TabsContent value="messages" className="mt-4"><MessagesTab orgId={orgId} /></TabsContent>
       </Tabs>
     </div>
   );

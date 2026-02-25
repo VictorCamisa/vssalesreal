@@ -45,12 +45,26 @@ serve(async (req) => {
     let enriched = 0;
 
     for (const lead of leads) {
-      const prompt = `Enriqueça os dados deste lead comercial e retorne informações relevantes para prospecção B2B:
-Nome: ${lead.name || "Desconhecido"}
-Telefone: ${lead.phone || "N/A"}
-Email: ${lead.email || "N/A"}
+      const prompt = `Analise este lead e gere um perfil comercial completo para prospecção:
 
-Retorne informações como: empresa provável, cargo estimado, segmento de mercado, cidade/estado, redes sociais prováveis, e uma pontuação de 0-100 indicando potencial de conversão. Responda em JSON.`;
+DADOS DO LEAD:
+- Nome: ${lead.name || "Desconhecido"}
+- Telefone: ${lead.phone || "N/A"}
+- Email: ${lead.email || "N/A"}
+
+ANÁLISE SOLICITADA:
+1. Empresa provável (baseado em domínio do email ou DDD do telefone)
+2. Cargo estimado e nível de decisão
+3. Segmento de mercado e porte da empresa
+4. Localização (cidade/estado baseado no DDD)
+5. Redes sociais prováveis (LinkedIn URL estimada)
+6. Dores e necessidades prováveis do segmento
+7. Melhor canal de abordagem (WhatsApp/Email/LinkedIn/Telefone)
+8. Melhor horário e dia da semana para contato
+9. Score de conversão (0-100) com justificativa
+10. 2-3 argumentos de venda personalizados para este perfil
+
+Responda APENAS em JSON válido.`;
 
       try {
         const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
@@ -62,7 +76,7 @@ Retorne informações como: empresa provável, cargo estimado, segmento de merca
           body: JSON.stringify({
             model: "google/gemini-3-flash-preview",
             messages: [
-              { role: "system", content: "Você é um assistente de inteligência comercial B2B. Responda em JSON válido com campos: empresa, cargo, segmento, localizacao, redes_sociais, score_conversao (0-100), observacoes." },
+              { role: "system", content: "Você é um analista de inteligência comercial sênior. Analise leads e retorne JSON com: empresa, cargo, nivel_decisao (C-level/Gerência/Operacional), segmento, porte_empresa (micro/pequena/média/grande), localizacao, redes_sociais (objeto com linkedin, instagram), dores_provaveis (array), canal_ideal, melhor_horario, score_conversao (0-100), justificativa_score, argumentos_venda (array de strings), observacoes." },
               { role: "user", content: prompt },
             ],
           }),
