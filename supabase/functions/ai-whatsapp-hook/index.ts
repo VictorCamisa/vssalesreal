@@ -104,16 +104,61 @@ serve(async (req) => {
       }
     }
 
-    // Fetch knowledge base
+    // Smart knowledge retrieval using keywords
+    const queryWords = messageText.toLowerCase().split(/\W+/).filter((w: string) => w.length > 3);
+
     const { data: kbDocs } = await supabaseAdmin
       .from("ai_knowledge_docs")
-      .select("title, content")
-      .eq("org_id", orgId)
-      .limit(20);
+      .select("title, content, summary, keywords, chunks, processed")
+      .eq("org_id", orgId);
 
-    const knowledgeContext = kbDocs?.length
-      ? `\n\n--- BASE DE CONHECIMENTO ---\n${kbDocs.map((d) => `## ${d.title}\n${d.content}`).join("\n\n")}\n--- FIM ---`
-      : "";
+    let knowledgeContext = "";
+    if (kbDocs?.length) {
+      const scoredDocs = kbDocs.map((doc: any) => {
+        let score = 0;
+        if (doc.processed && doc.keywords?.length) {
+          for (const kw of doc.keywords) {
+            if (queryWords.some((qw: string) => kw.includes(qw) || qw.includes(kw))) score += 2;
+          }
+          const titleWords = doc.title.toLowerCase().split(/\W+/);
+          for (const tw of titleWords) {
+            if (queryWords.some((qw: string) => tw.includes(qw) || qw.includes(tw))) score += 3;
+          }
+        } else {
+          score = 1;
+        }
+        return { ...doc, score };
+      });
+
+      scoredDocs.sort((a: any, b: any) => b.score - a.score);
+      const relevantDocs = scoredDocs.filter((d: any) => d.score > 0).slice(0, 3);
+
+      const contextParts: string[] = [];
+      for (const doc of relevantDocs) {
+        if (doc.processed && doc.chunks?.length) {
+          const scoredChunks = doc.chunks.map((chunk: any) => {
+            let cs = 0;
+            const ct = (chunk.text || "").toLowerCase();
+            for (const qw of queryWords) { if (ct.includes(qw)) cs++; }
+            return { ...chunk, cs };
+          });
+          scoredChunks.sort((a: any, b: any) => b.cs - a.cs);
+          contextParts.push(`## ${doc.title}\n${scoredChunks.slice(0, 2).map((c: any) => c.text).join("\n\n")}`);
+        } else {
+          contextParts.push(`## ${doc.title}\n${doc.content.substring(0, 1500)}`);
+        }
+      }
+
+      if (relevantDocs.length === 0 && kbDocs.length > 0) {
+        for (const doc of kbDocs.slice(0, 5)) {
+          contextParts.push(`## ${(doc as any).title}\n${(doc as any).summary || (doc as any).content.substring(0, 400)}`);
+        }
+      }
+
+      if (contextParts.length > 0) {
+        knowledgeContext = `\n\n--- BASE DE CONHECIMENTO ---\n${contextParts.join("\n\n")}\n--- FIM ---`;
+      }
+    }
 
     const systemPrompt = `Você é um assistente virtual via WhatsApp para uma empresa.
 ${aiConfig.system_prompt || "Seja educado, prestativo e profissional."}

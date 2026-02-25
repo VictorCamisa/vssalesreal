@@ -46,6 +46,10 @@ type KnowledgeDoc = {
   org_id: string;
   title: string;
   content: string;
+  keywords?: string[];
+  summary?: string;
+  processed?: boolean;
+  chunks?: any[];
 };
 
 type ChatMessage = { role: "user" | "assistant"; content: string };
@@ -568,6 +572,7 @@ function KnowledgeBaseTab({ orgId }: { orgId: string }) {
   const [newTitle, setNewTitle] = useState("");
   const [newContent, setNewContent] = useState("");
   const [saving, setSaving] = useState(false);
+  const [processingIds, setProcessingIds] = useState<Set<string>>(new Set());
 
   const loadDocs = useCallback(async () => {
     const { data } = await supabase
@@ -580,19 +585,42 @@ function KnowledgeBaseTab({ orgId }: { orgId: string }) {
 
   useEffect(() => { loadDocs(); }, [loadDocs]);
 
+  const processDoc = async (docId: string) => {
+    setProcessingIds((prev) => new Set([...prev, docId]));
+    try {
+      const resp = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/process-knowledge`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+        },
+        body: JSON.stringify({ doc_id: docId }),
+      });
+      const result = await resp.json();
+      if (!resp.ok) throw new Error(result.error || "Erro ao processar");
+      toast({ title: "Processado!", description: `${result.chunks_count} chunks, ${result.keywords_count} keywords` });
+      await loadDocs();
+    } catch (e: any) {
+      toast({ title: "Erro ao processar", description: e.message, variant: "destructive" });
+    }
+    setProcessingIds((prev) => { const s = new Set(prev); s.delete(docId); return s; });
+  };
+
   const addDoc = async () => {
     if (!newTitle.trim() || !newContent.trim()) return;
     setSaving(true);
     try {
-      await supabase.from("ai_knowledge_docs").insert({
+      const { data } = await supabase.from("ai_knowledge_docs").insert({
         org_id: orgId,
         title: newTitle.trim(),
         content: newContent.trim(),
-      });
+      }).select().single();
       setNewTitle("");
       setNewContent("");
       await loadDocs();
-      toast({ title: "Documento adicionado!" });
+      toast({ title: "Documento adicionado! Processando..." });
+      // Auto-process
+      if (data?.id) processDoc(data.id);
     } catch (e: any) {
       toast({ title: "Erro", description: e.message, variant: "destructive" });
     }
@@ -605,11 +633,28 @@ function KnowledgeBaseTab({ orgId }: { orgId: string }) {
     toast({ title: "Removido" });
   };
 
+  const reprocessAll = async () => {
+    const unprocessed = docs.filter((d) => !d.processed && d.id);
+    if (unprocessed.length === 0) {
+      toast({ title: "Todos os documentos já estão processados!" });
+      return;
+    }
+    toast({ title: `Processando ${unprocessed.length} documento(s)...` });
+    for (const doc of unprocessed) {
+      if (doc.id) await processDoc(doc.id);
+    }
+  };
+
   return (
     <div className="space-y-5">
-      <p className="text-sm text-muted-foreground">
-        Adicione documentos, FAQs e informações que a IA usará para responder perguntas — tanto no chatbot WhatsApp quanto no assistente interno.
-      </p>
+      <div className="flex items-center justify-between">
+        <p className="text-sm text-muted-foreground">
+          Adicione documentos que a IA usará como contexto. Documentos são processados automaticamente com chunking e keywords.
+        </p>
+        <Button variant="outline" size="sm" className="rounded-xl text-xs shrink-0" onClick={reprocessAll}>
+          <Zap className="h-3.5 w-3.5 mr-1.5" />Processar Pendentes
+        </Button>
+      </div>
 
       {/* Add new doc */}
       <div className="glass rounded-2xl p-5 space-y-3">
@@ -644,20 +689,60 @@ function KnowledgeBaseTab({ orgId }: { orgId: string }) {
             <p className="text-sm text-muted-foreground">Nenhum documento na base de conhecimento</p>
           </div>
         )}
-        {docs.map((doc) => (
-          <div key={doc.id} className="glass rounded-2xl p-4 space-y-2">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <FileText className="h-4 w-4 text-primary" />
-                <h4 className="font-semibold text-sm">{doc.title}</h4>
+        {docs.map((doc) => {
+          const isProcessing = doc.id ? processingIds.has(doc.id) : false;
+          return (
+            <div key={doc.id} className="glass rounded-2xl p-4 space-y-2">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <FileText className="h-4 w-4 text-primary" />
+                  <h4 className="font-semibold text-sm">{doc.title}</h4>
+                  {doc.processed ? (
+                    <Badge variant="outline" className="text-[10px] bg-success/10 text-success border-success/30">
+                      <Check className="h-2.5 w-2.5 mr-0.5" />Processado
+                    </Badge>
+                  ) : (
+                    <Badge variant="outline" className="text-[10px] bg-warning/10 text-warning border-warning/30">
+                      Pendente
+                    </Badge>
+                  )}
+                </div>
+                <div className="flex items-center gap-1">
+                  {!doc.processed && doc.id && (
+                    <Button
+                      variant="ghost" size="icon" className="h-7 w-7"
+                      onClick={() => doc.id && processDoc(doc.id)}
+                      disabled={isProcessing}
+                    >
+                      {isProcessing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Zap className="h-3.5 w-3.5 text-warning" />}
+                    </Button>
+                  )}
+                  <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive" onClick={() => doc.id && deleteDoc(doc.id)}>
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
               </div>
-              <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive" onClick={() => doc.id && deleteDoc(doc.id)}>
-                <Trash2 className="h-3.5 w-3.5" />
-              </Button>
+              {doc.processed && doc.summary && (
+                <p className="text-xs text-muted-foreground italic">{doc.summary}</p>
+              )}
+              {doc.processed && doc.keywords?.length ? (
+                <div className="flex flex-wrap gap-1">
+                  {doc.keywords.slice(0, 12).map((kw, i) => (
+                    <Badge key={i} variant="secondary" className="text-[10px] py-0">{kw}</Badge>
+                  ))}
+                  {doc.keywords.length > 12 && (
+                    <Badge variant="secondary" className="text-[10px] py-0">+{doc.keywords.length - 12}</Badge>
+                  )}
+                </div>
+              ) : (
+                <p className="text-xs text-muted-foreground line-clamp-3">{doc.content}</p>
+              )}
+              {doc.processed && doc.chunks?.length && (
+                <p className="text-[10px] text-muted-foreground/60">{doc.chunks.length} chunk(s) indexados</p>
+              )}
             </div>
-            <p className="text-xs text-muted-foreground line-clamp-3">{doc.content}</p>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );

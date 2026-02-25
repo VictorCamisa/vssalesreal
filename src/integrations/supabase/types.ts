@@ -67,29 +67,41 @@ export type Database = {
       }
       ai_knowledge_docs: {
         Row: {
+          chunks: Json | null
           content: string
           created_at: string
           file_url: string | null
           id: string
+          keywords: string[] | null
           org_id: string
+          processed: boolean | null
+          summary: string | null
           title: string
           updated_at: string
         }
         Insert: {
+          chunks?: Json | null
           content?: string
           created_at?: string
           file_url?: string | null
           id?: string
+          keywords?: string[] | null
           org_id: string
+          processed?: boolean | null
+          summary?: string | null
           title: string
           updated_at?: string
         }
         Update: {
+          chunks?: Json | null
           content?: string
           created_at?: string
           file_url?: string | null
           id?: string
+          keywords?: string[] | null
           org_id?: string
+          processed?: boolean | null
+          summary?: string | null
           title?: string
           updated_at?: string
         }
