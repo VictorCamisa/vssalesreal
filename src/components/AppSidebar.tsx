@@ -6,6 +6,7 @@ import {
   Settings,
   LogOut,
   Zap,
+  Brain,
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useAuth } from "@/contexts/AuthContext";
@@ -29,6 +30,7 @@ const navItems = [
   { title: "Prospecção", url: "/prospecting", icon: Search },
   { title: "Leads", url: "/leads", icon: Users },
   { title: "CRM", url: "/crm", icon: Kanban },
+  { title: "IA", url: "/ai", icon: Brain },
   { title: "Configurações", url: "/settings", icon: Settings },
 ];
 

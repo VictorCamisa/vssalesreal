@@ -14,6 +14,87 @@ export type Database = {
   }
   public: {
     Tables: {
+      ai_configs: {
+        Row: {
+          config: Json | null
+          config_type: string
+          created_at: string
+          enabled: boolean
+          id: string
+          instance_name: string | null
+          only_outside_hours: boolean | null
+          org_id: string
+          schedule_days: number[] | null
+          schedule_end: string | null
+          schedule_start: string | null
+          system_prompt: string | null
+          temperature: number | null
+          updated_at: string
+        }
+        Insert: {
+          config?: Json | null
+          config_type: string
+          created_at?: string
+          enabled?: boolean
+          id?: string
+          instance_name?: string | null
+          only_outside_hours?: boolean | null
+          org_id: string
+          schedule_days?: number[] | null
+          schedule_end?: string | null
+          schedule_start?: string | null
+          system_prompt?: string | null
+          temperature?: number | null
+          updated_at?: string
+        }
+        Update: {
+          config?: Json | null
+          config_type?: string
+          created_at?: string
+          enabled?: boolean
+          id?: string
+          instance_name?: string | null
+          only_outside_hours?: boolean | null
+          org_id?: string
+          schedule_days?: number[] | null
+          schedule_end?: string | null
+          schedule_start?: string | null
+          system_prompt?: string | null
+          temperature?: number | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      ai_knowledge_docs: {
+        Row: {
+          content: string
+          created_at: string
+          file_url: string | null
+          id: string
+          org_id: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          content?: string
+          created_at?: string
+          file_url?: string | null
+          id?: string
+          org_id: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          file_url?: string | null
+          id?: string
+          org_id?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       crm_stages: {
         Row: {
           created_at: string
