@@ -416,6 +416,9 @@ export default function Leads() {
                       {lead.enrichment_data && Object.keys(lead.enrichment_data).length > 1 && (
                         <Sparkles className="h-3 w-3 text-chart-4 inline ml-1.5" />
                       )}
+                      {lead.enrichment_data?.empresa && (
+                        <p className="text-[10px] text-muted-foreground truncate max-w-[200px]">{lead.enrichment_data.empresa}</p>
+                      )}
                     </button>
                   </TableCell>
                   <TableCell className="font-mono text-xs text-muted-foreground">{lead.phone || "—"}</TableCell>
@@ -482,7 +485,26 @@ export default function Leads() {
               </div>
 
               {/* Enrichment */}
-              {detailLead.enrichment_data && Object.keys(detailLead.enrichment_data).length > 1 ? (
+              {detailLead.enrichment_data && Object.keys(detailLead.enrichment_data).length > 1 ? (() => {
+                const ed = detailLead.enrichment_data;
+                const company = ed.empresa || ed.company || ed.descricao_empresa || null;
+                const role = ed.cargo_estimado || ed.role || null;
+                const segment = ed.segmento || ed.segment || null;
+                const score = ed.score_conversao ?? ed.score ?? null;
+                const website = ed.website || null;
+                const instagram = ed.instagram || null;
+                const linkedin = ed.linkedin || null;
+                const size = ed.porte || ed.tamanho || null;
+                const location = ed.localizacao || ed.location || null;
+                const pains = ed.dores_provaveis || ed.dores || [];
+                const products = ed.produtos_servicos || ed.produtos || [];
+                const salesArgs = ed.argumentos_venda || [];
+                const channel = ed.canal_ideal || null;
+                const decisionLevel = ed.nivel_decisao || null;
+                const notes = ed.observacoes_importantes || ed.analysis || null;
+                const sources = ed.fontes_utilizadas || [];
+
+                return (
                 <div className="glass rounded-xl p-4 space-y-3">
                   <div className="flex items-center gap-2">
                     <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center">
@@ -494,25 +516,75 @@ export default function Leads() {
                     </div>
                   </div>
 
-                  {detailLead.enrichment_data.score !== undefined && (
+                  {score !== null && (
                     <div className="flex items-center gap-3 p-3 rounded-lg bg-gradient-to-r from-primary/10 to-transparent border border-primary/20">
-                      <div className="text-2xl font-bold text-primary font-mono">{detailLead.enrichment_data.score}</div>
+                      <div className="text-2xl font-bold text-primary font-mono">{score}</div>
                       <div>
-                        <p className="text-xs font-medium">Score de Qualificação</p>
+                        <p className="text-xs font-medium">Score de Conversão</p>
                         <p className="text-[10px] text-muted-foreground">Baseado nos dados coletados</p>
                       </div>
                     </div>
                   )}
 
                   <div className="rounded-lg border border-border/50 bg-muted/20 p-4 text-sm space-y-2">
-                    {detailLead.enrichment_data.company && <p><strong>Empresa:</strong> {detailLead.enrichment_data.company}</p>}
-                    {detailLead.enrichment_data.role && <p><strong>Cargo:</strong> {detailLead.enrichment_data.role}</p>}
-                    {detailLead.enrichment_data.segment && <p><strong>Segmento:</strong> {detailLead.enrichment_data.segment}</p>}
-                    {detailLead.enrichment_data.analysis && <p className="text-xs text-muted-foreground whitespace-pre-wrap mt-2">{detailLead.enrichment_data.analysis}</p>}
-                    {detailLead.enrichment_data.scraped_from && <p className="text-[11px] text-muted-foreground">Fonte: {detailLead.enrichment_data.scraped_from}</p>}
+                    {company && <p><strong>Empresa:</strong> {company}</p>}
+                    {role && <p><strong>Cargo:</strong> {role}</p>}
+                    {segment && <p><strong>Segmento:</strong> {segment}</p>}
+                    {size && <p><strong>Porte:</strong> {size}</p>}
+                    {location && <p><strong>Localização:</strong> {location}</p>}
+                    {decisionLevel && <p><strong>Nível de Decisão:</strong> {decisionLevel}</p>}
+                    {channel && <p><strong>Canal Ideal:</strong> {channel}</p>}
+                    {website && website !== "N/A" && <p><strong>Website:</strong> <a href={website.startsWith("http") ? website : `https://${website}`} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">{website}</a></p>}
+                    {instagram && instagram !== "N/A" && <p><strong>Instagram:</strong> {instagram}</p>}
+                    {linkedin && linkedin !== "N/A" && <p><strong>LinkedIn:</strong> {linkedin}</p>}
                   </div>
+
+                  {products.length > 0 && (
+                    <div className="rounded-lg border border-border/50 bg-muted/20 p-4">
+                      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Produtos/Serviços</p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {products.map((p: string, i: number) => (
+                          <Badge key={i} variant="outline" className="text-[10px] rounded-md">{p}</Badge>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {pains.length > 0 && (
+                    <div className="rounded-lg border border-border/50 bg-muted/20 p-4">
+                      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Dores Prováveis</p>
+                      <ul className="space-y-1">
+                        {pains.map((d: string, i: number) => (
+                          <li key={i} className="text-xs text-muted-foreground flex gap-1.5"><span className="text-destructive">•</span>{d}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {salesArgs.length > 0 && (
+                    <div className="rounded-lg border border-border/50 bg-muted/20 p-4">
+                      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Argumentos de Venda</p>
+                      <ul className="space-y-1">
+                        {salesArgs.map((a: string, i: number) => (
+                          <li key={i} className="text-xs text-muted-foreground flex gap-1.5"><span className="text-success">✓</span>{a}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {notes && (
+                    <div className="rounded-lg border border-border/50 bg-muted/20 p-4">
+                      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Observações</p>
+                      <p className="text-xs text-muted-foreground whitespace-pre-wrap">{notes}</p>
+                    </div>
+                  )}
+
+                  {sources.length > 0 && (
+                    <p className="text-[10px] text-muted-foreground">Fontes: {sources.join(", ")}</p>
+                  )}
                 </div>
-              ) : (
+                );
+              })() : (
                 <div className="glass rounded-xl p-4 text-center">
                   <Sparkles className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
                   <p className="text-sm text-muted-foreground">Sem dados de enriquecimento</p>
