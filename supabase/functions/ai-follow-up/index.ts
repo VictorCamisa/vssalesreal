@@ -146,8 +146,15 @@ SITUAÇÃO: O lead "${conv.push_name || 'cliente'}" não respondeu há ${Math.ro
 Este é o ${stepLabel}.
 Objetivo do follow-up: ${contextHint}
 ${compCtx}
+
+FORMATO (CRÍTICO):
+- Se precisar mais de 2 linhas, divida em blocos separados por ---BLOCO---
+- Cada bloco = 1-2 linhas no máximo
+- Máximo 2 blocos para follow-up
+- Tom natural, humano, como se estivesse digitando normalmente
+
 REGRAS:
-- Mensagem CURTA (máx 2 linhas)
+- Mensagem CURTA (máx 2 linhas por bloco)
 - Tom natural, não robótico
 - NÃO repita mensagens anteriores
 - Varie a abordagem a cada etapa
@@ -182,22 +189,36 @@ REGRAS:
 
         if (!reply) continue;
 
-        // Send via Evolution API
+        // Send via Evolution API — split into blocks for human-like delivery
         const phone = conv.remote_jid.replace("@s.whatsapp.net", "");
-        const sendResponse = await fetch(
-          `${evolutionUrl}/message/sendText/${conv.instance_name}`,
-          {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              apikey: evolutionKey,
-            },
-            body: JSON.stringify({ number: phone, text: reply }),
-          }
-        );
+        const blocks = reply.split(/---BLOCO---/i).map((b: string) => b.trim()).filter((b: string) => b.length > 0);
+        const messageParts = blocks.length > 0 ? blocks : [reply];
 
-        if (!sendResponse.ok) {
-          console.error(`Evolution send error for ${phone}:`, sendResponse.status);
+        let sendOk = false;
+        for (let i = 0; i < messageParts.length; i++) {
+          if (i > 0) {
+            const delayMs = Math.min(1000 + messageParts[i].length * 30, 3000);
+            await new Promise(resolve => setTimeout(resolve, delayMs));
+          }
+          const sendResponse = await fetch(
+            `${evolutionUrl}/message/sendText/${conv.instance_name}`,
+            {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                apikey: evolutionKey,
+              },
+              body: JSON.stringify({ number: phone, text: messageParts[i] }),
+            }
+          );
+          if (!sendResponse.ok) {
+            console.error(`Evolution send error for ${phone}:`, sendResponse.status);
+          } else {
+            sendOk = true;
+          }
+        }
+
+        if (!sendOk) {
           results.push({ conv_id: conv.id, status: "send_failed", phone });
           continue;
         }
