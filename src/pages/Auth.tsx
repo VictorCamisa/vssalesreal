@@ -8,13 +8,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { Separator } from "@/components/ui/separator";
-import { Rocket, Mail, Lock, User, CheckCircle2, Brain, MessageCircle, TrendingUp } from "lucide-react";
+import { Rocket, Mail, Lock, CheckCircle2, Brain, MessageCircle, TrendingUp, ArrowLeft } from "lucide-react";
 
 export default function Auth() {
-  const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [fullName, setFullName] = useState("");
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
   const navigate = useNavigate();
@@ -24,25 +22,9 @@ export default function Auth() {
     setLoading(true);
 
     try {
-      if (isLogin) {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
         navigate("/");
-      } else {
-        const { error } = await supabase.auth.signUp({
-          email,
-          password,
-          options: {
-            data: { full_name: fullName },
-            emailRedirectTo: window.location.origin,
-          },
-        });
-        if (error) throw error;
-        toast({
-          title: "Conta criada!",
-          description: "Verifique seu email para confirmar o cadastro.",
-        });
-      }
     } catch (error: any) {
       toast({
         title: "Erro",
@@ -66,6 +48,9 @@ export default function Auth() {
       {/* Left: Form */}
       <div className="flex flex-1 items-center justify-center bg-background px-4 py-8 sm:p-6 lg:p-12">
         <div className="w-full max-w-md space-y-6 sm:space-y-8 animate-fade-in">
+          <Button variant="ghost" size="sm" className="self-start" onClick={() => navigate("/landing")}>
+            <ArrowLeft className="h-4 w-4 mr-1" /> Voltar ao site
+          </Button>
           {/* Logo */}
           <div className="flex flex-col items-center gap-3 sm:gap-4 lg:items-start">
             <img src={vsLogo} alt="VS SALES" className="h-12 sm:h-14 w-auto" />
@@ -78,26 +63,13 @@ export default function Auth() {
           {/* Form Card */}
           <div className="glass rounded-2xl p-5 sm:p-6 space-y-4 sm:space-y-5">
             <div>
-              <h2 className="text-base sm:text-lg font-semibold">{isLogin ? "Entrar" : "Criar conta"}</h2>
+              <h2 className="text-base sm:text-lg font-semibold">Entrar</h2>
               <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">
-                {isLogin ? "Acesse sua conta para continuar" : "Preencha os dados para criar sua conta"}
+                Acesse sua conta para continuar
               </p>
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-4">
-              {!isLogin && (
-                <div className="space-y-2">
-                  <Label htmlFor="fullName" className="text-xs font-medium">Nome completo</Label>
-                  <div className="relative">
-                    <User className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                    <Input
-                      id="fullName" type="text" placeholder="Seu nome"
-                      value={fullName} onChange={(e) => setFullName(e.target.value)}
-                      className="pl-10 h-11 rounded-xl bg-secondary/50 border-border/50 focus:border-primary/50" required
-                    />
-                  </div>
-                </div>
-              )}
               <div className="space-y-2">
                 <Label htmlFor="email" className="text-xs font-medium">Email</Label>
                 <div className="relative">
@@ -121,7 +93,7 @@ export default function Auth() {
                 </div>
               </div>
               <Button type="submit" className="w-full h-11 rounded-xl gradient-primary hover:opacity-90 transition-opacity font-semibold" disabled={loading}>
-                {loading ? "Carregando..." : isLogin ? "Entrar" : "Criar conta"}
+                {loading ? "Carregando..." : "Entrar"}
               </Button>
             </form>
 
@@ -153,12 +125,6 @@ export default function Auth() {
               Continuar com Google
             </Button>
 
-            <div className="text-center">
-              <button type="button" onClick={() => setIsLogin(!isLogin)}
-                className="text-sm text-primary hover:text-primary/80 transition-colors">
-                {isLogin ? "Não tem conta? Cadastre-se" : "Já tem conta? Entrar"}
-              </button>
-            </div>
           </div>
         </div>
       </div>
