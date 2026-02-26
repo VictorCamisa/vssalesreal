@@ -336,9 +336,9 @@ Regras:
       } catch (e) { console.error("Cancel error:", e); }
     }
 
-    // Send reply via Evolution API
-    const evolutionUrl = integration.endpoint_url;
-    const evolutionKey = integration.api_key;
+    // Send reply via Evolution API (global credentials)
+    const evolutionUrl = (Deno.env.get("EVOLUTION_API_URL") || "").replace(/\/$/, "");
+    const evolutionKey = Deno.env.get("EVOLUTION_API_KEY") || "";
 
     const sendResponse = await fetch(`${evolutionUrl}/message/sendText/${instanceName}`, {
       method: "POST",
