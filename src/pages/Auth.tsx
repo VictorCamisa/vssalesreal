@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { lovable } from "@/integrations/lovable/index";
+import vsLogo from "@/assets/vs-sales-logo.png";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -67,11 +68,9 @@ export default function Auth() {
         <div className="w-full max-w-md space-y-8 animate-fade-in">
           {/* Logo */}
           <div className="flex flex-col items-center gap-4 lg:items-start">
-            <div className="flex h-14 w-14 items-center justify-center rounded-2xl gradient-primary glow-primary">
-              <Rocket className="h-7 w-7 text-primary-foreground" />
-            </div>
+            <img src={vsLogo} alt="VS SALES" className="h-14 w-auto" />
             <div className="text-center lg:text-left">
-              <h1 className="text-3xl font-bold tracking-tight">VS LEADS</h1>
+              <h1 className="text-3xl font-bold tracking-tight">VS SALES</h1>
               <p className="text-sm text-muted-foreground mt-1">por VS Soluções</p>
             </div>
           </div>

@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, FormEvent } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import vsLogo from "@/assets/vs-logo.png";
+import vsLogo from "@/assets/vs-sales-logo.png";
 import { ParticleCanvas } from "@/components/landing/ParticleCanvas";
 import { useScrollAnimation, useAnimatedCounter } from "@/hooks/useScrollAnimation";
 import {

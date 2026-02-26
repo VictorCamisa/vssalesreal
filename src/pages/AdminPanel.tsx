@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import vsLogo from "@/assets/vs-logo.png";
+import vsLogo from "@/assets/vs-sales-logo.png";
 import {
   Users, FileText, BarChart3, Settings, LogOut, Mail,
   Phone, Building2, TrendingUp, Activity, Database,

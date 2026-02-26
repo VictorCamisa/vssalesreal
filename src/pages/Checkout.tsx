@@ -1,7 +1,7 @@
 import { useState, useEffect, FormEvent } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
-import vsLogo from "@/assets/vs-logo.png";
+import vsLogo from "@/assets/vs-sales-logo.png";
 import {
   ArrowLeft, ArrowRight, CheckCircle2, Building2, User, Mail, Phone,
   MessageCircle, Shield, Sparkles, Zap, Crown, Users, Check, Loader2,
