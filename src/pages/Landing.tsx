@@ -1,4 +1,4 @@
-import { useState, FormEvent } from "react";
+import { useState, useEffect, useRef, FormEvent } from "react";
 import { ParticleCanvas } from "@/components/landing/ParticleCanvas";
 import { useScrollAnimation, useAnimatedCounter } from "@/hooks/useScrollAnimation";
 import {
@@ -8,15 +8,22 @@ import {
 } from "lucide-react";
 
 /* ─── scroll-animated wrapper ─── */
-function Reveal({ children, className = "", delay = 0 }: { children: React.ReactNode; className?: string; delay?: number }) {
-  const { ref, isVisible } = useScrollAnimation(0.12);
+function Reveal({ children, className = "", delay = 0, direction = "up" }: { children: React.ReactNode; className?: string; delay?: number; direction?: "up" | "left" | "right" | "scale" }) {
+  const { ref, isVisible } = useScrollAnimation(0.1);
+  const transforms: Record<string, string> = {
+    up: "translateY(40px)",
+    left: "translateX(-40px)",
+    right: "translateX(40px)",
+    scale: "scale(0.92)",
+  };
   return (
     <div
       ref={ref}
-      className={`transition-all duration-700 ease-out ${className}`}
+      className={`transition-all ease-out ${className}`}
       style={{
         opacity: isVisible ? 1 : 0,
-        transform: isVisible ? "translateY(0)" : "translateY(32px)",
+        transform: isVisible ? "none" : transforms[direction],
+        transitionDuration: "800ms",
         transitionDelay: `${delay}ms`,
       }}
     >
@@ -31,24 +38,128 @@ function Counter({ end, suffix = "", prefix = "" }: { end: number; suffix?: stri
   return <span ref={ref}>{prefix}{value.toLocaleString("pt-BR")}{suffix}</span>;
 }
 
+/* ─── Flow Step with animated line ─── */
+function FlowStep({ step, index, total }: { step: { icon: any; title: string; desc: string; color: string; emoji: string }; index: number; total: number }) {
+  const { ref, isVisible } = useScrollAnimation(0.2);
+
+  return (
+    <div ref={ref} className="relative flex flex-col items-center text-center group" style={{ transitionDelay: `${index * 150}ms` }}>
+      {/* Connector line */}
+      {index < total - 1 && (
+        <div className="hidden md:block absolute top-7 left-[calc(50%+28px)] right-[-50%] h-px z-0">
+          <div
+            className="h-full transition-all duration-1000 ease-out"
+            style={{
+              background: `linear-gradient(90deg, ${step.color}, ${step.color}40)`,
+              transform: isVisible ? "scaleX(1)" : "scaleX(0)",
+              transformOrigin: "left",
+              transitionDelay: `${index * 150 + 300}ms`,
+            }}
+          />
+        </div>
+      )}
+
+      {/* Node */}
+      <div
+        className="relative z-10 flex h-14 w-14 items-center justify-center rounded-2xl border transition-all duration-700"
+        style={{
+          borderColor: isVisible ? `${step.color}40` : "rgba(255,255,255,0.05)",
+          backgroundColor: isVisible ? `${step.color}08` : "transparent",
+          boxShadow: isVisible ? `0 0 30px ${step.color}15, inset 0 0 20px ${step.color}05` : "none",
+          opacity: isVisible ? 1 : 0,
+          transform: isVisible ? "translateY(0) scale(1)" : "translateY(20px) scale(0.8)",
+          transitionDelay: `${index * 150}ms`,
+        }}
+      >
+        <span className="text-xl">{step.emoji}</span>
+      </div>
+
+      {/* Step number */}
+      <div
+        className="mt-3 text-[10px] font-mono font-semibold tracking-widest transition-all duration-700"
+        style={{
+          color: isVisible ? step.color : "rgba(255,255,255,0.1)",
+          opacity: isVisible ? 1 : 0,
+          transitionDelay: `${index * 150 + 100}ms`,
+        }}
+      >
+        0{index + 1}
+      </div>
+
+      {/* Title */}
+      <h3
+        className="mt-2 text-sm font-semibold text-white transition-all duration-700"
+        style={{
+          opacity: isVisible ? 1 : 0,
+          transform: isVisible ? "translateY(0)" : "translateY(12px)",
+          transitionDelay: `${index * 150 + 200}ms`,
+        }}
+      >
+        {step.title}
+      </h3>
+
+      {/* Description */}
+      <p
+        className="mt-1.5 text-xs text-gray-500 leading-relaxed max-w-[180px] transition-all duration-700"
+        style={{
+          opacity: isVisible ? 1 : 0,
+          transform: isVisible ? "translateY(0)" : "translateY(12px)",
+          transitionDelay: `${index * 150 + 300}ms`,
+        }}
+      >
+        {step.desc}
+      </p>
+
+      {/* Hover glow */}
+      <div
+        className="absolute -inset-3 rounded-3xl opacity-0 group-hover:opacity-100 transition-opacity duration-500 -z-10"
+        style={{ background: `radial-gradient(circle, ${step.color}06, transparent 70%)` }}
+      />
+    </div>
+  );
+}
+
+/* ─── Hero stagger animation ─── */
+function HeroLine({ children, delay, className = "" }: { children: React.ReactNode; delay: number; className?: string }) {
+  const [visible, setVisible] = useState(false);
+  useEffect(() => {
+    const t = setTimeout(() => setVisible(true), delay);
+    return () => clearTimeout(t);
+  }, [delay]);
+  return (
+    <span
+      className={`block transition-all duration-700 ease-out ${className}`}
+      style={{
+        opacity: visible ? 1 : 0,
+        transform: visible ? "translateY(0) skewY(0)" : "translateY(60px) skewY(2deg)",
+        filter: visible ? "blur(0)" : "blur(4px)",
+      }}
+    >
+      {children}
+    </span>
+  );
+}
+
 /* ─── FAQ Item ─── */
 function FAQItem({ question, answer }: { question: string; answer: string }) {
   const [open, setOpen] = useState(false);
   return (
-    <div className="border border-[#1a1a2e] rounded-xl overflow-hidden">
+    <div className="border border-[#1a1a2e] rounded-xl overflow-hidden transition-colors hover:border-[#00D4FF]/15">
       <button
         onClick={() => setOpen(!open)}
         className="w-full flex items-center justify-between p-5 text-left hover:bg-[#0d0d1a] transition-colors"
         aria-expanded={open}
       >
         <span className="font-medium text-sm md:text-base text-gray-200 pr-4">{question}</span>
-        <ChevronDown className={`h-4 w-4 text-[#00D4FF] shrink-0 transition-transform duration-300 ${open ? "rotate-180" : ""}`} />
+        <ChevronDown className={`h-4 w-4 text-[#00D4FF] shrink-0 transition-transform duration-500 ${open ? "rotate-180" : ""}`} />
       </button>
       <div
-        className="overflow-hidden transition-all duration-400 ease-out"
-        style={{ maxHeight: open ? "300px" : "0", opacity: open ? 1 : 0 }}
+        className="grid transition-all duration-500 ease-out"
+        style={{ gridTemplateRows: open ? "1fr" : "0fr", opacity: open ? 1 : 0 }}
       >
-        <p className="px-5 pb-5 text-sm text-gray-400 leading-relaxed">{answer}</p>
+        <div className="overflow-hidden">
+          <p className="px-5 pb-5 text-sm text-gray-400 leading-relaxed">{answer}</p>
+        </div>
       </div>
     </div>
   );
@@ -111,63 +222,71 @@ export default function Landing() {
         }} />
 
         <div className="relative z-10 max-w-4xl mx-auto px-5 text-center">
-          <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-[#00D4FF]/20 bg-[#00D4FF]/5 text-[10px] text-[#00D4FF] font-medium mb-8 tracking-wider uppercase">
-            <Sparkles className="h-3 w-3" /> Powered by VS Soluções Labs
-          </div>
+          <HeroLine delay={200}>
+            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-[#00D4FF]/20 bg-[#00D4FF]/5 text-[10px] text-[#00D4FF] font-medium mb-8 tracking-wider uppercase">
+              <Sparkles className="h-3 w-3" /> Powered by VS Soluções Labs
+            </div>
+          </HeroLine>
 
           <h1
             style={{ fontFamily: "'Bebas Neue', sans-serif" }}
-            className="text-5xl sm:text-7xl md:text-8xl lg:text-9xl leading-[0.9] tracking-tight mb-6 glitch-text"
+            className="text-5xl sm:text-7xl md:text-8xl lg:text-9xl leading-[0.9] tracking-tight mb-6"
           >
-            <span className="block">Prospecção.</span>
-            <span className="block">Qualificação.</span>
-            <span className="block bg-gradient-to-r from-[#00D4FF] to-[#00FF88] bg-clip-text text-transparent">Fechamento.</span>
-            <span className="block text-gray-500 text-3xl sm:text-4xl md:text-5xl mt-2">Sem humanos.</span>
+            <HeroLine delay={400}>Prospecção.</HeroLine>
+            <HeroLine delay={600}>Qualificação.</HeroLine>
+            <HeroLine delay={800} className="bg-gradient-to-r from-[#00D4FF] to-[#00FF88] bg-clip-text text-transparent glitch-text">Fechamento.</HeroLine>
+            <HeroLine delay={1100} className="text-gray-500 text-3xl sm:text-4xl md:text-5xl mt-2">Sem humanos.</HeroLine>
           </h1>
 
-          <p className="text-gray-400 max-w-xl mx-auto text-sm md:text-base leading-relaxed mb-8">
-            O VS SALES substitui sua equipe comercial inteira com IA. SDR, BDR, Closer — tudo automatizado, 24/7, por uma fração do custo.
-          </p>
+          <HeroLine delay={1400}>
+            <p className="text-gray-400 max-w-xl mx-auto text-sm md:text-base leading-relaxed mb-8">
+              O VS SALES substitui sua equipe comercial inteira com IA. SDR, BDR, Closer — tudo automatizado, 24/7, por uma fração do custo.
+            </p>
+          </HeroLine>
 
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-3 mb-12">
-            <a
-              href="#acesso"
-              className="group flex items-center gap-2 px-6 py-3 rounded-lg bg-gradient-to-r from-[#00D4FF] to-[#0057FF] font-medium text-sm hover:shadow-[0_0_30px_rgba(0,212,255,0.4)] transition-all"
-            >
-              Quero ver o VS SALES em ação
-              <ArrowRight className="h-4 w-4 group-hover:translate-x-0.5 transition-transform" />
-            </a>
-            <a
-              href="#como-funciona"
-              className="flex items-center gap-2 px-6 py-3 rounded-lg border border-white/10 text-sm text-gray-300 hover:border-white/25 hover:text-white transition-all"
-            >
-              Como funciona?
-            </a>
-          </div>
+          <HeroLine delay={1700}>
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-3 mb-12">
+              <a
+                href="#acesso"
+                className="group flex items-center gap-2 px-6 py-3 rounded-lg bg-gradient-to-r from-[#00D4FF] to-[#0057FF] font-medium text-sm hover:shadow-[0_0_30px_rgba(0,212,255,0.4)] transition-all duration-300 hover:scale-[1.03]"
+              >
+                Quero ver o VS SALES em ação
+                <ArrowRight className="h-4 w-4 group-hover:translate-x-1 transition-transform duration-300" />
+              </a>
+              <a
+                href="#como-funciona"
+                className="flex items-center gap-2 px-6 py-3 rounded-lg border border-white/10 text-sm text-gray-300 hover:border-white/25 hover:text-white transition-all duration-300"
+              >
+                Como funciona?
+              </a>
+            </div>
+          </HeroLine>
 
           {/* Counters */}
-          <div className="flex items-center justify-center gap-8 md:gap-12 text-center">
-            <div>
-              <p className="text-2xl md:text-3xl font-bold text-white" style={{ fontFamily: "'Bebas Neue', sans-serif", letterSpacing: "0.05em" }}>
-                <Counter end={12400} prefix="" suffix="" />
-              </p>
-              <p className="text-[10px] text-gray-500 uppercase tracking-wider mt-1">Leads qualificados</p>
+          <HeroLine delay={2000}>
+            <div className="flex items-center justify-center gap-8 md:gap-12 text-center">
+              <div>
+                <p className="text-2xl md:text-3xl font-bold text-white" style={{ fontFamily: "'Bebas Neue', sans-serif", letterSpacing: "0.05em" }}>
+                  <Counter end={12400} />
+                </p>
+                <p className="text-[10px] text-gray-500 uppercase tracking-wider mt-1">Leads qualificados</p>
+              </div>
+              <div className="h-8 w-px bg-white/10" />
+              <div>
+                <p className="text-2xl md:text-3xl font-bold text-white" style={{ fontFamily: "'Bebas Neue', sans-serif", letterSpacing: "0.05em" }}>
+                  <Counter end={8300} suffix="h" />
+                </p>
+                <p className="text-[10px] text-gray-500 uppercase tracking-wider mt-1">Horas economizadas</p>
+              </div>
+              <div className="h-8 w-px bg-white/10" />
+              <div>
+                <p className="text-2xl md:text-3xl font-bold text-[#00FF88]" style={{ fontFamily: "'Bebas Neue', sans-serif", letterSpacing: "0.05em" }}>
+                  <Counter end={97} suffix="%" />
+                </p>
+                <p className="text-[10px] text-gray-500 uppercase tracking-wider mt-1">Satisfação</p>
+              </div>
             </div>
-            <div className="h-8 w-px bg-white/10" />
-            <div>
-              <p className="text-2xl md:text-3xl font-bold text-white" style={{ fontFamily: "'Bebas Neue', sans-serif", letterSpacing: "0.05em" }}>
-                <Counter end={8300} suffix="h" />
-              </p>
-              <p className="text-[10px] text-gray-500 uppercase tracking-wider mt-1">Horas economizadas</p>
-            </div>
-            <div className="h-8 w-px bg-white/10" />
-            <div>
-              <p className="text-2xl md:text-3xl font-bold text-[#00FF88]" style={{ fontFamily: "'Bebas Neue', sans-serif", letterSpacing: "0.05em" }}>
-                <Counter end={97} suffix="%" />
-              </p>
-              <p className="text-[10px] text-gray-500 uppercase tracking-wider mt-1">Satisfação</p>
-            </div>
-          </div>
+          </HeroLine>
         </div>
 
         {/* Gradient fade bottom */}
@@ -228,51 +347,48 @@ export default function Landing() {
       </section>
 
       {/* ═══ 3. COMO FUNCIONA ═══ */}
-      <section id="como-funciona" className="py-24 md:py-32 relative">
+      <section id="como-funciona" className="py-24 md:py-36 relative overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-b from-transparent via-[#00D4FF]/[0.02] to-transparent" />
-        <div className="max-w-5xl mx-auto px-5 relative z-10">
+        <div className="max-w-6xl mx-auto px-5 relative z-10">
           <Reveal>
             <p className="text-[10px] uppercase tracking-[0.3em] text-[#00D4FF] font-medium mb-3 text-center">Como funciona</p>
             <h2 style={{ fontFamily: "'Bebas Neue', sans-serif" }} className="text-3xl md:text-5xl tracking-tight mb-3 text-center">
               Um sistema. Quatro papéis.
             </h2>
-            <p style={{ fontFamily: "'Bebas Neue', sans-serif" }} className="text-3xl md:text-5xl tracking-tight mb-12 text-center text-gray-500">
+            <p style={{ fontFamily: "'Bebas Neue', sans-serif" }} className="text-3xl md:text-5xl tracking-tight mb-16 text-center text-gray-500">
               Zero desperdício.
             </p>
           </Reveal>
 
-          <div className="relative">
-            {/* Connecting line */}
-            <div className="hidden md:block absolute left-1/2 top-0 bottom-0 w-px bg-gradient-to-b from-[#00D4FF]/30 via-[#0057FF]/30 to-[#00FF88]/30" />
-
+          {/* Horizontal pipeline */}
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-6 md:gap-4">
             {[
-              { icon: Search, title: "Prospecção Inteligente", desc: "IA rastreia e mapeia leads do ICP ideal em tempo real, varrendo múltiplas fontes.", color: "#00D4FF" },
-              { icon: PuzzleIcon, title: "Enriquecimento de Dados", desc: "Informações de contato, empresa, cargo e redes sociais completadas automaticamente.", color: "#0057FF" },
-              { icon: Target, title: "Qualificação com Score", desc: "Cada lead recebe uma pontuação de 0 a 100%. Configurável por você.", color: "#00D4FF" },
-              { icon: CheckCircle2, title: "Encaminhamento Automático", desc: "Leads acima do threshold vão direto pro Closer — humano ou IA.", color: "#0057FF" },
-              { icon: CalendarCheck, title: "Agendamento Automático", desc: "Reunião marcada no calendário sem intervenção humana.", color: "#00FF88" },
-              { icon: DollarSign, title: "Fechamento", desc: "Closer humano ou IA fecha o negócio com o lead pré-qualificado e aquecido.", color: "#00FF88" },
-            ].map((step, i) => (
-              <Reveal key={step.title} delay={i * 120}>
-                <div className={`flex items-start gap-5 mb-8 ${i % 2 === 0 ? "md:flex-row" : "md:flex-row-reverse"} md:text-${i % 2 === 0 ? "right" : "left"}`}>
-                  <div className="flex-1 hidden md:block" />
-                  <div className="relative z-10 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-[#0d0d18]"
-                    style={{ boxShadow: `0 0 20px ${step.color}15` }}>
-                    <step.icon className="h-4 w-4" style={{ color: step.color }} />
-                  </div>
-                  <div className="flex-1">
-                    <div className="rounded-xl border border-[#1a1a2e] bg-[#0d0d18]/80 p-5 hover:border-[#00D4FF]/20 transition-all">
-                      <div className="flex items-center gap-2 mb-1.5">
-                        <span className="text-[10px] font-medium text-gray-500">0{i + 1}</span>
-                        <h3 className="text-sm font-semibold text-white">{step.title}</h3>
-                      </div>
-                      <p className="text-xs text-gray-400 leading-relaxed">{step.desc}</p>
-                    </div>
-                  </div>
-                </div>
-              </Reveal>
+              { icon: Search, emoji: "🔍", title: "Prospecção Inteligente", desc: "IA rastreia e mapeia leads do ICP ideal em tempo real.", color: "#00D4FF" },
+              { icon: PuzzleIcon, emoji: "🧩", title: "Enriquecimento", desc: "Contato, empresa, cargo e redes sociais completados.", color: "#00A0FF" },
+              { icon: Target, emoji: "🎯", title: "Score de Qualificação", desc: "Cada lead recebe pontuação de 0 a 100%.", color: "#0057FF" },
+              { icon: CheckCircle2, emoji: "✅", title: "Encaminhamento", desc: "Acima do threshold, vai direto pro Closer.", color: "#0057FF" },
+              { icon: CalendarCheck, emoji: "📅", title: "Agendamento Auto", desc: "Reunião marcada sem intervenção humana.", color: "#00C880" },
+              { icon: DollarSign, emoji: "💰", title: "Fechamento", desc: "Closer humano ou IA fecha o negócio.", color: "#00FF88" },
+            ].map((step, i, arr) => (
+              <FlowStep key={step.title} step={step} index={i} total={arr.length} />
             ))}
           </div>
+
+          {/* Summary bar */}
+          <Reveal delay={900}>
+            <div className="mt-16 flex items-center justify-center">
+              <div className="inline-flex items-center gap-3 px-6 py-3 rounded-full border border-[#00D4FF]/15 bg-[#00D4FF]/[0.03]">
+                <div className="flex -space-x-1">
+                  {["#00D4FF", "#0057FF", "#00FF88"].map(c => (
+                    <div key={c} className="h-2 w-2 rounded-full" style={{ backgroundColor: c }} />
+                  ))}
+                </div>
+                <p className="text-xs text-gray-400">
+                  Da prospecção ao fechamento em <span className="text-[#00D4FF] font-semibold">modo automático</span>
+                </p>
+              </div>
+            </div>
+          </Reveal>
         </div>
       </section>
 
@@ -584,25 +700,52 @@ export default function Landing() {
         </div>
       </footer>
 
-      {/* Glitch CSS */}
+      {/* Glitch + animations CSS */}
       <style>{`
         .glitch-text {
           position: relative;
+          display: inline;
         }
         .glitch-text::before,
         .glitch-text::after {
-          content: attr(data-text);
+          content: "Fechamento.";
           position: absolute;
           top: 0; left: 0;
           width: 100%; height: 100%;
           pointer-events: none;
+          background: inherit;
+          -webkit-background-clip: text;
+          background-clip: text;
+          -webkit-text-fill-color: transparent;
+        }
+        .glitch-text::before {
+          animation: glitch-1 4s infinite linear;
+          color: #00D4FF;
+          -webkit-text-fill-color: #00D4FF;
+          opacity: 0.6;
+        }
+        .glitch-text::after {
+          animation: glitch-2 4s infinite linear 0.1s;
+          color: #00FF88;
+          -webkit-text-fill-color: #00FF88;
+          opacity: 0.4;
         }
         @keyframes glitch-1 {
-          0%, 100% { clip-path: inset(0 0 96% 0); transform: translateX(0); }
-          20% { clip-path: inset(40% 0 30% 0); transform: translateX(-2px); }
-          40% { clip-path: inset(60% 0 10% 0); transform: translateX(2px); }
-          60% { clip-path: inset(20% 0 60% 0); transform: translateX(-1px); }
-          80% { clip-path: inset(80% 0 5% 0); transform: translateX(1px); }
+          0%, 90%, 100% { clip-path: inset(0 0 100% 0); transform: none; }
+          92% { clip-path: inset(20% 0 50% 0); transform: translateX(-3px); }
+          94% { clip-path: inset(60% 0 10% 0); transform: translateX(3px); }
+          96% { clip-path: inset(40% 0 30% 0); transform: translateX(-2px); }
+          98% { clip-path: inset(70% 0 5% 0); transform: translateX(2px); }
+        }
+        @keyframes glitch-2 {
+          0%, 88%, 100% { clip-path: inset(0 0 100% 0); transform: none; }
+          90% { clip-path: inset(50% 0 20% 0); transform: translateX(4px); }
+          93% { clip-path: inset(10% 0 60% 0); transform: translateX(-4px); }
+          95% { clip-path: inset(80% 0 3% 0); transform: translateX(2px); }
+          97% { clip-path: inset(30% 0 40% 0); transform: translateX(-1px); }
+        }
+        html {
+          scroll-behavior: smooth;
         }
       `}</style>
     </div>
