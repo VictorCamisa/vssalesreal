@@ -19,6 +19,15 @@ Deno.serve(async (req) => {
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
     const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
+    // Global Evolution API credentials from secrets
+    const baseUrl = (Deno.env.get("EVOLUTION_API_URL") || "").replace(/\/$/, "");
+    const apiKey = Deno.env.get("EVOLUTION_API_KEY") || "";
+
+    if (!baseUrl || !apiKey) {
+      return json({ error: "Evolution API não configurada no sistema." }, 500);
+    }
+
+    // Auth
     const authHeader = req.headers.get("authorization");
     if (!authHeader?.startsWith("Bearer ")) {
       return json({ error: "Unauthorized" }, 401);
@@ -37,22 +46,45 @@ Deno.serve(async (req) => {
     if (!org_id) return json({ error: "org_id is required" }, 400);
 
     const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
-    const { data: integration } = await supabaseAdmin
+
+    // Helper: get/set per-user instances stored in a global config record
+    // We use a single "evolution_instances" record in integrations for the org,
+    // but instances are tracked per-user in a simple separate table approach.
+    // For simplicity, we store user->instances mapping in profiles or a lightweight approach.
+    // Actually, let's use a simple key-value in the user's profile metadata isn't available,
+    // so we'll store in a global config keyed by org_id in integrations table.
+    
+    // Get or create the integration record for this org (auto-provision)
+    let { data: integration } = await supabaseAdmin
       .from("integrations")
-      .select("id, api_key, endpoint_url, config")
+      .select("id, config")
       .eq("org_id", org_id)
       .eq("service_name", "evolution")
-      .single();
+      .maybeSingle();
 
-    if (!integration?.api_key || !integration?.endpoint_url) {
-      return json({ error: "Evolution API não configurada. Vá em Configurações e adicione a API Key e URL." }, 400);
+    if (!integration) {
+      // Auto-create integration record for this org
+      const { data: newInt, error: insertErr } = await supabaseAdmin
+        .from("integrations")
+        .insert({
+          org_id,
+          service_name: "evolution",
+          api_key: "global",
+          endpoint_url: baseUrl,
+          status: "active",
+          config: { instances_by_user: {} },
+        })
+        .select("id, config")
+        .single();
+      if (insertErr) {
+        console.error("Failed to auto-create integration:", insertErr);
+        return json({ error: "Erro ao configurar integração" }, 500);
+      }
+      integration = newInt;
     }
 
-    const baseUrl = integration.endpoint_url.replace(/\/$/, "");
-    const apiKey = integration.api_key;
     const currentConfig = (integration.config as any) || {};
 
-    // Helper: get/set per-user instances from config.instances_by_user
     const getUserInstances = (): string[] => {
       return currentConfig.instances_by_user?.[userId] || [];
     };
@@ -62,7 +94,7 @@ Deno.serve(async (req) => {
       await supabaseAdmin
         .from("integrations")
         .update({ config: { ...currentConfig, instances_by_user: byUser } })
-        .eq("id", integration.id);
+        .eq("id", integration!.id);
     };
 
     // ============================================
@@ -88,7 +120,6 @@ Deno.serve(async (req) => {
 
       const data = await response.json();
 
-      // Persist to user's instance list
       const userInst = getUserInstances();
       if (!userInst.includes(instance_name)) {
         userInst.push(instance_name);
@@ -134,7 +165,6 @@ Deno.serve(async (req) => {
       const data = await response.json();
       const state = data.instance?.state || data.state || "unknown";
 
-      // Persist if connected and not tracked
       if (state === "open") {
         const userInst = getUserInstances();
         if (!userInst.includes(instance_name)) {
@@ -147,12 +177,11 @@ Deno.serve(async (req) => {
     }
 
     // ============================================
-    // ACTION: list - List only THIS user's instances
+    // ACTION: list
     // ============================================
     if (action === "list") {
       const userInstances = getUserInstances();
 
-      // Fetch all from Evolution API to hydrate state
       let apiMap: Record<string, { state: string; owner: string | null }> = {};
       try {
         const response = await fetch(`${baseUrl}/instance/fetchInstances`, {
@@ -174,14 +203,12 @@ Deno.serve(async (req) => {
         }
       } catch { /* ignore */ }
 
-      // Only return instances belonging to this user
       let instances = userInstances.map((name) => ({
         name,
         state: apiMap[name]?.state || "unknown",
         owner: apiMap[name]?.owner || null,
       }));
 
-      // For unknown states, check individually
       instances = await Promise.all(instances.map(async (inst) => {
         if (inst.state !== "unknown") return inst;
         try {
@@ -214,7 +241,6 @@ Deno.serve(async (req) => {
         return json({ error: `Erro ao deletar: ${response.status} - ${errText}` }, 502);
       }
 
-      // Remove from user's list
       const userInst = getUserInstances().filter((n) => n !== instance_name);
       await setUserInstances(userInst);
 
