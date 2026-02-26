@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, FormEvent } from "react";
+import vsLogo from "@/assets/vs-logo.png";
 import { ParticleCanvas } from "@/components/landing/ParticleCanvas";
 import { useScrollAnimation, useAnimatedCounter } from "@/hooks/useScrollAnimation";
 import {
@@ -195,7 +196,7 @@ export default function Landing() {
       <nav className="fixed top-0 left-0 right-0 z-50 bg-[#0A0A0F]/80 backdrop-blur-xl border-b border-white/5">
         <div className="max-w-7xl mx-auto px-5 h-14 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <div className="h-7 w-7 rounded-md bg-gradient-to-br from-[#00D4FF] to-[#0057FF] flex items-center justify-center text-[10px] font-black tracking-tight">VS</div>
+            <img src={vsLogo} alt="VS Soluções" className="h-9 w-9 object-contain" />
             <span style={{ fontFamily: "'Bebas Neue', sans-serif" }} className="text-lg tracking-wider">VS SALES</span>
           </div>
           <div className="hidden md:flex items-center gap-6 text-xs text-gray-400">
@@ -684,7 +685,7 @@ export default function Landing() {
         <div className="max-w-6xl mx-auto px-5">
           <div className="flex flex-col md:flex-row items-center justify-between gap-6">
             <div className="flex items-center gap-2">
-              <div className="h-6 w-6 rounded-md bg-gradient-to-br from-[#00D4FF] to-[#0057FF] flex items-center justify-center text-[8px] font-black">VS</div>
+              <img src={vsLogo} alt="VS Soluções" className="h-7 w-7 object-contain" />
               <div>
                 <span className="text-xs font-semibold text-white">VS Soluções</span>
                 <span className="text-[10px] text-gray-600 ml-2">Tecnologia que substitui. Resultado que comprova.</span>
