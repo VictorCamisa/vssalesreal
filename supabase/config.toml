@@ -24,5 +24,6 @@ verify_jwt = false
 [functions.ai-follow-up]
 verify_jwt = false
 
-[functions.crm-pipeline-automation]
+[functions.admin-delete-user]
+verify_jwt = false
 verify_jwt = false
