@@ -6,9 +6,9 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { AppLayout } from "@/components/AppLayout";
 import Auth from "./pages/Auth";
-import Onboarding from "./pages/Onboarding";
 import Index from "./pages/Index";
 import Prospecting from "./pages/Prospecting";
+import Broadcasts from "./pages/Broadcasts";
 import Leads from "./pages/Leads";
 import CRM from "./pages/CRM";
 import SettingsPage from "./pages/SettingsPage";
@@ -19,12 +19,12 @@ import NotFound from "./pages/NotFound";
 const queryClient = new QueryClient();
 
 function AppRoutes() {
-  const { user, profile, loading } = useAuth();
+  const { user, loading } = useAuth();
 
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
-        <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+        <div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
       </div>
     );
   }
@@ -44,13 +44,13 @@ function AppRoutes() {
         <Route path="/" element={<Index />} />
         <Route path="/whatsapp" element={<WhatsAppConnection />} />
         <Route path="/prospecting" element={<Prospecting />} />
+        <Route path="/broadcasts" element={<Broadcasts />} />
         <Route path="/leads" element={<Leads />} />
         <Route path="/crm" element={<CRM />} />
         <Route path="/ai" element={<AIPage />} />
         <Route path="/settings" element={<SettingsPage />} />
       </Route>
       <Route path="/auth" element={<Navigate to="/" replace />} />
-      <Route path="/onboarding" element={<Navigate to="/" replace />} />
       <Route path="*" element={<NotFound />} />
     </Routes>
   );
