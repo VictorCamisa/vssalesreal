@@ -148,6 +148,35 @@ serve(async (req) => {
       }
     }
 
+    // Fetch company profile for AI context
+    const { data: companyProfile } = await supabaseAdmin
+      .from("company_profiles")
+      .select("*")
+      .eq("org_id", orgId)
+      .maybeSingle();
+
+    let companyContext = "";
+    if (companyProfile) {
+      const cp = companyProfile as any;
+      const parts: string[] = [];
+      if (cp.company_name) parts.push(`Empresa: ${cp.company_name}`);
+      if (cp.segment) parts.push(`Segmento: ${cp.segment}`);
+      if (cp.description) parts.push(`Sobre: ${cp.description}`);
+      if (cp.target_audience) parts.push(`Público-alvo: ${cp.target_audience}`);
+      if (cp.differentials) parts.push(`Diferenciais: ${cp.differentials}`);
+      if (cp.tone_of_voice) parts.push(`Tom de voz: ${cp.tone_of_voice}`);
+      if (cp.sales_process) parts.push(`Processo: ${cp.sales_process}`);
+      const products = cp.products_services || [];
+      if (products.length > 0) {
+        parts.push("Produtos:\n" + products.map((p: any) => `- ${p.name}${p.price ? ` (${p.price})` : ""}: ${p.description}`).join("\n"));
+      }
+      const faqs = cp.objections_faq || [];
+      if (faqs.length > 0) {
+        parts.push("Objeções:\n" + faqs.map((f: any) => `Q: ${f.question}\nR: ${f.answer}`).join("\n"));
+      }
+      companyContext = `\n\n--- EMPRESA ---\n${parts.join("\n")}\n--- FIM ---`;
+    }
+
     // Smart knowledge retrieval using keywords
     const queryWords = messageText.toLowerCase().split(/\W+/).filter((w: string) => w.length > 3);
 
@@ -211,7 +240,7 @@ Regras:
 - Use emojis com moderação
 - Se não souber a resposta, diga que vai encaminhar para um atendente humano
 - Nunca invente informações
-- Responda em português brasileiro${knowledgeContext}`;
+- Responda em português brasileiro${companyContext}${knowledgeContext}`;
 
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY not configured");
