@@ -147,6 +147,7 @@ export default function AdminPanel() {
   const [companyProfile, setCompanyProfile] = useState<CompanyProfileData | null>(null);
   const [savingCompany, setSavingCompany] = useState(false);
   const [loadingCompany, setLoadingCompany] = useState(false);
+  const [deletingUser, setDeletingUser] = useState<string | null>(null);
   const { toast } = useToast();
   const navigate = useNavigate();
 
@@ -874,6 +875,7 @@ export default function AdminPanel() {
                           <th className="text-left px-4 py-3 text-[10px] uppercase tracking-wider text-gray-500 font-medium">Organização</th>
                           <th className="text-left px-4 py-3 text-[10px] uppercase tracking-wider text-gray-500 font-medium">Último acesso</th>
                           <th className="text-left px-4 py-3 text-[10px] uppercase tracking-wider text-gray-500 font-medium">Cadastro</th>
+                          <th className="text-right px-4 py-3 text-[10px] uppercase tracking-wider text-gray-500 font-medium">Ações</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -910,10 +912,44 @@ export default function AdminPanel() {
                             <td className="px-4 py-3 text-xs text-gray-500">
                               {new Date(u.created_at).toLocaleDateString("pt-BR")}
                             </td>
+                            <td className="px-4 py-3 text-right">
+                              <div className="flex items-center justify-end gap-1">
+                                <button
+                                  onClick={async () => {
+                                    const deleteData = confirm(
+                                      `⚠️ Deletar o usuário ${u.email}?\n\nClique OK para deletar o usuário E TODOS OS DADOS da organização (leads, CRM, IA, etc).\n\nEsta ação NÃO pode ser desfeita!`
+                                    );
+                                    if (!deleteData) return;
+                                    setDeletingUser(u.id);
+                                    try {
+                                      const session = (await supabase.auth.getSession()).data.session;
+                                      const { data, error: fnError } = await supabase.functions.invoke("admin-delete-user", {
+                                        headers: { Authorization: `Bearer ${session?.access_token}` },
+                                        body: { user_id: u.id, delete_org_data: true },
+                                      });
+                                      if (fnError || data?.error) {
+                                        toast({ title: "Erro ao deletar", description: data?.error || fnError?.message, variant: "destructive" });
+                                      } else {
+                                        toast({ title: "✅ Usuário e dados deletados!", description: `${u.email} foi removido com sucesso.` });
+                                        loadData();
+                                      }
+                                    } catch (err: any) {
+                                      toast({ title: "Erro", description: err.message, variant: "destructive" });
+                                    }
+                                    setDeletingUser(null);
+                                  }}
+                                  disabled={deletingUser === u.id}
+                                  className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[10px] text-red-400 hover:bg-red-500/10 transition-colors disabled:opacity-50"
+                                  title="Deletar usuário e todos os dados"
+                                >
+                                  {deletingUser === u.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+                                </button>
+                              </div>
+                            </td>
                           </tr>
                         ))}
                         {filteredUsers.length === 0 && (
-                          <tr><td colSpan={6} className="text-center py-12 text-sm text-gray-600">Nenhum usuário encontrado.</td></tr>
+                          <tr><td colSpan={7} className="text-center py-12 text-sm text-gray-600">Nenhum usuário encontrado.</td></tr>
                         )}
                       </tbody>
                     </table>
