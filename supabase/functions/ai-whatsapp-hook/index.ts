@@ -246,9 +246,21 @@ Você pode agendar, verificar e cancelar reuniões. Quando o lead quiser agendar
 4. Para verificar agenda: [VERIFICAR:YYYY-MM-DD]
 Esses comandos serão processados automaticamente. NÃO mostre os comandos ao lead.
 
+FORMATO DE RESPOSTA (CRÍTICO):
+- Divida SEMPRE sua resposta em blocos CURTOS de no máximo 2 linhas cada
+- Separe cada bloco com a marcação ---BLOCO--- (numa linha isolada)
+- Cada bloco deve ser uma mensagem independente e natural
+- Máximo 3-4 blocos por resposta
+- Exemplo correto:
+  Oi João! Tudo bem? 😊
+  ---BLOCO---
+  Vi que você se interessou pelo nosso serviço de consultoria.
+  ---BLOCO---
+  Quer que eu te explique como funciona?
+
 Regras:
-- Responda de forma curta e direta (WhatsApp)
-- Use emojis com moderação
+- Mensagens CURTAS e naturais (como um humano digitaria)
+- Use emojis com moderação (1 por bloco no máximo)
 - Se não souber a resposta, diga que vai encaminhar para um atendente humano
 - Nunca invente informações
 - Responda em português brasileiro${companyContext}${knowledgeContext}`;
@@ -336,25 +348,48 @@ Regras:
       } catch (e) { console.error("Cancel error:", e); }
     }
 
-    // Send reply via Evolution API (global credentials)
+    // Send reply via Evolution API (global credentials) — in short blocks
     const evolutionUrl = (Deno.env.get("EVOLUTION_API_URL") || "").replace(/\/$/, "");
     const evolutionKey = Deno.env.get("EVOLUTION_API_KEY") || "";
 
-    const sendResponse = await fetch(`${evolutionUrl}/message/sendText/${instanceName}`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        apikey: evolutionKey,
-      },
-      body: JSON.stringify({
-        number: phone,
-        text: reply,
-      }),
-    });
+    // Split reply into blocks for human-like delivery
+    const blocks = reply.split(/---BLOCO---/i).map((b: string) => b.trim()).filter((b: string) => b.length > 0);
+    
+    // If no blocks marker found, split by double newline or send as single
+    const messageParts = blocks.length > 1 ? blocks : 
+      reply.split(/\n\n+/).map((b: string) => b.trim()).filter((b: string) => b.length > 0);
+    
+    // Ensure we have at least one message
+    const finalParts = messageParts.length > 0 ? messageParts : [reply];
 
-    if (!sendResponse.ok) {
-      console.error("Evolution send error:", sendResponse.status, await sendResponse.text());
-    } else {
+    let sendSuccess = false;
+    for (let i = 0; i < finalParts.length; i++) {
+      // Add typing delay between messages (1-3 seconds based on text length)
+      if (i > 0) {
+        const delayMs = Math.min(1000 + finalParts[i].length * 30, 3000);
+        await new Promise(resolve => setTimeout(resolve, delayMs));
+      }
+
+      const sendResponse = await fetch(`${evolutionUrl}/message/sendText/${instanceName}`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          apikey: evolutionKey,
+        },
+        body: JSON.stringify({
+          number: phone,
+          text: finalParts[i],
+        }),
+      });
+
+      if (!sendResponse.ok) {
+        console.error("Evolution send error:", sendResponse.status, await sendResponse.text());
+      } else {
+        sendSuccess = true;
+      }
+    }
+
+    if (sendSuccess) {
       // Update conversation tracker with bot reply time
       await supabaseAdmin
         .from("conversation_tracker")
