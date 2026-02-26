@@ -1,104 +1,171 @@
 
 
-# Vendas Inteligentes — Plano de Implementação MVP
+# Plano: Redesign Frontend "VS LEADS" - PRD Completo
 
-## Fase 1: Fundação (Auth + Layout + Modelo de Dados)
+## Resumo
 
-### Autenticação e Multi-tenancy
-- Login com email/senha e Google OAuth via Supabase Auth
-- Tabela `organizations` com owner, tabela `user_roles` para permissões
-- Fluxo de onboarding: criar organização ao primeiro login
-- Perfil do usuário vinculado à organização
-
-### Modelo de Dados (Supabase)
-- **organizations** — id, name, owner_id
-- **profiles** — id, user_id, org_id, full_name, avatar
-- **user_roles** — user_id, role (admin/member)
-- **integrations** — id, org_id, service_name, api_key, endpoint_url, status
-- **leads_raw** — id, org_id, name, phone, email, source, status, enrichment_data (JSONB), external_mapping
-- **crm_stages** — id, org_id, name, order
-- **opportunities** — id, lead_id, stage_id, assigned_to, value, probability, notes
-- RLS em todas as tabelas com políticas baseadas em org_id
-
-### Layout Base
-- Tema dark profissional com palette azul profundo (#0F172A) e cobalto (#2563EB)
-- Sidebar colapsável com navegação: Dashboard, Prospecção, Leads, CRM, Configurações
-- Top bar com busca global e seletor de organização
-- Dashboard com cards de métricas (leads captados, em pipeline, convertidos)
+Transformar a interface atual ("Vendas AI") no produto "VS LEADS" da "VS Soluções", aplicando rebranding completo, novo layout de login split-screen, dashboard com graficos, suporte a light/dark mode, tela dedicada de conexao WhatsApp, e dados mockados para visualizacao imediata.
 
 ---
 
-## Fase 2: Módulo de Configurações e Integrações
+## 1. Rebranding: VS Solucoes / VS LEADS
 
-### Gestão de API Keys
-- Tela com formulários para inserir chaves: Firecrawl, Hasdata, Evolution API
-- Armazenamento seguro das chaves na tabela `integrations`
-- Botão "Testar Conexão" para cada serviço (Edge Function que faz um ping na API)
+**Arquivos afetados:** `src/components/AppSidebar.tsx`, `src/pages/Auth.tsx`, `index.html`
 
-### Conector Supabase Externo
-- Campos para SUPABASE_URL e SUPABASE_ANON_KEY do cliente
-- Edge Function que lê metadados das tabelas do Supabase externo
-- Interface para mapear quais tabelas/colunas sincronizar
-- Salvar mapeamento em JSONB na tabela organizations
+- Substituir "Vendas AI" por "VS LEADS" em toda a interface
+- Sidebar header: logo "VS Solucoes" + subtitulo "VS LEADS"
+- Trocar icone Zap por um icone mais corporativo (Shield ou Rocket)
+- Atualizar `<title>` no `index.html`
+
+## 2. Identidade Visual: Light/Dark Mode + Tipografia
+
+**Arquivos afetados:** `src/index.css`, `tailwind.config.ts`, `index.html`
+
+- Adicionar variantes de cores para light mode (`:root` com cores claras)
+- Manter dark mode atual como `.dark` 
+- Integrar `next-themes` (ja instalado) com `ThemeProvider`
+- Adicionar toggle de tema no header ou sidebar
+- Trocar fonte para Inter (Google Fonts)
+- Paleta: azul corporativo (#2563EB) + verde sucesso/WhatsApp (#22C55E)
+
+## 3. Tela de Login Split-Screen
+
+**Arquivo afetado:** `src/pages/Auth.tsx`
+
+- Layout dividido 50/50:
+  - **Esquerda**: Formulario de login (email/senha, Google OAuth)
+  - **Direita**: Banner visual com gradiente, headline "Vendas 100% gerenciadas por IA", bullet points de beneficios, logo VS Solucoes
+- Responsivo: em mobile, banner fica no topo resumido
+- Manter toda a logica de autenticacao existente
+
+## 4. Dashboard Expandido com Graficos
+
+**Arquivo afetado:** `src/pages/Index.tsx`
+
+- Expandir para 4 KPI cards:
+  1. Total de leads capturados
+  2. Instancias WhatsApp ativas
+  3. Conversas IA em andamento
+  4. Vendas concluidas
+- Adicionar grafico de funil de conversao usando `recharts` (ja instalado)
+  - Barras: Leads > Qualificados > Negociando > Vendidos
+- Adicionar grafico de linha: evolucao de leads nos ultimos 7 dias
+- Dados mockados iniciais para visualizacao imediata
+- Secao de acoes rapidas mantida e estilizada
+
+## 5. Tela Dedicada: Conexao WhatsApp
+
+**Novo arquivo:** `src/pages/WhatsAppConnection.tsx`
+
+- Extrair a logica de gerenciamento de instancias do `Prospecting.tsx` para tela propria
+- Layout limpo:
+  - Card centralizado com QR Code grande
+  - Instrucoes em 3 passos ao lado (1. Abra o WhatsApp, 2. Aparelhos Conectados, 3. Escaneie)
+  - Indicador de status animado (Desconectado/Conectando/Online)
+  - Lista de instancias existentes com status visual
+- Adicionar rota `/whatsapp` no `App.tsx`
+- Adicionar item "Conexao WhatsApp" na sidebar com icone Smartphone
+
+## 6. Leads: Status do Agente IA
+
+**Arquivo afetado:** `src/pages/Leads.tsx`
+
+- Adicionar novos status de IA na tabela: "Aguardando", "Qualificando", "Negociando", "Vendido"
+- Coluna "Status IA" com badges coloridas
+- Botoes de extracao no topo: "Extrair Contatos", "Extrair Grupos", "Extrair Conversas"
+- Filtros por status de IA
+- Dados mockados (20-30 leads ficticios) para demonstracao
+
+## 7. Controle do Agente IA + Log de Atividades
+
+**Arquivo afetado:** `src/pages/AIPage.tsx`
+
+- Nova sub-tab "Controle" dentro da pagina IA:
+  - Toggle "Disparador IA" (ativar/desativar globalmente)
+  - Metricas do agente: mensagens enviadas, taxa de resposta, leads qualificados
+- Feed de atividades em tempo real (mockado):
+  - "IA iniciou conversa com Joao Silva"
+  - "IA qualificou Maria Santos como lead quente"
+  - "IA agendou reuniao com Pedro Oliveira"
+  - Timestamps e icones por tipo de acao
+
+## 8. Sidebar Atualizada
+
+**Arquivo afetado:** `src/components/AppSidebar.tsx`
+
+- Itens de navegacao atualizados:
+  1. Dashboard (LayoutDashboard)
+  2. Conexao WhatsApp (Smartphone)
+  3. Meus Leads (Users)
+  4. Prospecao (Search)
+  5. CRM Pipeline (Kanban)
+  6. Agente IA (Brain)
+  7. Configuracoes (Settings)
+- Branding "VS Solucoes" / "VS LEADS" no header
+
+## 9. Layout e Header
+
+**Arquivo afetado:** `src/components/AppLayout.tsx`
+
+- Header com:
+  - SidebarTrigger
+  - Nome da pagina atual
+  - Toggle de tema (sol/lua)
+  - Avatar do usuario
+
+## 10. Dados Mockados
+
+**Novo arquivo:** `src/data/mockData.ts`
+
+- 25 leads ficticios com nomes brasileiros, telefones, status variados
+- 5 instancias WhatsApp (3 online, 1 connecting, 1 offline)
+- 15 entradas de log de atividade da IA
+- Dados para graficos (7 dias de metricas)
+- Os dados mockados serao exibidos quando nao houver dados reais no banco
 
 ---
 
-## Fase 3: Módulo de Prospecção (Geração de Demanda)
+## Detalhes Tecnicos
 
-### Web Scraping via Firecrawl
-- Interface de busca: palavras-chave + localização + URL alvo
-- Edge Function que chama Firecrawl para scraping e extração
-- Mapeamento de campos (Nome, Telefone, Email, Fonte) antes de salvar
-- Loading com Skeleton components durante as chamadas
+### Estrutura de Arquivos
 
-### Integração WhatsApp (Evolution API)
-- Tela com tabs: Membros de Grupos / Contatos Gerais / Lista de Chats
-- Edge Function que conecta na instância Evolution do usuário
-- Extração de membros de grupos específicos e contatos sem nome
-- Validação via Zod da instância antes de extrair
+```text
+src/
+  data/
+    mockData.ts                    (NOVO)
+  pages/
+    Auth.tsx                       (REFATORAR - split layout)
+    Index.tsx                      (REFATORAR - KPIs + charts)
+    WhatsAppConnection.tsx         (NOVO - tela dedicada)
+    Leads.tsx                      (REFATORAR - status IA)
+    AIPage.tsx                     (REFATORAR - tab controle)
+    Prospecting.tsx                (REFATORAR - remover WhatsApp mgmt)
+  components/
+    AppSidebar.tsx                 (REFATORAR - rebranding + nav)
+    AppLayout.tsx                  (REFATORAR - header)
+    ThemeToggle.tsx                (NOVO)
+  index.css                        (REFATORAR - light mode)
+  App.tsx                          (REFATORAR - nova rota)
+  main.tsx                         (REFATORAR - ThemeProvider)
+```
 
-### Saneamento Automático
-- Formatação de telefones para E.164 (remoção de caracteres, prefixo de país)
-- Capitalização automática de nomes
-- Deduplicação por número de telefone
+### Dependencias
 
----
+Nenhuma nova dependencia necessaria. Tudo ja esta instalado:
+- `recharts` para graficos
+- `next-themes` para dark/light mode
+- `lucide-react` para icones
+- Shadcn UI completo
 
-## Fase 4: Módulo de Organização (Leads Raspados)
+### Ordem de Implementacao
 
-### Inbox de Triagem
-- Data Table avançada com filtros por fonte, status, data
-- Seleção múltipla de leads com ações em lote
-- Busca e ordenação por colunas
-
-### Enriquecimento de Dados
-- Botão "Enriquecer" que dispara Edge Function (Perplexity/Clearbit)
-- Busca automática de CNPJ, redes sociais, email corporativo
-- Resultados salvos no campo JSONB `enrichment_data`
-
-### Qualificação e Envio ao CRM
-- Sistema "Dedo no Gatilho": selecionar leads → enviar para pipeline com 1 clique
-- Mudança automática de status: pending → enriched → converted
-
----
-
-## Fase 5: Módulo CRM (Ativação da Demanda)
-
-### Kanban Multi-função
-- Board drag-and-drop com colunas configuráveis
-- Divisão por papéis: SDR (Qualificação), BDR (Prospecção Ativa), Closer (Fechamento)
-- Cards com info do lead, valor estimado, probabilidade
-
-### Gestão de Oportunidades
-- Modal de detalhes com histórico de interações
-- Atribuição de responsável (membro da organização)
-- Automação de status baseada em mudança de coluna
-
----
-
-## Segurança e Edge Cases
-- RLS em todas as tabelas filtrando por org_id
-- Rate limiting nas Edge Functions de scraping
-- Validação Zod em todos os inputs de formulário
-- Sanitização de dados antes de persistir
+1. Identidade visual (CSS + tema + fonte)
+2. Rebranding (sidebar + auth + title)
+3. Login split-screen
+4. Dados mockados
+5. Dashboard com graficos
+6. Tela WhatsApp dedicada
+7. Leads com status IA
+8. Controle do Agente + Log
+9. Layout/header refinado
 
