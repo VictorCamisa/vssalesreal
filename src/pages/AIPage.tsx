@@ -657,8 +657,20 @@ function ChatbotTab({ orgId }: { orgId: string }) {
       </div>
 
       {/* Follow-up Rules */}
-      {currentConfig.id && selectedInstance && (
+      {currentConfig.id && selectedInstance ? (
         <FollowUpSection orgId={orgId} aiConfigId={currentConfig.id} instanceName={selectedInstance} />
+      ) : (
+        <div className="glass rounded-2xl p-5 space-y-3">
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-warning/15">
+              <RefreshCw className="h-5 w-5 text-warning" />
+            </div>
+            <div>
+              <h3 className="font-semibold">Cadência de Follow-up</h3>
+              <p className="text-xs text-muted-foreground">Salve a configuração do chatbot primeiro para habilitar o follow-up automático.</p>
+            </div>
+          </div>
+        </div>
       )}
 
       <Button onClick={handleSave} disabled={saving} className="w-full rounded-xl gradient-primary hover:opacity-90 h-11">
