@@ -44,17 +44,12 @@ Deno.serve(async (req) => {
     if (!org_id) return json({ error: "org_id is required" }, 400);
 
     const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
-    const { data: integration } = await supabaseAdmin
-      .from("integrations")
-      .select("api_key, endpoint_url")
-      .eq("org_id", org_id)
-      .eq("service_name", "evolution")
-      .single();
 
-    const apiKey = integration?.api_key || Deno.env.get("EVOLUTION_API_KEY");
-    const evolutionUrl = integration?.endpoint_url || Deno.env.get("EVOLUTION_API_URL");
+    // Use global Evolution API credentials from environment
+    const apiKey = Deno.env.get("EVOLUTION_API_KEY") || "";
+    const evolutionUrl = Deno.env.get("EVOLUTION_API_URL") || "";
     if (!apiKey || !evolutionUrl) {
-      return json({ error: "Evolution API não configurada. Vá em Configurações e adicione a API Key e URL." }, 400);
+      return json({ error: "Evolution API não configurada no sistema." }, 500);
     }
 
     const baseUrl = evolutionUrl.replace(/\/$/, "");

@@ -61,18 +61,10 @@ serve(async (req) => {
       rulesByConfig[rule.ai_config_id].push(rule);
     }
 
-    // Get integration info for Evolution API (grouped by org)
+    // Global Evolution API credentials
+    const evolutionUrl = (Deno.env.get("EVOLUTION_API_URL") || "").replace(/\/$/, "");
+    const evolutionKey = Deno.env.get("EVOLUTION_API_KEY") || "";
     const orgIds = [...new Set(conversations.map((c: any) => c.org_id))];
-    const { data: integrations } = await supabaseAdmin
-      .from("integrations")
-      .select("*")
-      .in("org_id", orgIds)
-      .eq("service_name", "evolution");
-
-    const integrationByOrg: Record<string, any> = {};
-    for (const integ of integrations || []) {
-      integrationByOrg[integ.org_id] = integ;
-    }
 
     // Get AI configs for system prompts
     const { data: aiConfigs } = await supabaseAdmin
@@ -122,9 +114,8 @@ serve(async (req) => {
         continue;
       }
 
-      const integration = integrationByOrg[conv.org_id];
-      if (!integration) {
-        console.error(`No Evolution integration for org ${conv.org_id}`);
+      if (!evolutionUrl || !evolutionKey) {
+        console.error(`Evolution API not configured`);
         continue;
       }
 
@@ -194,12 +185,12 @@ REGRAS:
         // Send via Evolution API
         const phone = conv.remote_jid.replace("@s.whatsapp.net", "");
         const sendResponse = await fetch(
-          `${integration.endpoint_url}/message/sendText/${conv.instance_name}`,
+          `${evolutionUrl}/message/sendText/${conv.instance_name}`,
           {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
-              apikey: integration.api_key,
+              apikey: evolutionKey,
             },
             body: JSON.stringify({ number: phone, text: reply }),
           }
