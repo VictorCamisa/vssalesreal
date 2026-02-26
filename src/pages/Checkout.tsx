@@ -202,17 +202,25 @@ export default function Checkout() {
   const handleSubmit = async () => {
     setSubmitting(true);
     try {
-      await supabase.from("site_leads").insert({
+      const { error } = await supabase.from("site_leads").insert({
         name: contact.name,
         email: contact.email,
         phone: contact.phone,
         company: company.name,
         message: `[CHECKOUT - ${plan.name}] Segmento: ${company.segment} | Funcionários: ${company.employees} | Faturamento: ${company.revenue} | Cargo: ${contact.role} | Mensagem: ${contact.message}`,
         form_source: `checkout_${selectedPlan}`,
+        plan_selected: plan.name,
+        status: "new",
       });
-      setSubmitted(true);
-    } catch {
-      // silently handle
+      if (error) {
+        console.error("Checkout insert error:", error);
+        alert("Erro ao enviar. Tente novamente.");
+      } else {
+        setSubmitted(true);
+      }
+    } catch (err) {
+      console.error("Checkout error:", err);
+      alert("Erro inesperado. Tente novamente.");
     }
     setSubmitting(false);
   };
