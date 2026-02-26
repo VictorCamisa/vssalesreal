@@ -385,7 +385,9 @@ export type Database = {
       }
       site_leads: {
         Row: {
+          admin_notes: string | null
           company: string | null
+          contacted_at: string | null
           created_at: string
           email: string
           form_source: string
@@ -394,9 +396,13 @@ export type Database = {
           name: string
           partnership_type: string | null
           phone: string | null
+          plan_selected: string | null
+          status: string
         }
         Insert: {
+          admin_notes?: string | null
           company?: string | null
+          contacted_at?: string | null
           created_at?: string
           email: string
           form_source?: string
@@ -405,9 +411,13 @@ export type Database = {
           name: string
           partnership_type?: string | null
           phone?: string | null
+          plan_selected?: string | null
+          status?: string
         }
         Update: {
+          admin_notes?: string | null
           company?: string | null
+          contacted_at?: string | null
           created_at?: string
           email?: string
           form_source?: string
@@ -416,6 +426,8 @@ export type Database = {
           name?: string
           partnership_type?: string | null
           phone?: string | null
+          plan_selected?: string | null
+          status?: string
         }
         Relationships: []
       }
