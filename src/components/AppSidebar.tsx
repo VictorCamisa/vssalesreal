@@ -5,8 +5,9 @@ import {
   Kanban,
   Settings,
   LogOut,
-  Zap,
   Brain,
+  Smartphone,
+  Rocket,
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useAuth } from "@/contexts/AuthContext";
@@ -27,10 +28,11 @@ import { Separator } from "@/components/ui/separator";
 
 const navItems = [
   { title: "Dashboard", url: "/", icon: LayoutDashboard },
+  { title: "Conexão WhatsApp", url: "/whatsapp", icon: Smartphone },
+  { title: "Meus Leads", url: "/leads", icon: Users },
   { title: "Prospecção", url: "/prospecting", icon: Search },
-  { title: "Leads", url: "/leads", icon: Users },
-  { title: "CRM", url: "/crm", icon: Kanban },
-  { title: "IA", url: "/ai", icon: Brain },
+  { title: "CRM Pipeline", url: "/crm", icon: Kanban },
+  { title: "Agente IA", url: "/ai", icon: Brain },
   { title: "Configurações", url: "/settings", icon: Settings },
 ];
 
@@ -42,13 +44,13 @@ export function AppSidebar() {
       <SidebarHeader className="p-4 pb-3">
         <div className="flex items-center gap-3">
           <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl gradient-primary glow-sm">
-            <Zap className="h-4.5 w-4.5 text-primary-foreground" />
+            <Rocket className="h-4.5 w-4.5 text-primary-foreground" />
           </div>
           <div className="group-data-[collapsible=icon]:hidden">
             <span className="font-bold text-sm tracking-tight text-foreground">
-              Vendas AI
+              VS LEADS
             </span>
-            <p className="text-[10px] text-muted-foreground leading-none mt-0.5">Sales Intelligence</p>
+            <p className="text-[10px] text-muted-foreground leading-none mt-0.5">por VS Soluções</p>
           </div>
         </div>
       </SidebarHeader>

@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -6,6 +6,62 @@
 
 @layer base {
   :root {
+    --background: 220 20% 97%;
+    --foreground: 224 30% 12%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 224 30% 12%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 224 30% 12%;
+
+    --primary: 221 83% 53%;
+    --primary-foreground: 0 0% 100%;
+    --primary-glow: 221 83% 65%;
+
+    --secondary: 220 14% 93%;
+    --secondary-foreground: 224 20% 30%;
+
+    --muted: 220 14% 93%;
+    --muted-foreground: 220 10% 46%;
+
+    --accent: 220 14% 90%;
+    --accent-foreground: 224 30% 12%;
+
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+
+    --success: 152 69% 41%;
+    --success-foreground: 0 0% 100%;
+
+    --warning: 36 100% 50%;
+    --warning-foreground: 0 0% 0%;
+
+    --border: 220 13% 88%;
+    --input: 220 13% 88%;
+    --ring: 221 83% 53%;
+
+    --radius: 0.75rem;
+
+    --sidebar-background: 0 0% 100%;
+    --sidebar-foreground: 220 10% 46%;
+    --sidebar-primary: 221 83% 53%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 220 14% 95%;
+    --sidebar-accent-foreground: 224 30% 12%;
+    --sidebar-border: 220 13% 90%;
+    --sidebar-ring: 221 83% 53%;
+
+    --chart-1: 221 83% 53%;
+    --chart-2: 152 69% 41%;
+    --chart-3: 36 100% 50%;
+    --chart-4: 270 60% 58%;
+    --chart-5: 0 72% 51%;
+
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  }
+
+  .dark {
     --background: 228 28% 6%;
     --foreground: 220 20% 95%;
 
@@ -41,8 +97,6 @@
     --input: 224 15% 15%;
     --ring: 221 83% 53%;
 
-    --radius: 0.75rem;
-
     --sidebar-background: 228 28% 5%;
     --sidebar-foreground: 220 12% 60%;
     --sidebar-primary: 221 83% 53%;
@@ -57,8 +111,6 @@
     --chart-3: 36 100% 50%;
     --chart-4: 270 60% 58%;
     --chart-5: 0 72% 51%;
-
-    font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
   }
 }
 
@@ -93,9 +145,15 @@
 /* Glassmorphism utilities */
 @layer utilities {
   .glass {
-    @apply bg-card/60 backdrop-blur-xl border border-border/50;
+    @apply bg-card/80 backdrop-blur-xl border border-border/50;
   }
   .glass-subtle {
+    @apply bg-card/50 backdrop-blur-md border border-border/30;
+  }
+  .dark .glass {
+    @apply bg-card/60 backdrop-blur-xl border border-border/50;
+  }
+  .dark .glass-subtle {
     @apply bg-card/30 backdrop-blur-md border border-border/30;
   }
   .glow-primary {
@@ -108,6 +166,12 @@
     background: linear-gradient(135deg, hsl(221 83% 53%), hsl(221 83% 65%));
   }
   .gradient-mesh {
+    background: 
+      radial-gradient(ellipse at 20% 50%, hsl(221 83% 53% / 0.06) 0%, transparent 50%),
+      radial-gradient(ellipse at 80% 20%, hsl(270 60% 58% / 0.04) 0%, transparent 50%),
+      radial-gradient(ellipse at 50% 80%, hsl(152 69% 41% / 0.03) 0%, transparent 50%);
+  }
+  .dark .gradient-mesh {
     background: 
       radial-gradient(ellipse at 20% 50%, hsl(221 83% 53% / 0.08) 0%, transparent 50%),
       radial-gradient(ellipse at 80% 20%, hsl(270 60% 58% / 0.05) 0%, transparent 50%),
