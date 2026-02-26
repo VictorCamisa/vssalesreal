@@ -107,6 +107,195 @@ export type Database = {
         }
         Relationships: []
       }
+      broadcast_leads: {
+        Row: {
+          broadcast_id: string
+          created_at: string
+          delivered_at: string | null
+          error_message: string | null
+          id: string
+          lead_id: string
+          message_sent: string | null
+          read_at: string | null
+          replied_at: string | null
+          sent_at: string | null
+          status: string
+        }
+        Insert: {
+          broadcast_id: string
+          created_at?: string
+          delivered_at?: string | null
+          error_message?: string | null
+          id?: string
+          lead_id: string
+          message_sent?: string | null
+          read_at?: string | null
+          replied_at?: string | null
+          sent_at?: string | null
+          status?: string
+        }
+        Update: {
+          broadcast_id?: string
+          created_at?: string
+          delivered_at?: string | null
+          error_message?: string | null
+          id?: string
+          lead_id?: string
+          message_sent?: string | null
+          read_at?: string | null
+          replied_at?: string | null
+          sent_at?: string | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "broadcast_leads_broadcast_id_fkey"
+            columns: ["broadcast_id"]
+            isOneToOne: false
+            referencedRelation: "broadcasts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "broadcast_leads_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads_raw"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      broadcasts: {
+        Row: {
+          ai_config_id: string | null
+          ai_enabled: boolean
+          channel: string
+          completed_at: string | null
+          converted_count: number | null
+          created_at: string
+          created_by: string | null
+          delay_between_messages: number | null
+          delivered_count: number | null
+          description: string | null
+          failed_count: number | null
+          follow_up_count: number | null
+          follow_up_enabled: boolean | null
+          follow_up_interval_hours: number | null
+          id: string
+          instance_name: string | null
+          message_template: string | null
+          message_variables: Json | null
+          name: string
+          org_id: string
+          read_count: number | null
+          replied_count: number | null
+          scheduled_at: string | null
+          segment_custom_filter: Json | null
+          segment_date_from: string | null
+          segment_date_to: string | null
+          segment_source: string[] | null
+          segment_status: string[] | null
+          segment_tags: string[] | null
+          send_rate_per_minute: number | null
+          sent_count: number | null
+          started_at: string | null
+          status: string
+          total_leads: number | null
+          type: string
+          updated_at: string
+        }
+        Insert: {
+          ai_config_id?: string | null
+          ai_enabled?: boolean
+          channel?: string
+          completed_at?: string | null
+          converted_count?: number | null
+          created_at?: string
+          created_by?: string | null
+          delay_between_messages?: number | null
+          delivered_count?: number | null
+          description?: string | null
+          failed_count?: number | null
+          follow_up_count?: number | null
+          follow_up_enabled?: boolean | null
+          follow_up_interval_hours?: number | null
+          id?: string
+          instance_name?: string | null
+          message_template?: string | null
+          message_variables?: Json | null
+          name: string
+          org_id: string
+          read_count?: number | null
+          replied_count?: number | null
+          scheduled_at?: string | null
+          segment_custom_filter?: Json | null
+          segment_date_from?: string | null
+          segment_date_to?: string | null
+          segment_source?: string[] | null
+          segment_status?: string[] | null
+          segment_tags?: string[] | null
+          send_rate_per_minute?: number | null
+          sent_count?: number | null
+          started_at?: string | null
+          status?: string
+          total_leads?: number | null
+          type?: string
+          updated_at?: string
+        }
+        Update: {
+          ai_config_id?: string | null
+          ai_enabled?: boolean
+          channel?: string
+          completed_at?: string | null
+          converted_count?: number | null
+          created_at?: string
+          created_by?: string | null
+          delay_between_messages?: number | null
+          delivered_count?: number | null
+          description?: string | null
+          failed_count?: number | null
+          follow_up_count?: number | null
+          follow_up_enabled?: boolean | null
+          follow_up_interval_hours?: number | null
+          id?: string
+          instance_name?: string | null
+          message_template?: string | null
+          message_variables?: Json | null
+          name?: string
+          org_id?: string
+          read_count?: number | null
+          replied_count?: number | null
+          scheduled_at?: string | null
+          segment_custom_filter?: Json | null
+          segment_date_from?: string | null
+          segment_date_to?: string | null
+          segment_source?: string[] | null
+          segment_status?: string[] | null
+          segment_tags?: string[] | null
+          send_rate_per_minute?: number | null
+          sent_count?: number | null
+          started_at?: string | null
+          status?: string
+          total_leads?: number | null
+          type?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "broadcasts_ai_config_id_fkey"
+            columns: ["ai_config_id"]
+            isOneToOne: false
+            referencedRelation: "ai_configs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "broadcasts_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       crm_stages: {
         Row: {
           created_at: string
