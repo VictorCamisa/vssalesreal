@@ -16,6 +16,7 @@ import AIPage from "./pages/AIPage";
 import WhatsAppConnection from "./pages/WhatsAppConnection";
 import NotFound from "./pages/NotFound";
 import Landing from "./pages/Landing";
+import Checkout from "./pages/Checkout";
 import AdminAuth from "./pages/AdminAuth";
 import AdminPanel from "./pages/AdminPanel";
 
@@ -36,6 +37,7 @@ function AppRoutes() {
     return (
       <Routes>
         <Route path="/site" element={<Landing />} />
+        <Route path="/checkout" element={<Checkout />} />
         <Route path="/admin" element={<AdminAuth />} />
         <Route path="/auth" element={<Auth />} />
         <Route path="*" element={<Navigate to="/auth" replace />} />
@@ -56,6 +58,7 @@ function AppRoutes() {
         <Route path="/settings" element={<SettingsPage />} />
       </Route>
       <Route path="/site" element={<Landing />} />
+      <Route path="/checkout" element={<Checkout />} />
       <Route path="/admin" element={<AdminAuth />} />
       <Route path="/admin/panel" element={<AdminPanel />} />
       <Route path="/auth" element={<Navigate to="/" replace />} />
