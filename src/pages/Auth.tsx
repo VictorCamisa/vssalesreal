@@ -48,7 +48,7 @@ export default function Auth() {
       {/* Left: Form */}
       <div className="flex flex-1 items-center justify-center bg-background px-4 py-8 sm:p-6 lg:p-12">
         <div className="w-full max-w-md space-y-6 sm:space-y-8 animate-fade-in">
-          <Button variant="ghost" size="sm" className="self-start" onClick={() => navigate("/landing")}>
+          <Button variant="ghost" size="sm" className="self-start" onClick={() => navigate("/site")}>
             <ArrowLeft className="h-4 w-4 mr-1" /> Voltar ao site
           </Button>
           {/* Logo */}
