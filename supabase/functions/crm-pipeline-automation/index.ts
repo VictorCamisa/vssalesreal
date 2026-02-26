@@ -121,10 +121,11 @@ Deno.serve(async (req) => {
       // =========================================
       const { data: leadOpps } = await supabase
         .from("opportunities")
-        .select("id, lead_id, automation_status, leads_raw!inner(id, name, phone, email, enrichment_data)")
+        .select("id, lead_id, automation_status, message_sent_at, leads_raw!inner(id, name, phone, email, enrichment_data)")
         .eq("org_id", orgId)
         .eq("stage_id", leadStageId)
-        .in("automation_status", ["idle", null]);
+        .in("automation_status", ["idle", null])
+        .is("message_sent_at", null);
 
       let movedToEnriched = 0;
       for (const opp of leadOpps || []) {
@@ -132,14 +133,19 @@ Deno.serve(async (req) => {
         if (lead?.name && lead?.phone) {
           if (canAutoEnrich) {
             // Has enriched stage — move there for processing
+            // Lock immediately to prevent duplicate processing
             await supabase
               .from("opportunities")
               .update({ stage_id: enrichedStageId, automation_status: "pending_enrichment" })
-              .eq("id", opp.id);
+              .eq("id", opp.id)
+              .is("message_sent_at", null);
             movedToEnriched++;
           } else {
             // No enriched stage — do enrichment + send directly from lead stage
             try {
+              // Lock immediately to prevent duplicate processing on concurrent runs
+              await supabase.from("opportunities").update({ automation_status: "processing" }).eq("id", opp.id);
+              
               const enrichmentData = await deepEnrichLead(lead, FIRECRAWL_API_KEY, LOVABLE_API_KEY);
               await supabase.from("leads_raw").update({ enrichment_data: enrichmentData, status: "enriched" }).eq("id", lead.id);
               
@@ -184,12 +190,16 @@ Deno.serve(async (req) => {
         .select("id, lead_id, leads_raw!inner(id, name, phone, email, enrichment_data)")
         .eq("org_id", orgId)
         .eq("stage_id", enrichedStageId)
-        .eq("automation_status", "pending_enrichment");
+        .eq("automation_status", "pending_enrichment")
+        .is("message_sent_at", null);
 
       let enrichedAndSent2 = 0;
       for (const opp of enrichOpps || []) {
         const lead = (opp as any).leads_raw;
         try {
+          // Lock immediately to prevent duplicate processing on concurrent runs
+          await supabase.from("opportunities").update({ automation_status: "processing" }).eq("id", opp.id);
+          
           // Step A: Deep enrichment via Firecrawl + AI
           const enrichmentData = await deepEnrichLead(lead, FIRECRAWL_API_KEY, LOVABLE_API_KEY);
 
