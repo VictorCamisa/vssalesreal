@@ -64,22 +64,22 @@ export default function Auth() {
   return (
     <div className="flex min-h-screen">
       {/* Left: Form */}
-      <div className="flex flex-1 items-center justify-center bg-background p-6 lg:p-12">
-        <div className="w-full max-w-md space-y-8 animate-fade-in">
+      <div className="flex flex-1 items-center justify-center bg-background px-4 py-8 sm:p-6 lg:p-12">
+        <div className="w-full max-w-md space-y-6 sm:space-y-8 animate-fade-in">
           {/* Logo */}
-          <div className="flex flex-col items-center gap-4 lg:items-start">
-            <img src={vsLogo} alt="VS SALES" className="h-14 w-auto" />
+          <div className="flex flex-col items-center gap-3 sm:gap-4 lg:items-start">
+            <img src={vsLogo} alt="VS SALES" className="h-12 sm:h-14 w-auto" />
             <div className="text-center lg:text-left">
-              <h1 className="text-3xl font-bold tracking-tight">VS SALES</h1>
-              <p className="text-sm text-muted-foreground mt-1">por VS Soluções</p>
+              <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">VS SALES</h1>
+              <p className="text-xs sm:text-sm text-muted-foreground mt-1">por VS Soluções</p>
             </div>
           </div>
 
           {/* Form Card */}
-          <div className="glass rounded-2xl p-6 space-y-5">
+          <div className="glass rounded-2xl p-5 sm:p-6 space-y-4 sm:space-y-5">
             <div>
-              <h2 className="text-lg font-semibold">{isLogin ? "Entrar" : "Criar conta"}</h2>
-              <p className="text-sm text-muted-foreground mt-0.5">
+              <h2 className="text-base sm:text-lg font-semibold">{isLogin ? "Entrar" : "Criar conta"}</h2>
+              <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">
                 {isLogin ? "Acesse sua conta para continuar" : "Preencha os dados para criar sua conta"}
               </p>
             </div>
