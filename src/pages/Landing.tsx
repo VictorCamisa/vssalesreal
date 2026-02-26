@@ -695,6 +695,10 @@ export default function Landing() {
               <a href="#" className="hover:text-gray-400 transition-colors">Política de Privacidade</a>
               <a href="#" className="hover:text-gray-400 transition-colors">Termos de Uso</a>
               <a href="#" className="hover:text-gray-400 transition-colors">Contato</a>
+              <a href="/admin" className="hover:text-[#00D4FF] transition-colors flex items-center gap-1">
+                <Shield className="h-3 w-3" />
+                Página do Admin
+              </a>
             </div>
           </div>
           <p className="text-[10px] text-gray-700 text-center mt-6">© 2026 VS Soluções. Todos os direitos reservados.</p>

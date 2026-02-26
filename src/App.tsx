@@ -16,6 +16,7 @@ import AIPage from "./pages/AIPage";
 import WhatsAppConnection from "./pages/WhatsAppConnection";
 import NotFound from "./pages/NotFound";
 import Landing from "./pages/Landing";
+import AdminAuth from "./pages/AdminAuth";
 
 const queryClient = new QueryClient();
 
@@ -34,6 +35,7 @@ function AppRoutes() {
     return (
       <Routes>
         <Route path="/site" element={<Landing />} />
+        <Route path="/admin" element={<AdminAuth />} />
         <Route path="/auth" element={<Auth />} />
         <Route path="*" element={<Navigate to="/auth" replace />} />
       </Routes>
