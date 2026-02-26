@@ -808,6 +808,7 @@ export type Database = {
         Row: {
           created_at: string
           external_mapping: Json | null
+          form_token: string
           id: string
           name: string
           owner_id: string
@@ -816,6 +817,7 @@ export type Database = {
         Insert: {
           created_at?: string
           external_mapping?: Json | null
+          form_token?: string
           id?: string
           name: string
           owner_id: string
@@ -824,6 +826,7 @@ export type Database = {
         Update: {
           created_at?: string
           external_mapping?: Json | null
+          form_token?: string
           id?: string
           name?: string
           owner_id?: string

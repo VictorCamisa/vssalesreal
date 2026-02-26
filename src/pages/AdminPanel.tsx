@@ -11,7 +11,7 @@ import {
   DollarSign, RefreshCw, UserPlus, Copy,
   Loader2, Trash2, User, ArrowLeft, Package, Plus,
   Target, Lightbulb, ShieldCheck, Globe, Instagram,
-  Linkedin, Facebook, MapPin, Upload, Sparkles, HelpCircle
+  Linkedin, Facebook, MapPin, Upload, Sparkles, HelpCircle, Link2
 } from "lucide-react";
 
 type Tab = "metrics" | "pending" | "users" | "leads" | "content" | "companies";
@@ -21,6 +21,7 @@ interface Organization {
   name: string;
   owner_id: string;
   created_at: string;
+  form_token: string;
 }
 
 type CompanyProfileData = {
@@ -1047,23 +1048,47 @@ export default function AdminPanel() {
                           return o.name.toLowerCase().includes(q);
                         }).map(org => {
                           const ownerUser = users.find(u => u.id === org.owner_id);
+                          const formUrl = `${window.location.origin}/forms/${org.form_token}`;
                           return (
                             <div
                               key={org.id}
-                              onClick={() => loadCompanyProfile(org.id)}
-                              className="rounded-xl border border-[#1a1a2e] bg-[#0d0d18] p-4 flex items-center gap-4 cursor-pointer hover:bg-white/[0.02] hover:border-[#00D4FF]/20 transition-all"
+                              className="rounded-xl border border-[#1a1a2e] bg-[#0d0d18] p-4 flex items-center gap-4 hover:border-[#00D4FF]/20 transition-all"
                             >
-                              <div className="h-10 w-10 rounded-lg flex items-center justify-center bg-[#0057FF]/10 shrink-0">
-                                <Building2 className="h-5 w-5 text-[#00D4FF]" />
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                <p className="text-sm font-semibold text-white">{org.name}</p>
-                                <div className="flex items-center gap-3 text-[11px] text-gray-500">
-                                  {ownerUser && <span className="flex items-center gap-1"><User className="h-3 w-3" />{ownerUser.full_name || ownerUser.email}</span>}
-                                  <span>Criada em {new Date(org.created_at).toLocaleDateString("pt-BR")}</span>
+                              <div
+                                onClick={() => loadCompanyProfile(org.id)}
+                                className="flex items-center gap-4 flex-1 min-w-0 cursor-pointer hover:bg-white/[0.02] rounded-lg -m-2 p-2 transition-colors"
+                              >
+                                <div className="h-10 w-10 rounded-lg flex items-center justify-center bg-[#0057FF]/10 shrink-0">
+                                  <Building2 className="h-5 w-5 text-[#00D4FF]" />
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-sm font-semibold text-white">{org.name}</p>
+                                  <div className="flex items-center gap-3 text-[11px] text-gray-500">
+                                    {ownerUser && <span className="flex items-center gap-1"><User className="h-3 w-3" />{ownerUser.full_name || ownerUser.email}</span>}
+                                    <span>Criada em {new Date(org.created_at).toLocaleDateString("pt-BR")}</span>
+                                  </div>
                                 </div>
                               </div>
-                              <Edit3 className="h-4 w-4 text-gray-600" />
+                              <div className="flex items-center gap-2 shrink-0">
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    navigator.clipboard.writeText(formUrl);
+                                    toast({ title: "Link copiado!", description: formUrl });
+                                  }}
+                                  className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-[#0057FF]/10 text-[#00D4FF] text-[10px] font-semibold hover:bg-[#0057FF]/20 transition-colors border border-[#00D4FF]/20"
+                                  title="Copiar link do formulário"
+                                >
+                                  <Link2 className="h-3.5 w-3.5" />
+                                  Link de Forms
+                                </button>
+                                <button
+                                  onClick={() => loadCompanyProfile(org.id)}
+                                  className="h-8 w-8 rounded-lg bg-white/[0.03] text-gray-500 hover:text-white hover:bg-white/[0.06] flex items-center justify-center transition-colors"
+                                >
+                                  <Edit3 className="h-4 w-4" />
+                                </button>
+                              </div>
                             </div>
                           );
                         })}
