@@ -85,6 +85,17 @@ serve(async (req) => {
       aiConfigById[cfg.id] = cfg;
     }
 
+    // Get company profiles for context
+    const { data: companyProfiles } = await supabaseAdmin
+      .from("company_profiles")
+      .select("*")
+      .in("org_id", orgIds);
+
+    const companyByOrg: Record<string, any> = {};
+    for (const cp of companyProfiles || []) {
+      companyByOrg[cp.org_id] = cp;
+    }
+
     const now = new Date();
     let processed = 0;
     const results: any[] = [];
@@ -124,13 +135,26 @@ serve(async (req) => {
       const contextHint = rule.context_hint || "reativar a conversa de forma natural";
       const stepLabel = `${nextStep}º follow-up (de ${rules.length} total)`;
 
+      // Company context for follow-up
+      const cp = companyByOrg[conv.org_id];
+      let compCtx = "";
+      if (cp) {
+        const p: string[] = [];
+        if (cp.company_name) p.push(`Empresa: ${cp.company_name}`);
+        if (cp.segment) p.push(`Segmento: ${cp.segment}`);
+        if (cp.tone_of_voice) p.push(`Tom: ${cp.tone_of_voice}`);
+        const products = cp.products_services || [];
+        if (products.length > 0) p.push("Produtos: " + products.map((pr: any) => pr.name).join(", "));
+        compCtx = `\n\nCONTEXTO DA EMPRESA:\n${p.join("\n")}`;
+      }
+
       const systemPrompt = `Você é um assistente de vendas via WhatsApp.
 ${aiConfig.system_prompt || "Seja educado, prestativo e profissional."}
 
 SITUAÇÃO: O lead "${conv.push_name || 'cliente'}" não respondeu há ${Math.round(minutesSince)} minutos.
 Este é o ${stepLabel}.
 Objetivo do follow-up: ${contextHint}
-
+${compCtx}
 REGRAS:
 - Mensagem CURTA (máx 2 linhas)
 - Tom natural, não robótico

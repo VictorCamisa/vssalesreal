@@ -296,6 +296,107 @@ export type Database = {
           },
         ]
       }
+      company_profiles: {
+        Row: {
+          address: string | null
+          avg_ticket: string | null
+          cnpj: string | null
+          company_name: string
+          created_at: string
+          description: string | null
+          differentials: string | null
+          email: string | null
+          facebook: string | null
+          founded_year: number | null
+          id: string
+          instagram: string | null
+          linkedin: string | null
+          logo_url: string | null
+          mission: string | null
+          objections_faq: Json | null
+          org_id: string
+          phone: string | null
+          products_services: Json | null
+          sales_process: string | null
+          segment: string | null
+          target_audience: string | null
+          team_size: string | null
+          tone_of_voice: string | null
+          updated_at: string
+          values: string | null
+          vision: string | null
+          website: string | null
+        }
+        Insert: {
+          address?: string | null
+          avg_ticket?: string | null
+          cnpj?: string | null
+          company_name?: string
+          created_at?: string
+          description?: string | null
+          differentials?: string | null
+          email?: string | null
+          facebook?: string | null
+          founded_year?: number | null
+          id?: string
+          instagram?: string | null
+          linkedin?: string | null
+          logo_url?: string | null
+          mission?: string | null
+          objections_faq?: Json | null
+          org_id: string
+          phone?: string | null
+          products_services?: Json | null
+          sales_process?: string | null
+          segment?: string | null
+          target_audience?: string | null
+          team_size?: string | null
+          tone_of_voice?: string | null
+          updated_at?: string
+          values?: string | null
+          vision?: string | null
+          website?: string | null
+        }
+        Update: {
+          address?: string | null
+          avg_ticket?: string | null
+          cnpj?: string | null
+          company_name?: string
+          created_at?: string
+          description?: string | null
+          differentials?: string | null
+          email?: string | null
+          facebook?: string | null
+          founded_year?: number | null
+          id?: string
+          instagram?: string | null
+          linkedin?: string | null
+          logo_url?: string | null
+          mission?: string | null
+          objections_faq?: Json | null
+          org_id?: string
+          phone?: string | null
+          products_services?: Json | null
+          sales_process?: string | null
+          segment?: string | null
+          target_audience?: string | null
+          team_size?: string | null
+          tone_of_voice?: string | null
+          updated_at?: string
+          values?: string | null
+          vision?: string | null
+          website?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "company_profiles_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: true
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       conversation_tracker: {
         Row: {
           ai_config_id: string | null

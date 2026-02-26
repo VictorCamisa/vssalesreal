@@ -31,6 +31,40 @@ serve(async (req) => {
       .eq("config_type", configType)
       .maybeSingle();
 
+    // Fetch company profile for deep context
+    const { data: companyProfile } = await supabaseAdmin
+      .from("company_profiles")
+      .select("*")
+      .eq("org_id", org_id)
+      .maybeSingle();
+
+    let companyContext = "";
+    if (companyProfile) {
+      const cp = companyProfile as any;
+      const parts: string[] = [];
+      if (cp.company_name) parts.push(`Empresa: ${cp.company_name}`);
+      if (cp.segment) parts.push(`Segmento: ${cp.segment}`);
+      if (cp.description) parts.push(`Sobre: ${cp.description}`);
+      if (cp.mission) parts.push(`Missão: ${cp.mission}`);
+      if (cp.target_audience) parts.push(`Público-alvo: ${cp.target_audience}`);
+      if (cp.differentials) parts.push(`Diferenciais: ${cp.differentials}`);
+      if (cp.tone_of_voice) parts.push(`Tom de voz: ${cp.tone_of_voice}`);
+      if (cp.sales_process) parts.push(`Processo de vendas: ${cp.sales_process}`);
+      if (cp.avg_ticket) parts.push(`Ticket médio: ${cp.avg_ticket}`);
+      const products = cp.products_services || [];
+      if (products.length > 0) {
+        parts.push("Produtos/Serviços:\n" + products.map((p: any) => `- ${p.name}${p.price ? ` (${p.price})` : ""}: ${p.description}`).join("\n"));
+      }
+      const faqs = cp.objections_faq || [];
+      if (faqs.length > 0) {
+        parts.push("Objeções e respostas:\n" + faqs.map((f: any) => `Q: ${f.question}\nR: ${f.answer}`).join("\n\n"));
+      }
+      if (cp.website) parts.push(`Site: ${cp.website}`);
+      if (cp.phone) parts.push(`Telefone: ${cp.phone}`);
+      if (cp.email) parts.push(`Email: ${cp.email}`);
+      companyContext = `\n\n--- PERFIL DA EMPRESA ---\n${parts.join("\n")}\n--- FIM DO PERFIL ---`;
+    }
+
     // Smart knowledge retrieval using keywords
     const userQuery = messages[messages.length - 1]?.content?.toLowerCase() || "";
     const queryWords = userQuery.split(/\W+/).filter((w: string) => w.length > 3);
@@ -152,7 +186,7 @@ REGRAS DE OURO:
 4. SEM JARGÃO: Evite "solução", "inovador", "disruptivo". Use linguagem do dia-a-dia do lead.
 5. GERE 3 VARIAÇÕES distintas: (A) Direta/urgente (B) Consultiva/educativa (C) Social proof/case
 6. Formate em Markdown com headers para cada variação.
-7. Inclua ao final uma análise de 2 linhas sobre qual variação usar em cada situação.${knowledgeContext}`;
+7. Inclua ao final uma análise de 2 has sobre qual variação usar em cada situação.${companyContext}${knowledgeContext}`;
     } else if (mode === "enrich_analysis") {
       systemPrompt = `Você é um analista de inteligência comercial sênior especializado em pesquisa B2B.
 
@@ -168,7 +202,7 @@ FRAMEWORK DE ANÁLISE:
 5. **Score de Prioridade**: 0-100 com justificativa
 6. **Riscos**: Objeções prováveis e como contorná-las
 
-Responda em Markdown estruturado. Seja específico e acionável — evite generalidades.${knowledgeContext}`;
+Responda em Markdown estruturado. Seja específico e acionável — evite generalidades.${companyContext}${knowledgeContext}`;
     } else {
       systemPrompt = `Você é um estrategista de vendas de alta performance integrado ao CRM da equipe.
 
@@ -189,7 +223,7 @@ REGRAS:
 - Seja direto e acionável — cada resposta deve ter um "próximo passo" claro
 - Quando analisar dados, use números e percentuais
 - Quando sugerir ações, ordene por impacto esperado
-- Baseie-se na base de conhecimento quando disponível${knowledgeContext}`;
+- Baseie-se na base de conhecimento quando disponível${companyContext}${knowledgeContext}`;
     }
 
     const temperature = aiConfig?.temperature ? Number(aiConfig.temperature) : 0.7;

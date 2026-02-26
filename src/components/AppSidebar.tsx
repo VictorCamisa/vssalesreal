@@ -8,6 +8,7 @@ import {
   Brain,
   Smartphone,
   Send,
+  Building2,
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useAuth } from "@/contexts/AuthContext";
@@ -38,6 +39,7 @@ const mainNav = [
 const toolsNav = [
   { title: "CRM Pipeline", url: "/crm", icon: Kanban },
   { title: "Agente IA", url: "/ai", icon: Brain },
+  { title: "Minha Empresa", url: "/company", icon: Building2 },
   { title: "Configurações", url: "/settings", icon: Settings },
 ];
 
