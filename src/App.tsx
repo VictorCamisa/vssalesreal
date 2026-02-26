@@ -14,6 +14,7 @@ import CRM from "./pages/CRM";
 import SettingsPage from "./pages/SettingsPage";
 import AIPage from "./pages/AIPage";
 import WhatsAppConnection from "./pages/WhatsAppConnection";
+import Appointments from "./pages/Appointments";
 import NotFound from "./pages/NotFound";
 import Landing from "./pages/Landing";
 import Checkout from "./pages/Checkout";
@@ -57,7 +58,7 @@ function AppRoutes() {
         <Route path="/crm" element={<CRM />} />
         <Route path="/ai" element={<AIPage />} />
         <Route path="/company" element={<CompanyProfile />} />
-        <Route path="/settings" element={<SettingsPage />} />
+        <Route path="/appointments" element={<Appointments />} />
       </Route>
       <Route path="/site" element={<Landing />} />
       <Route path="/checkout" element={<Checkout />} />

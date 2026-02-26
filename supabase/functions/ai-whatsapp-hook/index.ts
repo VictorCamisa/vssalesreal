@@ -235,6 +235,15 @@ serve(async (req) => {
 
     const systemPrompt = `Você é um assistente virtual via WhatsApp para uma empresa.
 ${aiConfig.system_prompt || "Seja educado, prestativo e profissional."}
+
+CAPACIDADE DE AGENDAMENTO:
+Você pode agendar, verificar e cancelar reuniões. Quando o lead quiser agendar:
+1. Pergunte data e horário preferido
+2. Quando tiver data e hora, inclua no final da sua resposta (invisível ao lead): [AGENDAR:YYYY-MM-DD:HH:MM:NOME_DO_LEAD]
+3. Para cancelar: [CANCELAR:TELEFONE_DO_LEAD]
+4. Para verificar agenda: [VERIFICAR:YYYY-MM-DD]
+Esses comandos serão processados automaticamente. NÃO mostre os comandos ao lead.
+
 Regras:
 - Responda de forma curta e direta (WhatsApp)
 - Use emojis com moderação
@@ -272,7 +281,7 @@ Regras:
     }
 
     const aiData = await aiResponse.json();
-    const reply = aiData.choices?.[0]?.message?.content || "";
+    let reply = aiData.choices?.[0]?.message?.content || "";
 
     if (!reply) {
       return new Response(JSON.stringify({ error: "Empty AI response" }), {
@@ -281,11 +290,53 @@ Regras:
       });
     }
 
+    // Process scheduling commands embedded in AI response
+    const phone = remoteJid.replace("@s.whatsapp.net", "");
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+
+    const agendarMatch = reply.match(/\[AGENDAR:(\d{4}-\d{2}-\d{2}):(\d{2}:\d{2}):([^\]]+)\]/);
+    const cancelarMatch = reply.match(/\[CANCELAR:([^\]]+)\]/);
+    const verificarMatch = reply.match(/\[VERIFICAR:(\d{4}-\d{2}-\d{2})\]/);
+
+    // Remove commands from visible reply
+    reply = reply.replace(/\[AGENDAR:[^\]]+\]/g, "").replace(/\[CANCELAR:[^\]]+\]/g, "").replace(/\[VERIFICAR:[^\]]+\]/g, "").trim();
+
+    if (agendarMatch) {
+      try {
+        await fetch(`${supabaseUrl}/functions/v1/manage-appointments`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${serviceKey}` },
+          body: JSON.stringify({
+            action: "create",
+            org_id: orgId,
+            date: agendarMatch[1],
+            time: agendarMatch[2],
+            lead_name: agendarMatch[3] || pushName,
+            lead_phone: phone,
+          }),
+        });
+      } catch (e) { console.error("Scheduling error:", e); }
+    }
+
+    if (cancelarMatch) {
+      try {
+        await fetch(`${supabaseUrl}/functions/v1/manage-appointments`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${serviceKey}` },
+          body: JSON.stringify({
+            action: "cancel",
+            org_id: orgId,
+            lead_phone: cancelarMatch[1] || phone,
+            reason: "Cancelado pelo lead via WhatsApp",
+          }),
+        });
+      } catch (e) { console.error("Cancel error:", e); }
+    }
+
     // Send reply via Evolution API
     const evolutionUrl = integration.endpoint_url;
     const evolutionKey = integration.api_key;
-
-    const phone = remoteJid.replace("@s.whatsapp.net", "");
 
     const sendResponse = await fetch(`${evolutionUrl}/message/sendText/${instanceName}`, {
       method: "POST",

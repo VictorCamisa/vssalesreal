@@ -107,6 +107,87 @@ export type Database = {
         }
         Relationships: []
       }
+      appointments: {
+        Row: {
+          cancelled_reason: string | null
+          created_at: string
+          created_by: string | null
+          created_via: string
+          description: string | null
+          duration_minutes: number
+          id: string
+          lead_id: string | null
+          lead_name: string | null
+          lead_phone: string | null
+          location: string | null
+          meeting_url: string | null
+          notes: string | null
+          org_id: string
+          reminder_sent: boolean
+          scheduled_at: string
+          status: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          cancelled_reason?: string | null
+          created_at?: string
+          created_by?: string | null
+          created_via?: string
+          description?: string | null
+          duration_minutes?: number
+          id?: string
+          lead_id?: string | null
+          lead_name?: string | null
+          lead_phone?: string | null
+          location?: string | null
+          meeting_url?: string | null
+          notes?: string | null
+          org_id: string
+          reminder_sent?: boolean
+          scheduled_at: string
+          status?: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          cancelled_reason?: string | null
+          created_at?: string
+          created_by?: string | null
+          created_via?: string
+          description?: string | null
+          duration_minutes?: number
+          id?: string
+          lead_id?: string | null
+          lead_name?: string | null
+          lead_phone?: string | null
+          location?: string | null
+          meeting_url?: string | null
+          notes?: string | null
+          org_id?: string
+          reminder_sent?: boolean
+          scheduled_at?: string
+          status?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "appointments_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads_raw"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "appointments_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       broadcast_leads: {
         Row: {
           broadcast_id: string

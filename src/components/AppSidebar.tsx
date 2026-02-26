@@ -3,12 +3,12 @@ import {
   Search,
   Users,
   Kanban,
-  Settings,
   LogOut,
   Brain,
   Smartphone,
   Send,
   Building2,
+  Calendar,
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useAuth } from "@/contexts/AuthContext";
@@ -38,9 +38,9 @@ const mainNav = [
 
 const toolsNav = [
   { title: "CRM Pipeline", url: "/crm", icon: Kanban },
+  { title: "Agendamentos", url: "/appointments", icon: Calendar },
   { title: "Agente IA", url: "/ai", icon: Brain },
   { title: "Minha Empresa", url: "/company", icon: Building2 },
-  { title: "Configurações", url: "/settings", icon: Settings },
 ];
 
 export function AppSidebar() {
