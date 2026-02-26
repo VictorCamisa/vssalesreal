@@ -17,6 +17,7 @@ import WhatsAppConnection from "./pages/WhatsAppConnection";
 import NotFound from "./pages/NotFound";
 import Landing from "./pages/Landing";
 import AdminAuth from "./pages/AdminAuth";
+import AdminPanel from "./pages/AdminPanel";
 
 const queryClient = new QueryClient();
 
@@ -56,6 +57,7 @@ function AppRoutes() {
       </Route>
       <Route path="/site" element={<Landing />} />
       <Route path="/admin" element={<AdminAuth />} />
+      <Route path="/admin/panel" element={<AdminPanel />} />
       <Route path="/auth" element={<Navigate to="/" replace />} />
       <Route path="*" element={<NotFound />} />
     </Routes>

@@ -19,7 +19,7 @@ export default function AdminAuth() {
     try {
       const { error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) throw error;
-      navigate("/");
+      navigate("/admin/panel");
     } catch (error: any) {
       toast({
         title: "Acesso negado",

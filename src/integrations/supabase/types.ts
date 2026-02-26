@@ -359,6 +359,66 @@ export type Database = {
           },
         ]
       }
+      site_content: {
+        Row: {
+          id: string
+          key: string
+          updated_at: string
+          updated_by: string | null
+          value: string
+        }
+        Insert: {
+          id?: string
+          key: string
+          updated_at?: string
+          updated_by?: string | null
+          value: string
+        }
+        Update: {
+          id?: string
+          key?: string
+          updated_at?: string
+          updated_by?: string | null
+          value?: string
+        }
+        Relationships: []
+      }
+      site_leads: {
+        Row: {
+          company: string | null
+          created_at: string
+          email: string
+          form_source: string
+          id: string
+          message: string | null
+          name: string
+          partnership_type: string | null
+          phone: string | null
+        }
+        Insert: {
+          company?: string | null
+          created_at?: string
+          email: string
+          form_source?: string
+          id?: string
+          message?: string | null
+          name: string
+          partnership_type?: string | null
+          phone?: string | null
+        }
+        Update: {
+          company?: string | null
+          created_at?: string
+          email?: string
+          form_source?: string
+          id?: string
+          message?: string | null
+          name?: string
+          partnership_type?: string | null
+          phone?: string | null
+        }
+        Relationships: []
+      }
       user_roles: {
         Row: {
           created_at: string
