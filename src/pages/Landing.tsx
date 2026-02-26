@@ -565,7 +565,7 @@ export default function Landing() {
                   <p className="text-[10px] text-gray-500 italic mb-4 leading-relaxed">"{plan.hook}"</p>
 
                   <a
-                    href="#acesso"
+                    href={`/checkout?plan=${plan.name.toLowerCase()}`}
                     className={`w-full text-center py-3 rounded-xl text-sm font-semibold transition-all duration-300 block ${
                       plan.popular
                         ? "bg-gradient-to-r from-[#0057FF] to-[#00D4FF] text-white hover:shadow-[0_0_30px_rgba(0,87,255,0.3)]"
