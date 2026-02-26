@@ -32,6 +32,36 @@ serve(async (req) => {
 
     const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
+    // Fetch company profile for richer context
+    const { data: companyProfile } = await supabaseAdmin
+      .from("company_profiles")
+      .select("*")
+      .eq("org_id", org_id)
+      .maybeSingle();
+
+    let companyContext = "";
+    if (companyProfile) {
+      const cp = companyProfile as any;
+      const parts: string[] = [];
+      if (cp.company_name) parts.push(`Nossa Empresa: ${cp.company_name}`);
+      if (cp.segment) parts.push(`Nosso Segmento: ${cp.segment}`);
+      if (cp.description) parts.push(`O que fazemos: ${cp.description}`);
+      if (cp.target_audience) parts.push(`Nosso Público-alvo: ${cp.target_audience}`);
+      if (cp.differentials) parts.push(`Nossos Diferenciais: ${cp.differentials}`);
+      if (cp.avg_ticket) parts.push(`Ticket Médio: ${cp.avg_ticket}`);
+      if (cp.sales_process) parts.push(`Processo de Vendas: ${cp.sales_process}`);
+      if (cp.tone_of_voice) parts.push(`Tom de Comunicação: ${cp.tone_of_voice}`);
+      const products = cp.products_services || [];
+      if (products.length > 0) {
+        parts.push("Nossos Produtos/Serviços:\n" + products.map((p: any) => `- ${p.name}${p.price ? ` (${p.price})` : ""}: ${p.description}`).join("\n"));
+      }
+      const faqs = cp.objections_faq || [];
+      if (faqs.length > 0) {
+        parts.push("Objeções Comuns e Respostas:\n" + faqs.map((f: any) => `Q: ${f.question}\nR: ${f.answer}`).join("\n\n"));
+      }
+      companyContext = `\n\nCONTEXTO DA NOSSA EMPRESA (use para personalizar a análise e os argumentos de venda):\n${parts.join("\n")}`;
+    }
+
     // Fetch leads
     const { data: leads, error: leadsError } = await supabaseAdmin
       .from("leads_raw")
@@ -51,6 +81,7 @@ DADOS DO LEAD:
 - Nome: ${lead.name || "Desconhecido"}
 - Telefone: ${lead.phone || "N/A"}
 - Email: ${lead.email || "N/A"}
+${companyContext}
 
 ANÁLISE SOLICITADA:
 1. Empresa provável (baseado em domínio do email ou DDD do telefone)
@@ -61,8 +92,9 @@ ANÁLISE SOLICITADA:
 6. Dores e necessidades prováveis do segmento
 7. Melhor canal de abordagem (WhatsApp/Email/LinkedIn/Telefone)
 8. Melhor horário e dia da semana para contato
-9. Score de conversão (0-100) com justificativa
-10. 2-3 argumentos de venda personalizados para este perfil
+9. Score de conversão (0-100) com justificativa — considere o FIT com nossos produtos/serviços e público-alvo
+10. 2-3 argumentos de venda personalizados para este lead com base nos nossos diferenciais e produtos
+11. Objeções prováveis deste lead e como contorná-las com base nas nossas respostas padrão
 
 Responda APENAS em JSON válido.`;
 
@@ -76,7 +108,7 @@ Responda APENAS em JSON válido.`;
           body: JSON.stringify({
             model: "google/gemini-3-flash-preview",
             messages: [
-              { role: "system", content: "Você é um analista de inteligência comercial sênior. Analise leads e retorne JSON com: empresa, cargo, nivel_decisao (C-level/Gerência/Operacional), segmento, porte_empresa (micro/pequena/média/grande), localizacao, redes_sociais (objeto com linkedin, instagram), dores_provaveis (array), canal_ideal, melhor_horario, score_conversao (0-100), justificativa_score, argumentos_venda (array de strings), observacoes." },
+              { role: "system", content: "Você é um analista de inteligência comercial sênior. Analise leads e retorne JSON com: empresa, cargo, nivel_decisao (C-level/Gerência/Operacional), segmento, porte_empresa (micro/pequena/média/grande), localizacao, redes_sociais (objeto com linkedin, instagram), dores_provaveis (array), canal_ideal, melhor_horario, score_conversao (0-100), justificativa_score, argumentos_venda (array de strings personalizados com base nos produtos/diferenciais da empresa), objecoes_provaveis (array de objetos com objecao e contorno), observacoes. Quando tiver contexto da empresa vendedora, personalize os argumentos de venda e o score de conversão com base no fit entre o lead e os produtos/serviços oferecidos." },
               { role: "user", content: prompt },
             ],
           }),
