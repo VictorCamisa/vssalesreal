@@ -82,6 +82,50 @@ serve(async (req) => {
       });
     }
 
+    // Track conversation for follow-up system
+    // When customer sends a message, reset follow-up state (they responded)
+    const { data: existingConv } = await supabaseAdmin
+      .from("conversation_tracker")
+      .select("id")
+      .eq("org_id", orgId)
+      .eq("instance_name", instanceName)
+      .eq("remote_jid", remoteJid)
+      .maybeSingle();
+
+    if (existingConv) {
+      await supabaseAdmin
+        .from("conversation_tracker")
+        .update({
+          last_customer_msg_at: new Date().toISOString(),
+          push_name: pushName || undefined,
+          last_follow_up_step: 0,
+          follow_up_paused: false,
+          ai_config_id: aiConfig.id,
+        })
+        .eq("id", existingConv.id);
+    } else {
+      // Try to find matching lead by phone
+      const phone = remoteJid.replace("@s.whatsapp.net", "");
+      const { data: matchedLead } = await supabaseAdmin
+        .from("leads_raw")
+        .select("id")
+        .eq("org_id", orgId)
+        .or(`phone.ilike.%${phone}%,phone.ilike.%${phone.slice(-8)}%`)
+        .maybeSingle();
+
+      await supabaseAdmin
+        .from("conversation_tracker")
+        .insert({
+          org_id: orgId,
+          instance_name: instanceName,
+          remote_jid: remoteJid,
+          push_name: pushName || null,
+          last_customer_msg_at: new Date().toISOString(),
+          ai_config_id: aiConfig.id,
+          lead_id: matchedLead?.id || null,
+        });
+    }
+
     // Check business hours
     if (aiConfig.only_outside_hours && aiConfig.schedule_start && aiConfig.schedule_end) {
       const now = new Date();
@@ -228,6 +272,14 @@ Regras:
 
     if (!sendResponse.ok) {
       console.error("Evolution send error:", sendResponse.status, await sendResponse.text());
+    } else {
+      // Update conversation tracker with bot reply time
+      await supabaseAdmin
+        .from("conversation_tracker")
+        .update({ last_bot_msg_at: new Date().toISOString() })
+        .eq("org_id", orgId)
+        .eq("instance_name", instanceName)
+        .eq("remote_jid", remoteJid);
     }
 
     return new Response(JSON.stringify({ success: true, reply }), {
