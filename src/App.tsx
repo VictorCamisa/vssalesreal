@@ -13,6 +13,7 @@ import Leads from "./pages/Leads";
 import CRM from "./pages/CRM";
 import SettingsPage from "./pages/SettingsPage";
 import AIPage from "./pages/AIPage";
+import WhatsAppConnection from "./pages/WhatsAppConnection";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -41,6 +42,7 @@ function AppRoutes() {
     <Routes>
       <Route element={<AppLayout />}>
         <Route path="/" element={<Index />} />
+        <Route path="/whatsapp" element={<WhatsAppConnection />} />
         <Route path="/prospecting" element={<Prospecting />} />
         <Route path="/leads" element={<Leads />} />
         <Route path="/crm" element={<CRM />} />

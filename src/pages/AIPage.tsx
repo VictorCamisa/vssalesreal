@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import ReactMarkdown from "react-markdown";
+import { MOCK_AI_LOG } from "@/data/mockData";
 import {
   Bot, Brain, MessageSquare, Sparkles, Save, Loader2, Plus, Trash2,
   Clock, Send, FileText, Zap, Copy, Check, RefreshCw,
@@ -915,6 +916,89 @@ function MessagesTab({ orgId }: { orgId: string }) {
   );
 }
 
+// ========== AI CONTROL TAB ==========
+function ControlTab({ orgId }: { orgId: string }) {
+  const [aiEnabled, setAiEnabled] = useState(true);
+  // Mock data import is at top level
+
+  const actionIcons: Record<string, any> = {
+    message: MessageSquare,
+    target: Target,
+    calendar: Clock,
+    check: Sparkles,
+    refresh: RefreshCw,
+    shield: Brain,
+  };
+
+  return (
+    <div className="space-y-5">
+      {/* Global Toggle */}
+      <div className="glass rounded-2xl p-5">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/15">
+              <Zap className="h-5 w-5 text-primary" />
+            </div>
+            <div>
+              <h3 className="font-semibold">Disparador IA</h3>
+              <p className="text-xs text-muted-foreground">Ative para que a IA inicie e gerencie conversas automaticamente</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-3">
+            <Switch checked={aiEnabled} onCheckedChange={setAiEnabled} />
+            <Badge variant="outline" className={aiEnabled ? "bg-success/10 text-success border-success/30 text-xs" : "text-xs"}>
+              {aiEnabled ? "Ativo" : "Inativo"}
+            </Badge>
+          </div>
+        </div>
+      </div>
+
+      {/* Agent Metrics */}
+      <div className="grid grid-cols-3 gap-4">
+        {[
+          { label: "Mensagens Enviadas", value: "1.247", color: "text-primary" },
+          { label: "Taxa de Resposta", value: "78%", color: "text-success" },
+          { label: "Leads Qualificados", value: "142", color: "text-warning" },
+        ].map((m) => (
+          <div key={m.label} className="glass rounded-xl p-4 text-center">
+            <p className={`text-2xl font-bold ${m.color}`}>{m.value}</p>
+            <p className="text-xs text-muted-foreground mt-1">{m.label}</p>
+          </div>
+        ))}
+      </div>
+
+      {/* Activity Feed */}
+      <div className="glass rounded-2xl p-5">
+        <h3 className="font-semibold mb-4">Log de Atividades da IA</h3>
+        <ScrollArea className="h-[400px]">
+          <div className="space-y-3">
+            {MOCK_AI_LOG.map((log: any) => {
+              const Icon = actionIcons[log.icon] || MessageSquare;
+              const isSuccess = log.action === "venda_concluida";
+              const isQualified = log.action === "lead_qualificado";
+              return (
+                <div key={log.id} className="flex items-start gap-3 p-3 rounded-xl bg-secondary/20 hover:bg-secondary/40 transition-colors">
+                  <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${
+                    isSuccess ? "bg-success/15" : isQualified ? "bg-warning/15" : "bg-primary/15"
+                  }`}>
+                    <Icon className={`h-4 w-4 ${isSuccess ? "text-success" : isQualified ? "text-warning" : "text-primary"}`} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm">{log.description}</p>
+                    <p className="text-[10px] text-muted-foreground mt-0.5">
+                      {new Date(log.timestamp).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}
+                    </p>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </ScrollArea>
+      </div>
+    </div>
+  );
+}
+
 // ========== MAIN PAGE ==========
 export default function AIPage() {
   const { profile } = useAuth();
@@ -931,13 +1015,16 @@ export default function AIPage() {
           <Brain className="h-5 w-5 text-primary" />
         </div>
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Inteligência Artificial</h1>
-          <p className="text-muted-foreground text-sm">Configure chatbot, assistente e geração de conteúdo</p>
+          <h1 className="text-2xl font-bold tracking-tight">Agente IA</h1>
+          <p className="text-muted-foreground text-sm">Configure chatbot, assistente, controle e geração de conteúdo</p>
         </div>
       </div>
 
-      <Tabs defaultValue="chatbot">
+      <Tabs defaultValue="control">
         <TabsList className="bg-secondary/30 rounded-xl p-1 h-auto flex-wrap">
+          <TabsTrigger value="control" className="rounded-lg text-xs data-[state=active]:bg-primary/10 data-[state=active]:text-primary py-2 px-3">
+            <Zap className="h-3.5 w-3.5 mr-1.5" />Controle
+          </TabsTrigger>
           <TabsTrigger value="chatbot" className="rounded-lg text-xs data-[state=active]:bg-primary/10 data-[state=active]:text-primary py-2 px-3">
             <Bot className="h-3.5 w-3.5 mr-1.5" />Chatbot
           </TabsTrigger>
@@ -952,6 +1039,7 @@ export default function AIPage() {
           </TabsTrigger>
         </TabsList>
 
+        <TabsContent value="control" className="mt-4"><ControlTab orgId={orgId} /></TabsContent>
         <TabsContent value="chatbot" className="mt-4"><ChatbotTab orgId={orgId} /></TabsContent>
         <TabsContent value="assistant" className="mt-4"><AssistantTab orgId={orgId} /></TabsContent>
         <TabsContent value="knowledge" className="mt-4"><KnowledgeBaseTab orgId={orgId} /></TabsContent>
