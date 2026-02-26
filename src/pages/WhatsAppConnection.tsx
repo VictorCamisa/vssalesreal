@@ -134,16 +134,11 @@ export default function WhatsAppConnection() {
   };
 
   return (
-    <div className="space-y-6 max-w-4xl mx-auto">
+    <div className="space-y-5 max-w-4xl mx-auto">
       {/* Header */}
-      <div className="flex items-center gap-3">
-        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-success/15">
-          <Smartphone className="h-5 w-5 text-success" />
-        </div>
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Conexão WhatsApp</h1>
-          <p className="text-muted-foreground text-sm">Gerencie suas instâncias da Evolution API</p>
-        </div>
+      <div>
+        <h1 className="page-title">Conexão WhatsApp</h1>
+        <p className="page-description">Gerencie suas instâncias da Evolution API</p>
       </div>
 
       {/* QR Code Setup Card */}

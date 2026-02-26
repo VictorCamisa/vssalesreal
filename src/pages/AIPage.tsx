@@ -3,7 +3,6 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import ReactMarkdown from "react-markdown";
-import { MOCK_AI_LOG } from "@/data/mockData";
 import {
   Bot, Brain, MessageSquare, Sparkles, Save, Loader2, Plus, Trash2,
   Clock, Send, FileText, Zap, Copy, Check, RefreshCw,
@@ -1356,32 +1355,13 @@ function ControlTab({ orgId }: { orgId: string }) {
       </div>
 
       {/* Activity Feed */}
-      <div className="glass rounded-2xl p-5">
-        <h3 className="font-semibold mb-4">Log de Atividades da IA</h3>
-        <ScrollArea className="h-[400px]">
-          <div className="space-y-3">
-            {MOCK_AI_LOG.map((log: any) => {
-              const Icon = actionIcons[log.icon] || MessageSquare;
-              const isSuccess = log.action === "venda_concluida";
-              const isQualified = log.action === "lead_qualificado";
-              return (
-                <div key={log.id} className="flex items-start gap-3 p-3 rounded-xl bg-secondary/20 hover:bg-secondary/40 transition-colors">
-                  <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${
-                    isSuccess ? "bg-success/15" : isQualified ? "bg-warning/15" : "bg-primary/15"
-                  }`}>
-                    <Icon className={`h-4 w-4 ${isSuccess ? "text-success" : isQualified ? "text-warning" : "text-primary"}`} />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm">{log.description}</p>
-                    <p className="text-[10px] text-muted-foreground mt-0.5">
-                      {new Date(log.timestamp).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}
-                    </p>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </ScrollArea>
+      <div className="glass-card p-5">
+        <h3 className="text-sm font-medium mb-4">Log de Atividades da IA</h3>
+        <div className="flex flex-col items-center justify-center py-12 text-center">
+          <MessageSquare className="h-10 w-10 text-muted-foreground/20 mb-3" />
+          <p className="text-sm text-muted-foreground">Nenhuma atividade registrada ainda</p>
+          <p className="text-xs text-muted-foreground/60 mt-1">As ações da IA aparecerão aqui em tempo real</p>
+        </div>
       </div>
     </div>
   );
@@ -1397,15 +1377,10 @@ export default function AIPage() {
   }
 
   return (
-    <div className="space-y-6 max-w-3xl">
-      <div className="flex items-center gap-3">
-        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/15">
-          <Brain className="h-5 w-5 text-primary" />
-        </div>
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Agente IA</h1>
-          <p className="text-muted-foreground text-sm">Configure chatbot, assistente, controle e geração de conteúdo</p>
-        </div>
+    <div className="space-y-5 max-w-3xl">
+      <div>
+        <h1 className="page-title">Agente IA</h1>
+        <p className="page-description">Configure chatbot, assistente, controle e geração de conteúdo</p>
       </div>
 
       <Tabs defaultValue="control">

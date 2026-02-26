@@ -182,19 +182,15 @@ export default function Appointments() {
   if (loading) return <div className="flex min-h-[60vh] items-center justify-center"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div>;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       {/* Header */}
       <div className="flex items-start justify-between">
         <div>
-          <h1 className="text-2xl font-bold flex items-center gap-2">
-            <Calendar className="h-6 w-6 text-primary" /> Agendamentos
-          </h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            Gerencie reuniões e compromissos. A IA também pode agendar automaticamente via WhatsApp.
-          </p>
+          <h1 className="page-title">Agendamentos</h1>
+          <p className="page-description">Reuniões e compromissos — a IA também agenda via WhatsApp.</p>
         </div>
-        <Button onClick={() => openCreate()} className="gap-2">
-          <Plus className="h-4 w-4" /> Novo Agendamento
+        <Button onClick={() => openCreate()} size="sm" className="gap-2">
+          <Plus className="h-3.5 w-3.5" /> Novo
         </Button>
       </div>
 

@@ -268,15 +268,10 @@ export default function Leads() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/15">
-            <Users className="h-5 w-5 text-primary" />
-          </div>
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight">Leads</h1>
-            <p className="text-muted-foreground text-sm">Triagem e qualificação — {leads.length} leads</p>
-          </div>
+       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="page-title">Leads</h1>
+          <p className="page-description">Triagem e qualificação — {leads.length} leads</p>
         </div>
         <div className="flex items-center gap-2">
           <label className="cursor-pointer">
