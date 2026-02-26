@@ -30,13 +30,14 @@ interface SiteContent {
   updated_at: string;
 }
 
-interface UserProfile {
+interface AdminUser {
   id: string;
+  email: string;
   full_name: string | null;
-  user_id: string;
   org_id: string | null;
+  provider: string;
   created_at: string;
-  updated_at: string;
+  last_sign_in_at: string | null;
 }
 
 const CONTENT_LABELS: Record<string, string> = {
@@ -53,7 +54,7 @@ export default function AdminPanel() {
   const [tab, setTab] = useState<Tab>("metrics");
   const [siteLeads, setSiteLeads] = useState<SiteLead[]>([]);
   const [siteContent, setSiteContent] = useState<SiteContent[]>([]);
-  const [users, setUsers] = useState<UserProfile[]>([]);
+  const [users, setUsers] = useState<AdminUser[]>([]);
   const [editingKey, setEditingKey] = useState<string | null>(null);
   const [editValue, setEditValue] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
@@ -68,14 +69,17 @@ export default function AdminPanel() {
 
   const loadData = async () => {
     setLoading(true);
+    const session = (await supabase.auth.getSession()).data.session;
     const [leadsRes, contentRes, usersRes] = await Promise.all([
       supabase.from("site_leads").select("*").order("created_at", { ascending: false }),
       supabase.from("site_content").select("*"),
-      supabase.from("profiles").select("*").order("created_at", { ascending: false }),
+      supabase.functions.invoke("admin-list-users", {
+        headers: { Authorization: `Bearer ${session?.access_token}` },
+      }),
     ]);
     if (leadsRes.data) setSiteLeads(leadsRes.data);
     if (contentRes.data) setSiteContent(contentRes.data);
-    if (usersRes.data) setUsers(usersRes.data);
+    if (usersRes.data?.users) setUsers(usersRes.data.users);
     setLoading(false);
   };
 
@@ -110,7 +114,7 @@ export default function AdminPanel() {
   const filteredUsers = users.filter(u => {
     if (!searchQuery) return true;
     const q = searchQuery.toLowerCase();
-    return (u.full_name || "").toLowerCase().includes(q) || u.user_id.toLowerCase().includes(q);
+    return (u.full_name || "").toLowerCase().includes(q) || (u.email || "").toLowerCase().includes(q);
   });
 
   const tabs: { key: Tab; label: string; icon: React.ElementType }[] = [
@@ -277,8 +281,10 @@ export default function AdminPanel() {
                     <thead>
                       <tr className="bg-[#0d0d18] border-b border-[#1a1a2e]">
                         <th className="text-left px-4 py-3 text-[10px] uppercase tracking-wider text-gray-500 font-medium">Nome</th>
-                        <th className="text-left px-4 py-3 text-[10px] uppercase tracking-wider text-gray-500 font-medium">User ID</th>
+                        <th className="text-left px-4 py-3 text-[10px] uppercase tracking-wider text-gray-500 font-medium">Email</th>
+                        <th className="text-left px-4 py-3 text-[10px] uppercase tracking-wider text-gray-500 font-medium">Método</th>
                         <th className="text-left px-4 py-3 text-[10px] uppercase tracking-wider text-gray-500 font-medium">Organização</th>
+                        <th className="text-left px-4 py-3 text-[10px] uppercase tracking-wider text-gray-500 font-medium">Último acesso</th>
                         <th className="text-left px-4 py-3 text-[10px] uppercase tracking-wider text-gray-500 font-medium">Cadastro</th>
                       </tr>
                     </thead>
@@ -288,12 +294,21 @@ export default function AdminPanel() {
                           <td className="px-4 py-3">
                             <div className="flex items-center gap-2">
                               <div className="h-7 w-7 rounded-full bg-gradient-to-br from-[#0057FF] to-[#00D4FF] flex items-center justify-center text-[10px] font-bold text-white">
-                                {(u.full_name || "?")[0].toUpperCase()}
+                                {(u.full_name || u.email || "?")[0].toUpperCase()}
                               </div>
                               <span className="text-sm text-white">{u.full_name || "Sem nome"}</span>
                             </div>
                           </td>
-                          <td className="px-4 py-3 text-xs text-gray-500 font-mono">{u.user_id.slice(0, 8)}...</td>
+                          <td className="px-4 py-3 text-xs text-gray-400">{u.email}</td>
+                          <td className="px-4 py-3">
+                            <span className={`text-[10px] px-2 py-0.5 rounded-full border ${
+                              u.provider === "google"
+                                ? "bg-[#4285F4]/10 text-[#4285F4] border-[#4285F4]/20"
+                                : "bg-[#00D4FF]/10 text-[#00D4FF] border-[#00D4FF]/20"
+                            }`}>
+                              {u.provider === "google" ? "Google" : "Email/Senha"}
+                            </span>
+                          </td>
                           <td className="px-4 py-3">
                             {u.org_id ? (
                               <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#00FF88]/10 text-[#00FF88] border border-[#00FF88]/20">Ativa</span>
@@ -302,12 +317,15 @@ export default function AdminPanel() {
                             )}
                           </td>
                           <td className="px-4 py-3 text-xs text-gray-500">
+                            {u.last_sign_in_at ? new Date(u.last_sign_in_at).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : "—"}
+                          </td>
+                          <td className="px-4 py-3 text-xs text-gray-500">
                             {new Date(u.created_at).toLocaleDateString("pt-BR")}
                           </td>
                         </tr>
                       ))}
                       {filteredUsers.length === 0 && (
-                        <tr><td colSpan={4} className="text-center py-12 text-sm text-gray-600">Nenhum usuário encontrado.</td></tr>
+                        <tr><td colSpan={6} className="text-center py-12 text-sm text-gray-600">Nenhum usuário encontrado.</td></tr>
                       )}
                     </tbody>
                   </table>
