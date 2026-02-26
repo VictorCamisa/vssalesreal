@@ -23,3 +23,6 @@ verify_jwt = false
 
 [functions.ai-follow-up]
 verify_jwt = false
+
+[functions.crm-pipeline-automation]
+verify_jwt = false

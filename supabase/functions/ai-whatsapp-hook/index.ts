@@ -93,6 +93,8 @@ serve(async (req) => {
       .maybeSingle();
 
     if (existingConv) {
+      // Increment customer message count for pipeline automation
+      await supabaseAdmin.rpc("increment_customer_msg_count", { p_conv_id: existingConv.id });
       await supabaseAdmin
         .from("conversation_tracker")
         .update({

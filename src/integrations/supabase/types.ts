@@ -482,6 +482,7 @@ export type Database = {
         Row: {
           ai_config_id: string | null
           created_at: string
+          customer_msg_count: number
           follow_up_paused: boolean
           id: string
           instance_name: string
@@ -490,6 +491,7 @@ export type Database = {
           last_follow_up_step: number
           lead_id: string | null
           org_id: string
+          pipeline_stage_key: string | null
           push_name: string | null
           remote_jid: string
           updated_at: string
@@ -497,6 +499,7 @@ export type Database = {
         Insert: {
           ai_config_id?: string | null
           created_at?: string
+          customer_msg_count?: number
           follow_up_paused?: boolean
           id?: string
           instance_name: string
@@ -505,6 +508,7 @@ export type Database = {
           last_follow_up_step?: number
           lead_id?: string | null
           org_id: string
+          pipeline_stage_key?: string | null
           push_name?: string | null
           remote_jid: string
           updated_at?: string
@@ -512,6 +516,7 @@ export type Database = {
         Update: {
           ai_config_id?: string | null
           created_at?: string
+          customer_msg_count?: number
           follow_up_paused?: boolean
           id?: string
           instance_name?: string
@@ -520,6 +525,7 @@ export type Database = {
           last_follow_up_step?: number
           lead_id?: string | null
           org_id?: string
+          pipeline_stage_key?: string | null
           push_name?: string | null
           remote_jid?: string
           updated_at?: string
@@ -731,11 +737,14 @@ export type Database = {
       opportunities: {
         Row: {
           assigned_to: string | null
+          automation_status: string | null
           created_at: string
           id: string
           lead_id: string
+          message_sent_at: string | null
           notes: string | null
           org_id: string
+          personalized_message: string | null
           probability: number | null
           stage_id: string
           updated_at: string
@@ -743,11 +752,14 @@ export type Database = {
         }
         Insert: {
           assigned_to?: string | null
+          automation_status?: string | null
           created_at?: string
           id?: string
           lead_id: string
+          message_sent_at?: string | null
           notes?: string | null
           org_id: string
+          personalized_message?: string | null
           probability?: number | null
           stage_id: string
           updated_at?: string
@@ -755,11 +767,14 @@ export type Database = {
         }
         Update: {
           assigned_to?: string | null
+          automation_status?: string | null
           created_at?: string
           id?: string
           lead_id?: string
+          message_sent_at?: string | null
           notes?: string | null
           org_id?: string
+          personalized_message?: string | null
           probability?: number | null
           stage_id?: string
           updated_at?: string
@@ -964,6 +979,10 @@ export type Database = {
     }
     Functions: {
       get_user_org_id: { Args: { p_user_id: string }; Returns: string }
+      increment_customer_msg_count: {
+        Args: { p_conv_id: string }
+        Returns: undefined
+      }
       is_org_admin: { Args: { p_org_id: string }; Returns: boolean }
       is_org_member: { Args: { p_org_id: string }; Returns: boolean }
     }
