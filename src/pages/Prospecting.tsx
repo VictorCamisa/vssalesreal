@@ -2,12 +2,13 @@ import { useState, useEffect, useCallback } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { useNavigate } from "react-router-dom";
 import {
   Search, Globe, MessageCircle, Loader2, Plus, Users2, MessageSquare,
   Contact, Smartphone, QrCode, RefreshCw, Trash2, Wifi, WifiOff,
   CheckCircle2, Tag, X, Zap, ChevronRight, Eye,
   Sparkles, Phone, Building2, User, Upload,
-  FileSpreadsheet, AlertCircle
+  FileSpreadsheet, AlertCircle, MapPin, Hash, ArrowRight, Send
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -17,36 +18,54 @@ import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Progress } from "@/components/ui/progress";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Slider } from "@/components/ui/slider";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from "@/components/ui/dialog";
 
 type EvolutionInstance = { name: string; state: string; owner: string | null };
-type ScrapeResult = { name: string | null; phone: string | null; email: string | null; company: string | null; role: string | null };
-type ScrapeJob = { id: string; niche: string; keywords: string; status: "running" | "completed" | "failed"; results: ScrapeResult[]; results_count: number; created_at: string; error_message?: string };
+type ScrapeResult = { name: string | null; phone: string | null; email: string | null; company: string | null; role: string | null; city: string | null; website: string | null; segment: string | null };
+type ScrapeJob = {
+  id: string; niche: string; keywords: string; city: string;
+  status: "running" | "completed" | "failed";
+  results: ScrapeResult[]; results_count: number; total_found: number;
+  duplicates_skipped: number; pages_searched: number;
+  created_at: string; error_message?: string;
+};
 
 const PRESET_NICHES = [
   { label: "Imobiliárias", value: "imobiliárias", icon: "🏠" },
   { label: "Clínicas Médicas", value: "clínicas médicas", icon: "🏥" },
-  { label: "Escritórios de Advocacia", value: "escritórios de advocacia", icon: "⚖️" },
+  { label: "Advocacia", value: "escritórios de advocacia", icon: "⚖️" },
   { label: "Restaurantes", value: "restaurantes", icon: "🍽️" },
   { label: "Academias", value: "academias e fitness", icon: "💪" },
   { label: "E-commerces", value: "lojas online e-commerce", icon: "🛒" },
   { label: "Odontologia", value: "clínicas odontológicas", icon: "🦷" },
   { label: "Contabilidade", value: "escritórios de contabilidade", icon: "📊" },
   { label: "Educação", value: "escolas e cursos", icon: "📚" },
-  { label: "Agências de Marketing", value: "agências de marketing digital", icon: "📢" },
+  { label: "Marketing", value: "agências de marketing digital", icon: "📢" },
   { label: "Pet Shops", value: "pet shops e veterinários", icon: "🐾" },
   { label: "Tecnologia", value: "empresas de tecnologia e SaaS", icon: "💻" },
+];
+
+const CITIES = [
+  "", "São Paulo", "Rio de Janeiro", "Belo Horizonte", "Curitiba", "Porto Alegre",
+  "Brasília", "Salvador", "Recife", "Fortaleza", "Goiânia", "Campinas", "Florianópolis",
 ];
 
 export default function Prospecting() {
   const { profile } = useAuth();
   const { toast } = useToast();
+  const navigate = useNavigate();
 
   const [scrapeJobs, setScrapeJobs] = useState<ScrapeJob[]>([]);
   const [scrapingLoading, setScrapingLoading] = useState(false);
   const [viewResults, setViewResults] = useState<ScrapeJob | null>(null);
+  const [selectedResults, setSelectedResults] = useState<Set<number>>(new Set());
+  const [sendingToCrm, setSendingToCrm] = useState(false);
 
   // Wizard
   const [wizardOpen, setWizardOpen] = useState(false);
@@ -55,6 +74,9 @@ export default function Prospecting() {
   const [customNiche, setCustomNiche] = useState("");
   const [keywords, setKeywords] = useState<string[]>([]);
   const [keywordInput, setKeywordInput] = useState("");
+  const [selectedCity, setSelectedCity] = useState("");
+  const [customCity, setCustomCity] = useState("");
+  const [leadCount, setLeadCount] = useState(20);
 
   // WhatsApp state
   const [whatsappMode, setWhatsappMode] = useState<"group" | "conversation" | "contact">("group");
@@ -162,7 +184,7 @@ export default function Prospecting() {
     } catch (error: any) { toast({ title: "Erro", description: error.message, variant: "destructive" }); }
   };
 
-  // Poll status
+  // Poll QR status
   useEffect(() => {
     if (!qrDialogOpen || !qrInstanceName || !profile?.org_id) return;
     let qrRefreshCount = 0;
@@ -190,12 +212,14 @@ export default function Prospecting() {
     return () => clearInterval(statusInterval);
   }, [qrDialogOpen, qrInstanceName, profile?.org_id]);
 
-  // === Web Scraping (by Niche) ===
+  // === Web Scraping ===
   const activeNiche = customNiche || selectedNiche;
+  const activeCity = customCity || selectedCity;
 
   const resetWizard = () => {
     setWizardStep(1); setSelectedNiche(""); setCustomNiche("");
-    setKeywords([]); setKeywordInput("");
+    setKeywords([]); setKeywordInput(""); setSelectedCity(""); setCustomCity("");
+    setLeadCount(20);
   };
 
   const addKeyword = () => {
@@ -212,28 +236,135 @@ export default function Prospecting() {
 
     const jobId = crypto.randomUUID();
     const newJob: ScrapeJob = {
-      id: jobId, niche: activeNiche, keywords: keywords.join(", "),
-      status: "running", results: [], results_count: 0, created_at: new Date().toISOString(),
+      id: jobId, niche: activeNiche, keywords: keywords.join(", "), city: activeCity,
+      status: "running", results: [], results_count: 0, total_found: 0,
+      duplicates_skipped: 0, pages_searched: 0, created_at: new Date().toISOString(),
     };
     setScrapeJobs(prev => [newJob, ...prev]);
 
     try {
       const { data, error } = await supabase.functions.invoke("scrape-leads", {
-        body: { org_id: profile.org_id, url: `https://www.google.com/search?q=${encodeURIComponent(activeNiche)}`, keywords: [...keywords, activeNiche].filter(Boolean).join(", ") },
+        body: {
+          org_id: profile.org_id,
+          niche: activeNiche,
+          keywords: keywords.join(", "),
+          city: activeCity || undefined,
+          limit: leadCount,
+        },
       });
       if (error) throw error;
 
       setScrapeJobs(prev => prev.map(j => j.id === jobId ? {
-        ...j, status: "completed" as const, results_count: data?.count || 0, results: data?.results || [],
+        ...j,
+        status: "completed" as const,
+        results_count: data?.count || 0,
+        total_found: data?.total_found || 0,
+        duplicates_skipped: data?.duplicates_skipped || 0,
+        pages_searched: data?.pages_searched || 0,
+        results: data?.results || [],
       } : j));
-      toast({ title: "Prospecção concluída!", description: `${data?.count || 0} leads capturados.` });
+
+      const dupMsg = data?.duplicates_skipped ? ` (${data.duplicates_skipped} duplicados ignorados)` : "";
+      toast({ title: "Prospecção concluída! 🎯", description: `${data?.count || 0} novos leads salvos de ${data?.total_found || 0} encontrados${dupMsg}` });
       resetWizard();
     } catch (error: any) {
       setScrapeJobs(prev => prev.map(j => j.id === jobId ? {
         ...j, status: "failed" as const, error_message: error.message,
       } : j));
-      toast({ title: "Erro no scraping", description: error.message, variant: "destructive" });
+      toast({ title: "Erro na prospecção", description: error.message, variant: "destructive" });
     } finally { setScrapingLoading(false); }
+  };
+
+  // === Send to CRM ===
+  const handleSendToCrm = async (results: ScrapeResult[]) => {
+    if (!profile?.org_id) return;
+    setSendingToCrm(true);
+    try {
+      // Get or create first CRM stage
+      let { data: stages } = await supabase
+        .from("crm_stages")
+        .select("id")
+        .eq("org_id", profile.org_id)
+        .order("stage_order", { ascending: true })
+        .limit(1);
+
+      if (!stages?.length) {
+        const { data: newStage, error: stageErr } = await supabase
+          .from("crm_stages")
+          .insert({ org_id: profile.org_id, name: "Novo Lead", stage_order: 0 })
+          .select("id")
+          .single();
+        if (stageErr) throw stageErr;
+        stages = [newStage];
+      }
+
+      const stageId = stages[0].id;
+
+      // Find the leads by phone/email that were just scraped
+      const phones = results.filter(r => r.phone).map(r => r.phone!);
+      const emails = results.filter(r => r.email && !r.phone).map(r => r.email!);
+
+      let leadIds: string[] = [];
+
+      if (phones.length) {
+        const { data: phonLeads } = await supabase
+          .from("leads_raw")
+          .select("id")
+          .eq("org_id", profile.org_id)
+          .in("phone", phones);
+        leadIds.push(...(phonLeads || []).map(l => l.id));
+      }
+      if (emails.length) {
+        const { data: emailLeads } = await supabase
+          .from("leads_raw")
+          .select("id")
+          .eq("org_id", profile.org_id)
+          .in("email", emails);
+        leadIds.push(...(emailLeads || []).map(l => l.id));
+      }
+
+      if (leadIds.length === 0) {
+        toast({ title: "Nenhum lead encontrado", description: "Os leads podem já ter sido removidos.", variant: "destructive" });
+        return;
+      }
+
+      // Check existing opportunities
+      const { data: existingOpps } = await supabase
+        .from("opportunities")
+        .select("lead_id")
+        .eq("org_id", profile.org_id)
+        .in("lead_id", leadIds);
+      const existingLeadIds = new Set((existingOpps || []).map(o => o.lead_id));
+      const newLeadIds = leadIds.filter(id => !existingLeadIds.has(id));
+
+      if (newLeadIds.length === 0) {
+        toast({ title: "Todos já estão no CRM", description: "Esses leads já possuem oportunidades." });
+        return;
+      }
+
+      const opportunities = newLeadIds.map(lead_id => ({
+        org_id: profile.org_id!,
+        lead_id,
+        stage_id: stageId,
+        value: 0,
+        probability: 0,
+      }));
+
+      const { error: oppErr } = await supabase.from("opportunities").insert(opportunities);
+      if (oppErr) throw oppErr;
+
+      // Also mark leads as converted
+      await supabase
+        .from("leads_raw")
+        .update({ status: "converted" as const })
+        .eq("org_id", profile.org_id)
+        .in("id", newLeadIds);
+
+      toast({ title: "Enviados ao CRM! 🚀", description: `${newLeadIds.length} oportunidades criadas.` });
+      setViewResults(null);
+    } catch (error: any) {
+      toast({ title: "Erro ao enviar ao CRM", description: error.message, variant: "destructive" });
+    } finally { setSendingToCrm(false); }
   };
 
   // === WhatsApp Extract ===
@@ -360,6 +491,23 @@ export default function Prospecting() {
     failed: { color: "bg-destructive/15 text-destructive", label: "Falhou" },
   };
 
+  const toggleResultSelection = (idx: number) => {
+    setSelectedResults(prev => {
+      const next = new Set(prev);
+      next.has(idx) ? next.delete(idx) : next.add(idx);
+      return next;
+    });
+  };
+
+  const selectAllResults = () => {
+    if (!viewResults) return;
+    if (selectedResults.size === viewResults.results.length) {
+      setSelectedResults(new Set());
+    } else {
+      setSelectedResults(new Set(viewResults.results.map((_, i) => i)));
+    }
+  };
+
   return (
     <div className="space-y-6 max-w-5xl">
       <div>
@@ -386,7 +534,7 @@ export default function Prospecting() {
           <div className="flex items-center justify-between">
             <div>
               <h3 className="text-sm font-medium">Gerador de Demanda</h3>
-              <p className="text-xs text-muted-foreground">Pesquise leads por segmento de mercado</p>
+              <p className="text-xs text-muted-foreground">Busca real em sites e extração inteligente por IA</p>
             </div>
             <Button size="sm" className="gap-1.5 text-xs" onClick={() => { resetWizard(); setWizardOpen(true); }}>
               <Plus className="h-3.5 w-3.5" /> Nova Pesquisa
@@ -410,20 +558,32 @@ export default function Prospecting() {
                   <div key={job.id} className="border rounded-lg p-4 hover:bg-secondary/30 transition-colors">
                     <div className="flex items-center justify-between gap-3">
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-1">
+                        <div className="flex items-center gap-2 mb-1 flex-wrap">
                           <p className="text-sm font-medium truncate">{job.niche}</p>
                           <Badge variant="secondary" className={`text-[10px] ${cfg.color}`}>{cfg.label}</Badge>
-                          {job.results_count > 0 && <Badge variant="outline" className="text-[10px] gap-1"><Users2 className="h-3 w-3" />{job.results_count}</Badge>}
+                          {job.results_count > 0 && <Badge variant="outline" className="text-[10px] gap-1"><Users2 className="h-3 w-3" />{job.results_count} salvos</Badge>}
+                          {job.duplicates_skipped > 0 && <Badge variant="outline" className="text-[10px] text-muted-foreground">{job.duplicates_skipped} duplicados</Badge>}
+                          {job.pages_searched > 0 && <Badge variant="outline" className="text-[10px] text-muted-foreground">{job.pages_searched} páginas</Badge>}
                         </div>
-                        {job.keywords && <p className="text-xs text-muted-foreground"><Tag className="h-3 w-3 inline mr-1" />{job.keywords}</p>}
+                        <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                          {job.city && <span className="flex items-center gap-1"><MapPin className="h-3 w-3" />{job.city}</span>}
+                          {job.keywords && <span className="flex items-center gap-1"><Tag className="h-3 w-3" />{job.keywords}</span>}
+                        </div>
                         {job.status === "running" && <Progress value={45} className="h-1 mt-2 max-w-xs" />}
                         {job.error_message && <p className="text-xs text-destructive mt-1">{job.error_message}</p>}
                       </div>
-                      {job.status === "completed" && job.results_count > 0 && (
-                        <Button variant="outline" size="sm" className="text-xs gap-1" onClick={() => setViewResults(job)}>
-                          <Eye className="h-3 w-3" /> Ver
-                        </Button>
-                      )}
+                      <div className="flex items-center gap-1.5">
+                        {job.status === "completed" && job.results.length > 0 && (
+                          <>
+                            <Button variant="outline" size="sm" className="text-xs gap-1" onClick={() => { setViewResults(job); setSelectedResults(new Set()); }}>
+                              <Eye className="h-3 w-3" /> Ver
+                            </Button>
+                            <Button size="sm" className="text-xs gap-1" onClick={() => handleSendToCrm(job.results)} disabled={sendingToCrm}>
+                              {sendingToCrm ? <Loader2 className="h-3 w-3 animate-spin" /> : <Send className="h-3 w-3" />} CRM
+                            </Button>
+                          </>
+                        )}
+                      </div>
                     </div>
                   </div>
                 );
@@ -474,7 +634,6 @@ export default function Prospecting() {
             </div>
           </div>
 
-          {/* Extraction */}
           <div className="border rounded-lg p-5 space-y-4">
             <h3 className="text-sm font-medium">Extração de Contatos</h3>
             <div className="flex gap-1.5 flex-wrap">
@@ -607,20 +766,17 @@ export default function Prospecting() {
               Nova Pesquisa de Demanda
             </DialogTitle>
             <DialogDescription className="text-xs">
-              {wizardStep === 1 && "Escolha o segmento de mercado"}
-              {wizardStep === 2 && "Adicione palavras-chave para refinar"}
+              {wizardStep === 1 && "Escolha o segmento e localidade"}
+              {wizardStep === 2 && "Refine a busca e configure quantidade"}
               {wizardStep === 3 && "Revise e inicie a pesquisa"}
             </DialogDescription>
           </DialogHeader>
 
-          {/* Steps */}
           <div className="flex items-center gap-2 my-1">
             {[1, 2, 3].map(s => (
               <div key={s} className="flex items-center gap-2 flex-1">
                 <div className={`h-7 w-7 rounded-full flex items-center justify-center text-xs font-semibold transition-colors ${
-                  s < wizardStep ? "bg-primary text-primary-foreground" :
-                  s === wizardStep ? "bg-primary text-primary-foreground" :
-                  "bg-secondary text-muted-foreground"
+                  s <= wizardStep ? "bg-primary text-primary-foreground" : "bg-secondary text-muted-foreground"
                 }`}>
                   {s < wizardStep ? <CheckCircle2 className="h-3.5 w-3.5" /> : s}
                 </div>
@@ -629,7 +785,7 @@ export default function Prospecting() {
             ))}
           </div>
 
-          {/* Step 1: Niche Selection */}
+          {/* Step 1: Niche + City */}
           {wizardStep === 1 && (
             <div className="space-y-4">
               <div>
@@ -649,51 +805,96 @@ export default function Prospecting() {
               <div>
                 <Label className="text-xs text-muted-foreground">Ou digite um nicho personalizado</Label>
                 <Input value={customNiche} onChange={e => { setCustomNiche(e.target.value); setSelectedNiche(""); }}
-                  placeholder="Ex: clínicas estéticas, pet shops..." className="mt-1 text-sm" />
+                  placeholder="Ex: clínicas estéticas, autoescolas..." className="mt-1 text-sm" />
+              </div>
+              <div>
+                <Label className="text-sm font-medium flex items-center gap-1.5"><MapPin className="h-3.5 w-3.5" />Cidade / Região</Label>
+                <Select value={selectedCity} onValueChange={v => { setSelectedCity(v); setCustomCity(""); }}>
+                  <SelectTrigger className="mt-1 text-sm"><SelectValue placeholder="Qualquer cidade" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value=" ">Qualquer cidade</SelectItem>
+                    {CITIES.filter(Boolean).map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+                <Input value={customCity} onChange={e => { setCustomCity(e.target.value); setSelectedCity(""); }}
+                  placeholder="Ou digite uma cidade..." className="mt-1.5 text-sm" />
               </div>
             </div>
           )}
 
-          {/* Step 2: Keywords */}
+          {/* Step 2: Keywords + Count */}
           {wizardStep === 2 && (
-            <div className="space-y-3">
-              <Label className="text-sm font-medium">Palavras-chave (opcional)</Label>
-              <p className="text-xs text-muted-foreground -mt-1">Refine a busca com termos específicos</p>
-              <div className="flex gap-2">
-                <Input value={keywordInput} onChange={e => setKeywordInput(e.target.value)} placeholder="Ex: vendas, diretor..." className="flex-1 text-sm"
-                  onKeyDown={e => e.key === "Enter" && (e.preventDefault(), addKeyword())} />
-                <Button variant="outline" size="sm" onClick={addKeyword} className="text-xs">Adicionar</Button>
-              </div>
-              {keywords.length > 0 && (
-                <div className="flex flex-wrap gap-1.5">
-                  {keywords.map(kw => (
-                    <Badge key={kw} variant="secondary" className="gap-1 pr-1 text-xs">
-                      {kw}
-                      <button onClick={() => setKeywords(prev => prev.filter(k => k !== kw))} className="ml-0.5 hover:text-destructive"><X className="h-3 w-3" /></button>
-                    </Badge>
-                  ))}
+            <div className="space-y-4">
+              <div className="space-y-3">
+                <Label className="text-sm font-medium">Palavras-chave (opcional)</Label>
+                <p className="text-xs text-muted-foreground -mt-1">Refine a busca com termos específicos</p>
+                <div className="flex gap-2">
+                  <Input value={keywordInput} onChange={e => setKeywordInput(e.target.value)} placeholder="Ex: vendas, diretor..." className="flex-1 text-sm"
+                    onKeyDown={e => e.key === "Enter" && (e.preventDefault(), addKeyword())} />
+                  <Button variant="outline" size="sm" onClick={addKeyword} className="text-xs">Adicionar</Button>
                 </div>
-              )}
+                {keywords.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5">
+                    {keywords.map(kw => (
+                      <Badge key={kw} variant="secondary" className="gap-1 pr-1 text-xs">
+                        {kw}
+                        <button onClick={() => setKeywords(prev => prev.filter(k => k !== kw))} className="ml-0.5 hover:text-destructive"><X className="h-3 w-3" /></button>
+                      </Badge>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="space-y-3 border-t pt-4">
+                <div className="flex items-center justify-between">
+                  <Label className="text-sm font-medium flex items-center gap-1.5"><Hash className="h-3.5 w-3.5" />Quantidade de leads</Label>
+                  <Badge variant="outline" className="text-sm font-semibold">{leadCount}</Badge>
+                </div>
+                <Slider
+                  value={[leadCount]}
+                  onValueChange={v => setLeadCount(v[0])}
+                  min={5}
+                  max={50}
+                  step={5}
+                  className="w-full"
+                />
+                <div className="flex justify-between text-[10px] text-muted-foreground">
+                  <span>5 leads</span>
+                  <span>25 leads</span>
+                  <span>50 leads</span>
+                </div>
+                <p className="text-xs text-muted-foreground">Quanto mais leads, mais páginas serão analisadas (pode demorar mais).</p>
+              </div>
             </div>
           )}
 
           {/* Step 3: Review */}
           {wizardStep === 3 && (
             <div className="border rounded-lg p-4 space-y-3 bg-secondary/30">
-              <div>
-                <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Nicho</p>
-                <p className="text-sm font-medium mt-0.5">{activeNiche}</p>
-              </div>
-              {keywords.length > 0 && (
+              <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Palavras-chave</p>
-                  <div className="flex flex-wrap gap-1 mt-1">
-                    {keywords.map(kw => <Badge key={kw} variant="secondary" className="text-[10px]">{kw}</Badge>)}
-                  </div>
+                  <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Nicho</p>
+                  <p className="text-sm font-medium mt-0.5">{activeNiche}</p>
                 </div>
-              )}
+                <div>
+                  <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Cidade</p>
+                  <p className="text-sm font-medium mt-0.5">{activeCity || "Qualquer"}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Quantidade</p>
+                  <p className="text-sm font-medium mt-0.5">Até {leadCount} leads</p>
+                </div>
+                {keywords.length > 0 && (
+                  <div>
+                    <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Palavras-chave</p>
+                    <div className="flex flex-wrap gap-1 mt-1">
+                      {keywords.map(kw => <Badge key={kw} variant="secondary" className="text-[10px]">{kw}</Badge>)}
+                    </div>
+                  </div>
+                )}
+              </div>
               <p className="text-xs text-muted-foreground border-t pt-3">
-                A IA vai pesquisar e extrair contatos do nicho "{activeNiche}" automaticamente.
+                A IA vai pesquisar em sites reais, extrair contatos com telefone, email, empresa e cargo, e salvar sem duplicatas.
               </p>
             </div>
           )}
@@ -718,27 +919,72 @@ export default function Prospecting() {
         </DialogContent>
       </Dialog>
 
-      {/* Results Dialog */}
+      {/* ===== RESULTS DIALOG ===== */}
       <Dialog open={!!viewResults} onOpenChange={() => setViewResults(null)}>
-        <DialogContent className="sm:max-w-2xl max-h-[80vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-3xl max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="text-base flex items-center gap-2">
               Resultados — {viewResults?.niche}
-              <Badge variant="outline" className="text-[10px]">{viewResults?.results_count || 0} leads</Badge>
+              {viewResults?.city && <Badge variant="outline" className="text-[10px] gap-1"><MapPin className="h-3 w-3" />{viewResults.city}</Badge>}
             </DialogTitle>
+            <DialogDescription className="text-xs">
+              {viewResults?.results_count || 0} salvos · {viewResults?.total_found || 0} encontrados · {viewResults?.duplicates_skipped || 0} duplicados · {viewResults?.pages_searched || 0} páginas
+            </DialogDescription>
           </DialogHeader>
-          <div className="space-y-1.5">
-            {viewResults?.results?.length ? viewResults.results.map((r, i) => (
-              <div key={i} className="border rounded-md p-3">
-                <p className="text-sm font-medium flex items-center gap-1.5"><User className="h-3 w-3 text-primary" />{r.name || `Lead ${i + 1}`}</p>
-                <div className="flex flex-wrap gap-3 mt-1 text-xs text-muted-foreground">
-                  {r.phone && <span className="flex items-center gap-1"><Phone className="h-3 w-3" />{r.phone}</span>}
-                  {r.email && <span>✉ {r.email}</span>}
-                  {r.company && <span className="flex items-center gap-1"><Building2 className="h-3 w-3" />{r.company}</span>}
+
+          {viewResults?.results?.length ? (
+            <>
+              <div className="flex items-center justify-between">
+                <Button variant="ghost" size="sm" onClick={selectAllResults} className="text-xs h-7">
+                  {selectedResults.size === viewResults.results.length ? "Desmarcar todos" : "Selecionar todos"}
+                </Button>
+                <div className="flex gap-2">
+                  {selectedResults.size > 0 && (
+                    <Button size="sm" className="text-xs gap-1" disabled={sendingToCrm}
+                      onClick={() => {
+                        const selected = Array.from(selectedResults).map(i => viewResults.results[i]);
+                        handleSendToCrm(selected);
+                      }}>
+                      {sendingToCrm ? <Loader2 className="h-3 w-3 animate-spin" /> : <Send className="h-3 w-3" />}
+                      Enviar {selectedResults.size} ao CRM
+                    </Button>
+                  )}
+                  <Button variant="outline" size="sm" className="text-xs gap-1" disabled={sendingToCrm}
+                    onClick={() => handleSendToCrm(viewResults.results)}>
+                    <ArrowRight className="h-3 w-3" /> Enviar todos ao CRM
+                  </Button>
                 </div>
               </div>
-            )) : <p className="text-xs text-muted-foreground text-center py-4">Leads salvos na base. Confira em "Meus Leads".</p>}
-          </div>
+
+              <ScrollArea className="h-[400px]">
+                <div className="space-y-1.5">
+                  {viewResults.results.map((r, i) => (
+                    <div key={i} className={`border rounded-md p-3 cursor-pointer transition-colors ${selectedResults.has(i) ? "bg-primary/5 border-primary/30" : "hover:bg-secondary/30"}`}
+                      onClick={() => toggleResultSelection(i)}>
+                      <div className="flex items-start gap-2.5">
+                        <Checkbox checked={selectedResults.has(i)} className="mt-0.5 pointer-events-none" />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium flex items-center gap-1.5">
+                            <User className="h-3 w-3 text-primary shrink-0" />
+                            {r.name || `Lead ${i + 1}`}
+                          </p>
+                          <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1.5 text-xs text-muted-foreground">
+                            {r.phone && <span className="flex items-center gap-1"><Phone className="h-3 w-3" />{r.phone}</span>}
+                            {r.email && <span>✉ {r.email}</span>}
+                            {r.company && <span className="flex items-center gap-1"><Building2 className="h-3 w-3" />{r.company}</span>}
+                            {r.role && <span className="text-primary/80">{r.role}</span>}
+                            {r.city && <span className="flex items-center gap-1"><MapPin className="h-3 w-3" />{r.city}</span>}
+                            {r.website && <span className="flex items-center gap-1"><Globe className="h-3 w-3" />{r.website}</span>}
+                            {r.segment && <Badge variant="secondary" className="text-[10px]">{r.segment}</Badge>}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </ScrollArea>
+            </>
+          ) : <p className="text-xs text-muted-foreground text-center py-4">Leads salvos na base. Confira em "Meus Leads".</p>}
         </DialogContent>
       </Dialog>
 
