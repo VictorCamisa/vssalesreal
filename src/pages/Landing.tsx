@@ -1,0 +1,610 @@
+import { useState, FormEvent } from "react";
+import { ParticleCanvas } from "@/components/landing/ParticleCanvas";
+import { useScrollAnimation, useAnimatedCounter } from "@/hooks/useScrollAnimation";
+import {
+  Search, PuzzleIcon, Target, CalendarCheck, DollarSign, CheckCircle2,
+  Zap, Clock, TrendingUp, Users, ChevronDown, ArrowRight, Shield, Send,
+  Brain, BarChart3, Sparkles, Phone, Building2, Mail, MessageCircle, X
+} from "lucide-react";
+
+/* ─── scroll-animated wrapper ─── */
+function Reveal({ children, className = "", delay = 0 }: { children: React.ReactNode; className?: string; delay?: number }) {
+  const { ref, isVisible } = useScrollAnimation(0.12);
+  return (
+    <div
+      ref={ref}
+      className={`transition-all duration-700 ease-out ${className}`}
+      style={{
+        opacity: isVisible ? 1 : 0,
+        transform: isVisible ? "translateY(0)" : "translateY(32px)",
+        transitionDelay: `${delay}ms`,
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+
+/* ─── counter component ─── */
+function Counter({ end, suffix = "", prefix = "" }: { end: number; suffix?: string; prefix?: string }) {
+  const { ref, value } = useAnimatedCounter(end, 2200);
+  return <span ref={ref}>{prefix}{value.toLocaleString("pt-BR")}{suffix}</span>;
+}
+
+/* ─── FAQ Item ─── */
+function FAQItem({ question, answer }: { question: string; answer: string }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="border border-[#1a1a2e] rounded-xl overflow-hidden">
+      <button
+        onClick={() => setOpen(!open)}
+        className="w-full flex items-center justify-between p-5 text-left hover:bg-[#0d0d1a] transition-colors"
+        aria-expanded={open}
+      >
+        <span className="font-medium text-sm md:text-base text-gray-200 pr-4">{question}</span>
+        <ChevronDown className={`h-4 w-4 text-[#00D4FF] shrink-0 transition-transform duration-300 ${open ? "rotate-180" : ""}`} />
+      </button>
+      <div
+        className="overflow-hidden transition-all duration-400 ease-out"
+        style={{ maxHeight: open ? "300px" : "0", opacity: open ? 1 : 0 }}
+      >
+        <p className="px-5 pb-5 text-sm text-gray-400 leading-relaxed">{answer}</p>
+      </div>
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════ */
+/*                    LANDING PAGE                     */
+/* ═══════════════════════════════════════════════════ */
+export default function Landing() {
+  const [earlyForm, setEarlyForm] = useState({ name: "", email: "", whatsapp: "" });
+  const [earlySubmitted, setEarlySubmitted] = useState(false);
+  const [partnerForm, setPartnerForm] = useState({ name: "", email: "", company: "", type: "", message: "" });
+  const [partnerSubmitted, setPartnerSubmitted] = useState(false);
+
+  const handleEarlySubmit = (e: FormEvent) => {
+    e.preventDefault();
+    setEarlySubmitted(true);
+    setTimeout(() => setEarlySubmitted(false), 4000);
+    setEarlyForm({ name: "", email: "", whatsapp: "" });
+  };
+
+  const handlePartnerSubmit = (e: FormEvent) => {
+    e.preventDefault();
+    setPartnerSubmitted(true);
+    setTimeout(() => setPartnerSubmitted(false), 4000);
+    setPartnerForm({ name: "", email: "", company: "", type: "", message: "" });
+  };
+
+  return (
+    <div className="min-h-screen bg-[#0A0A0F] text-white overflow-x-hidden" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
+
+      {/* ═══ NAVBAR ═══ */}
+      <nav className="fixed top-0 left-0 right-0 z-50 bg-[#0A0A0F]/80 backdrop-blur-xl border-b border-white/5">
+        <div className="max-w-7xl mx-auto px-5 h-14 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className="h-7 w-7 rounded-md bg-gradient-to-br from-[#00D4FF] to-[#0057FF] flex items-center justify-center text-[10px] font-black tracking-tight">VS</div>
+            <span style={{ fontFamily: "'Bebas Neue', sans-serif" }} className="text-lg tracking-wider">VS SALES</span>
+          </div>
+          <div className="hidden md:flex items-center gap-6 text-xs text-gray-400">
+            <a href="#problema" className="hover:text-white transition-colors">O Problema</a>
+            <a href="#como-funciona" className="hover:text-white transition-colors">Como Funciona</a>
+            <a href="#comparativo" className="hover:text-white transition-colors">Comparativo</a>
+            <a href="#parceiros" className="hover:text-white transition-colors">Parceiros</a>
+            <a href="#faq" className="hover:text-white transition-colors">FAQ</a>
+          </div>
+          <a href="#acesso" className="text-xs font-medium px-4 py-2 rounded-lg bg-gradient-to-r from-[#00D4FF] to-[#0057FF] text-white hover:shadow-[0_0_20px_rgba(0,212,255,0.3)] transition-all">
+            Quero acesso
+          </a>
+        </div>
+      </nav>
+
+      {/* ═══ 1. HERO ═══ */}
+      <section className="relative min-h-screen flex items-center justify-center pt-14 overflow-hidden">
+        <ParticleCanvas />
+
+        {/* Grid lines bg */}
+        <div className="absolute inset-0 opacity-[0.03]" style={{
+          backgroundImage: "linear-gradient(rgba(0,212,255,1) 1px, transparent 1px), linear-gradient(90deg, rgba(0,212,255,1) 1px, transparent 1px)",
+          backgroundSize: "80px 80px",
+        }} />
+
+        <div className="relative z-10 max-w-4xl mx-auto px-5 text-center">
+          <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-[#00D4FF]/20 bg-[#00D4FF]/5 text-[10px] text-[#00D4FF] font-medium mb-8 tracking-wider uppercase">
+            <Sparkles className="h-3 w-3" /> Powered by VS Soluções Labs
+          </div>
+
+          <h1
+            style={{ fontFamily: "'Bebas Neue', sans-serif" }}
+            className="text-5xl sm:text-7xl md:text-8xl lg:text-9xl leading-[0.9] tracking-tight mb-6 glitch-text"
+          >
+            <span className="block">Prospecção.</span>
+            <span className="block">Qualificação.</span>
+            <span className="block bg-gradient-to-r from-[#00D4FF] to-[#00FF88] bg-clip-text text-transparent">Fechamento.</span>
+            <span className="block text-gray-500 text-3xl sm:text-4xl md:text-5xl mt-2">Sem humanos.</span>
+          </h1>
+
+          <p className="text-gray-400 max-w-xl mx-auto text-sm md:text-base leading-relaxed mb-8">
+            O VS SALES substitui sua equipe comercial inteira com IA. SDR, BDR, Closer — tudo automatizado, 24/7, por uma fração do custo.
+          </p>
+
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-3 mb-12">
+            <a
+              href="#acesso"
+              className="group flex items-center gap-2 px-6 py-3 rounded-lg bg-gradient-to-r from-[#00D4FF] to-[#0057FF] font-medium text-sm hover:shadow-[0_0_30px_rgba(0,212,255,0.4)] transition-all"
+            >
+              Quero ver o VS SALES em ação
+              <ArrowRight className="h-4 w-4 group-hover:translate-x-0.5 transition-transform" />
+            </a>
+            <a
+              href="#como-funciona"
+              className="flex items-center gap-2 px-6 py-3 rounded-lg border border-white/10 text-sm text-gray-300 hover:border-white/25 hover:text-white transition-all"
+            >
+              Como funciona?
+            </a>
+          </div>
+
+          {/* Counters */}
+          <div className="flex items-center justify-center gap-8 md:gap-12 text-center">
+            <div>
+              <p className="text-2xl md:text-3xl font-bold text-white" style={{ fontFamily: "'Bebas Neue', sans-serif", letterSpacing: "0.05em" }}>
+                <Counter end={12400} prefix="" suffix="" />
+              </p>
+              <p className="text-[10px] text-gray-500 uppercase tracking-wider mt-1">Leads qualificados</p>
+            </div>
+            <div className="h-8 w-px bg-white/10" />
+            <div>
+              <p className="text-2xl md:text-3xl font-bold text-white" style={{ fontFamily: "'Bebas Neue', sans-serif", letterSpacing: "0.05em" }}>
+                <Counter end={8300} suffix="h" />
+              </p>
+              <p className="text-[10px] text-gray-500 uppercase tracking-wider mt-1">Horas economizadas</p>
+            </div>
+            <div className="h-8 w-px bg-white/10" />
+            <div>
+              <p className="text-2xl md:text-3xl font-bold text-[#00FF88]" style={{ fontFamily: "'Bebas Neue', sans-serif", letterSpacing: "0.05em" }}>
+                <Counter end={97} suffix="%" />
+              </p>
+              <p className="text-[10px] text-gray-500 uppercase tracking-wider mt-1">Satisfação</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Gradient fade bottom */}
+        <div className="absolute bottom-0 left-0 right-0 h-32 bg-gradient-to-t from-[#0A0A0F] to-transparent" />
+      </section>
+
+      {/* ═══ 2. O PROBLEMA ═══ */}
+      <section id="problema" className="py-24 md:py-32 relative">
+        <div className="max-w-6xl mx-auto px-5">
+          <Reveal>
+            <p className="text-[10px] uppercase tracking-[0.3em] text-[#00D4FF] font-medium mb-3">O problema</p>
+            <h2 style={{ fontFamily: "'Bebas Neue', sans-serif" }} className="text-3xl md:text-5xl tracking-tight mb-4">
+              Você ainda paga salário para alguém<br />
+              <span className="text-gray-500">procurar lead no LinkedIn?</span>
+            </h2>
+            <p className="text-gray-400 text-sm max-w-xl mb-12">Enquanto isso, sua concorrência já opera com IA 24/7.</p>
+          </Reveal>
+
+          <div className="grid md:grid-cols-2 gap-4 mb-12">
+            {[
+              { icon: Users, title: "SDR custa R$ 3.500/mês", desc: "E prospecta no máximo 40 leads por dia. Nos bons dias." },
+              { icon: Target, title: "BDR qualifica errado", desc: "Desperdiça o tempo do Closer com leads que nunca vão comprar." },
+              { icon: DollarSign, title: "Closer fecha 20%", desc: "Mas passa 60% do dia lidando com leads frios e desqualificados." },
+              { icon: BarChart3, title: "Planilha e CRM desatualizado", desc: "Follow-up esquecido. Pipeline fictício. Forecast que nunca bate." },
+            ].map((card, i) => (
+              <Reveal key={card.title} delay={i * 100}>
+                <div className="group p-5 rounded-xl border border-[#1a1a2e] bg-[#0d0d18]/60 hover:border-red-500/20 hover:bg-red-500/[0.03] transition-all duration-300">
+                  <card.icon className="h-5 w-5 text-red-400/70 mb-3" />
+                  <h3 className="text-sm font-semibold text-white mb-1">{card.title}</h3>
+                  <p className="text-xs text-gray-500 leading-relaxed">{card.desc}</p>
+                </div>
+              </Reveal>
+            ))}
+          </div>
+
+          {/* Comparison */}
+          <Reveal>
+            <div className="grid md:grid-cols-2 gap-4">
+              <div className="rounded-xl border border-red-500/15 bg-red-500/[0.03] p-6">
+                <p className="text-xs font-semibold text-red-400 uppercase tracking-wider mb-4">❌ Time Humano</p>
+                <ul className="space-y-2.5 text-xs text-gray-400">
+                  {["Alto custo mensal fixo", "Horário limitado (8h/dia)", "Inconsistência na prospecção", "Follow-up esquecido", "Treinamento constante"].map(item => (
+                    <li key={item} className="flex items-center gap-2"><X className="h-3 w-3 text-red-400/60 shrink-0" />{item}</li>
+                  ))}
+                </ul>
+              </div>
+              <div className="rounded-xl border border-[#00D4FF]/20 bg-[#00D4FF]/[0.03] p-6">
+                <p className="text-xs font-semibold text-[#00D4FF] uppercase tracking-wider mb-4">✅ VS SALES</p>
+                <ul className="space-y-2.5 text-xs text-gray-300">
+                  {["Custo fixo previsível", "Operação 24/7 sem pausa", "100% de consistência", "Follow-up automático e inteligente", "Aprende sozinho com cada interação"].map(item => (
+                    <li key={item} className="flex items-center gap-2"><CheckCircle2 className="h-3 w-3 text-[#00FF88] shrink-0" />{item}</li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          </Reveal>
+        </div>
+      </section>
+
+      {/* ═══ 3. COMO FUNCIONA ═══ */}
+      <section id="como-funciona" className="py-24 md:py-32 relative">
+        <div className="absolute inset-0 bg-gradient-to-b from-transparent via-[#00D4FF]/[0.02] to-transparent" />
+        <div className="max-w-5xl mx-auto px-5 relative z-10">
+          <Reveal>
+            <p className="text-[10px] uppercase tracking-[0.3em] text-[#00D4FF] font-medium mb-3 text-center">Como funciona</p>
+            <h2 style={{ fontFamily: "'Bebas Neue', sans-serif" }} className="text-3xl md:text-5xl tracking-tight mb-3 text-center">
+              Um sistema. Quatro papéis.
+            </h2>
+            <p style={{ fontFamily: "'Bebas Neue', sans-serif" }} className="text-3xl md:text-5xl tracking-tight mb-12 text-center text-gray-500">
+              Zero desperdício.
+            </p>
+          </Reveal>
+
+          <div className="relative">
+            {/* Connecting line */}
+            <div className="hidden md:block absolute left-1/2 top-0 bottom-0 w-px bg-gradient-to-b from-[#00D4FF]/30 via-[#0057FF]/30 to-[#00FF88]/30" />
+
+            {[
+              { icon: Search, title: "Prospecção Inteligente", desc: "IA rastreia e mapeia leads do ICP ideal em tempo real, varrendo múltiplas fontes.", color: "#00D4FF" },
+              { icon: PuzzleIcon, title: "Enriquecimento de Dados", desc: "Informações de contato, empresa, cargo e redes sociais completadas automaticamente.", color: "#0057FF" },
+              { icon: Target, title: "Qualificação com Score", desc: "Cada lead recebe uma pontuação de 0 a 100%. Configurável por você.", color: "#00D4FF" },
+              { icon: CheckCircle2, title: "Encaminhamento Automático", desc: "Leads acima do threshold vão direto pro Closer — humano ou IA.", color: "#0057FF" },
+              { icon: CalendarCheck, title: "Agendamento Automático", desc: "Reunião marcada no calendário sem intervenção humana.", color: "#00FF88" },
+              { icon: DollarSign, title: "Fechamento", desc: "Closer humano ou IA fecha o negócio com o lead pré-qualificado e aquecido.", color: "#00FF88" },
+            ].map((step, i) => (
+              <Reveal key={step.title} delay={i * 120}>
+                <div className={`flex items-start gap-5 mb-8 ${i % 2 === 0 ? "md:flex-row" : "md:flex-row-reverse"} md:text-${i % 2 === 0 ? "right" : "left"}`}>
+                  <div className="flex-1 hidden md:block" />
+                  <div className="relative z-10 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-[#0d0d18]"
+                    style={{ boxShadow: `0 0 20px ${step.color}15` }}>
+                    <step.icon className="h-4 w-4" style={{ color: step.color }} />
+                  </div>
+                  <div className="flex-1">
+                    <div className="rounded-xl border border-[#1a1a2e] bg-[#0d0d18]/80 p-5 hover:border-[#00D4FF]/20 transition-all">
+                      <div className="flex items-center gap-2 mb-1.5">
+                        <span className="text-[10px] font-medium text-gray-500">0{i + 1}</span>
+                        <h3 className="text-sm font-semibold text-white">{step.title}</h3>
+                      </div>
+                      <p className="text-xs text-gray-400 leading-relaxed">{step.desc}</p>
+                    </div>
+                  </div>
+                </div>
+              </Reveal>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ═══ 4. PROVA SOCIAL / NÚMEROS ═══ */}
+      <section className="py-24 md:py-32 relative">
+        <div className="absolute inset-0 opacity-[0.03]" style={{
+          backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E")`,
+        }} />
+        <div className="max-w-5xl mx-auto px-5 relative z-10">
+          <Reveal>
+            <p className="text-[10px] uppercase tracking-[0.3em] text-[#00D4FF] font-medium mb-3 text-center">Resultados reais</p>
+            <h2 style={{ fontFamily: "'Bebas Neue', sans-serif" }} className="text-3xl md:text-5xl tracking-tight mb-16 text-center">
+              Números que um gestor comercial<br /><span className="text-gray-500">jamais conseguiu.</span>
+            </h2>
+          </Reveal>
+
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-16">
+            {[
+              { end: 300, suffix: "%", prefix: "+", label: "Aumento em leads qualificados", color: "#00D4FF" },
+              { end: 80, suffix: "%", prefix: "-", label: "Custo vs equipe tradicional", color: "#00FF88" },
+              { end: 24, suffix: "/7", prefix: "", label: "Operação contínua sem pausa", color: "#0057FF" },
+              { end: 5, suffix: " min", prefix: "< ", label: "Tempo de resposta ao lead", color: "#00D4FF" },
+            ].map((stat) => (
+              <Reveal key={stat.label}>
+                <div className="text-center p-6 rounded-xl border border-[#1a1a2e] bg-[#0d0d18]/60">
+                  <p className="text-3xl md:text-4xl font-bold mb-2" style={{ fontFamily: "'Bebas Neue', sans-serif", color: stat.color, letterSpacing: "0.03em" }}>
+                    <Counter end={stat.end} prefix={stat.prefix} suffix={stat.suffix} />
+                  </p>
+                  <p className="text-[10px] text-gray-500 uppercase tracking-wider leading-relaxed">{stat.label}</p>
+                </div>
+              </Reveal>
+            ))}
+          </div>
+
+          {/* Testimonial */}
+          <Reveal>
+            <div className="max-w-2xl mx-auto rounded-xl border border-[#1a1a2e] bg-[#0d0d18]/60 p-8 text-center">
+              <p className="text-sm text-gray-300 leading-relaxed italic mb-4">
+                "Substituímos 4 SDRs e 1 BDR pelo VS SALES. Em 60 dias, triplicamos os leads qualificados e cortamos 78% do custo operacional do comercial."
+              </p>
+              <div>
+                <p className="text-xs font-semibold text-white">Carlos Mendes</p>
+                <p className="text-[10px] text-gray-500">CEO — TechScale Soluções</p>
+              </div>
+            </div>
+          </Reveal>
+        </div>
+      </section>
+
+      {/* ═══ 5. COMPARATIVO ═══ */}
+      <section id="comparativo" className="py-24 md:py-32">
+        <div className="max-w-4xl mx-auto px-5">
+          <Reveal>
+            <p className="text-[10px] uppercase tracking-[0.3em] text-[#00D4FF] font-medium mb-3 text-center">Comparativo</p>
+            <h2 style={{ fontFamily: "'Bebas Neue', sans-serif" }} className="text-3xl md:text-5xl tracking-tight mb-12 text-center">
+              A decisão mais lógica<br /><span className="text-gray-500">que você vai tomar hoje.</span>
+            </h2>
+          </Reveal>
+
+          <Reveal>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr>
+                    <th className="text-left p-4 text-gray-500 text-xs font-medium" />
+                    <th className="p-4 text-center text-gray-400 text-xs font-medium">Time Humano</th>
+                    <th className="p-4 text-center rounded-t-xl border-t border-x border-[#00D4FF]/30 bg-[#00D4FF]/[0.03]">
+                      <span className="text-xs font-semibold text-[#00D4FF]">VS SALES</span>
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="text-xs">
+                  {[
+                    ["Custo mensal", "R$ 15.000+", "A partir de R$ 1.497"],
+                    ["Horário de operação", "8h/dia", "24/7"],
+                    ["Consistência", "Variável", "100%"],
+                    ["Escalabilidade", "Lenta e cara", "Imediata"],
+                    ["Integração com CRM", "Manual", "Automática"],
+                    ["Tempo de ramp-up", "30-90 dias", "< 48 horas"],
+                    ["Follow-up", "Esquecido", "Garantido"],
+                  ].map(([feature, human, vs], i) => (
+                    <tr key={feature} className="border-b border-[#1a1a2e]/50">
+                      <td className="p-4 text-gray-400 font-medium">{feature}</td>
+                      <td className="p-4 text-center text-gray-500">{human}</td>
+                      <td className="p-4 text-center border-x border-[#00D4FF]/30 bg-[#00D4FF]/[0.03] text-white font-medium">{vs}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </Reveal>
+        </div>
+      </section>
+
+      {/* ═══ 6. PARCEIROS ═══ */}
+      <section id="parceiros" className="py-24 md:py-32 bg-[#070712]">
+        <div className="max-w-6xl mx-auto px-5">
+          <Reveal>
+            <p className="text-[10px] uppercase tracking-[0.3em] text-[#00D4FF] font-medium mb-3 text-center">Programa de Parceiros</p>
+            <h2 style={{ fontFamily: "'Bebas Neue', sans-serif" }} className="text-3xl md:text-5xl tracking-tight mb-3 text-center">
+              Seja um parceiro VS
+            </h2>
+            <p className="text-sm text-gray-400 text-center mb-12 max-w-xl mx-auto">
+              Agências, consultores e integradores: revenda o VS SALES com margem real e suporte completo.
+            </p>
+          </Reveal>
+
+          {/* Tiers */}
+          <div className="grid md:grid-cols-3 gap-4 mb-16">
+            {[
+              {
+                name: "Parceiro Agência", color: "#00D4FF",
+                benefits: ["Comissão recorrente de 20%", "Suporte prioritário", "Co-marketing e materiais", "Dashboard de parceiro"],
+              },
+              {
+                name: "Parceiro Integrador", color: "#0057FF",
+                benefits: ["White-label disponível", "Onboarding dedicado", "SLA garantido de 4h", "API completa + docs"],
+              },
+              {
+                name: "Parceiro Estratégico", color: "#00FF88",
+                benefits: ["Equity de receita", "Acesso antecipado a produtos", "Participação no board de produto", "Margem premium exclusiva"],
+              },
+            ].map((tier, i) => (
+              <Reveal key={tier.name} delay={i * 100}>
+                <div
+                  className="rounded-xl border border-[#1a1a2e] bg-[#0d0d18]/60 p-6 hover:border-opacity-50 transition-all duration-300 group"
+                  style={{ ["--glow" as any]: tier.color }}
+                  onMouseEnter={(e) => e.currentTarget.style.borderColor = `${tier.color}30`}
+                  onMouseLeave={(e) => e.currentTarget.style.borderColor = ""}
+                >
+                  <p className="text-xs font-semibold mb-4 tracking-wider" style={{ color: tier.color }}>{tier.name}</p>
+                  <ul className="space-y-2.5 mb-6">
+                    {tier.benefits.map(b => (
+                      <li key={b} className="flex items-start gap-2 text-xs text-gray-300">
+                        <CheckCircle2 className="h-3 w-3 shrink-0 mt-0.5" style={{ color: tier.color }} />{b}
+                      </li>
+                    ))}
+                  </ul>
+                  <a href="#partner-form" className="block text-center text-xs font-medium py-2.5 rounded-lg border border-white/10 text-gray-300 hover:text-white hover:border-white/25 transition-all">
+                    Quero ser parceiro
+                  </a>
+                </div>
+              </Reveal>
+            ))}
+          </div>
+
+          {/* Partner Form */}
+          <Reveal>
+            <div id="partner-form" className="max-w-lg mx-auto rounded-xl border border-[#1a1a2e] bg-[#0d0d18]/80 p-8">
+              <h3 className="text-base font-semibold mb-1 text-center">Formulário de Interesse</h3>
+              <p className="text-xs text-gray-500 text-center mb-6">Preencha e nossa equipe entrará em contato</p>
+
+              {partnerSubmitted ? (
+                <div className="text-center py-6">
+                  <CheckCircle2 className="h-8 w-8 text-[#00FF88] mx-auto mb-3" />
+                  <p className="text-sm font-medium text-white">Formulário enviado!</p>
+                  <p className="text-xs text-gray-400 mt-1">Entraremos em contato em até 24h.</p>
+                </div>
+              ) : (
+                <form onSubmit={handlePartnerSubmit} className="space-y-3">
+                  <div className="grid grid-cols-2 gap-3">
+                    <input required value={partnerForm.name} onChange={e => setPartnerForm(p => ({ ...p, name: e.target.value }))}
+                      placeholder="Nome" className="w-full px-3 py-2.5 rounded-lg bg-[#0A0A0F] border border-[#1a1a2e] text-sm text-white placeholder:text-gray-600 focus:outline-none focus:border-[#00D4FF]/40" />
+                    <input required type="email" value={partnerForm.email} onChange={e => setPartnerForm(p => ({ ...p, email: e.target.value }))}
+                      placeholder="E-mail" className="w-full px-3 py-2.5 rounded-lg bg-[#0A0A0F] border border-[#1a1a2e] text-sm text-white placeholder:text-gray-600 focus:outline-none focus:border-[#00D4FF]/40" />
+                  </div>
+                  <input value={partnerForm.company} onChange={e => setPartnerForm(p => ({ ...p, company: e.target.value }))}
+                    placeholder="Empresa" className="w-full px-3 py-2.5 rounded-lg bg-[#0A0A0F] border border-[#1a1a2e] text-sm text-white placeholder:text-gray-600 focus:outline-none focus:border-[#00D4FF]/40" />
+                  <select required value={partnerForm.type} onChange={e => setPartnerForm(p => ({ ...p, type: e.target.value }))}
+                    className="w-full px-3 py-2.5 rounded-lg bg-[#0A0A0F] border border-[#1a1a2e] text-sm text-white focus:outline-none focus:border-[#00D4FF]/40 appearance-none"
+                    style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23555' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E")`, backgroundRepeat: "no-repeat", backgroundPosition: "right 12px center" }}>
+                    <option value="" className="text-gray-600">Tipo de parceria</option>
+                    <option value="agencia">Parceiro Agência</option>
+                    <option value="integrador">Parceiro Integrador</option>
+                    <option value="estrategico">Parceiro Estratégico</option>
+                  </select>
+                  <textarea value={partnerForm.message} onChange={e => setPartnerForm(p => ({ ...p, message: e.target.value }))}
+                    placeholder="Mensagem (opcional)" rows={3}
+                    className="w-full px-3 py-2.5 rounded-lg bg-[#0A0A0F] border border-[#1a1a2e] text-sm text-white placeholder:text-gray-600 focus:outline-none focus:border-[#00D4FF]/40 resize-none" />
+                  <button type="submit" className="w-full py-2.5 rounded-lg bg-gradient-to-r from-[#00D4FF] to-[#0057FF] text-sm font-medium hover:shadow-[0_0_20px_rgba(0,212,255,0.3)] transition-all">
+                    Enviar interesse
+                  </button>
+                </form>
+              )}
+            </div>
+          </Reveal>
+        </div>
+      </section>
+
+      {/* ═══ 7. URGÊNCIA ═══ */}
+      <section id="acesso" className="py-24 md:py-32 relative">
+        <div className="absolute inset-0 bg-gradient-to-b from-[#070712] via-transparent to-transparent" />
+        <div className="max-w-lg mx-auto px-5 relative z-10">
+          <Reveal>
+            <div className="rounded-2xl border border-[#00D4FF]/20 bg-[#0d0d18]/80 p-8 text-center backdrop-blur-sm"
+              style={{ boxShadow: "0 0 60px rgba(0,212,255,0.06)" }}>
+              <p className="text-[10px] uppercase tracking-[0.3em] text-[#00FF88] font-medium mb-3">Acesso Antecipado</p>
+              <h2 style={{ fontFamily: "'Bebas Neue', sans-serif" }} className="text-2xl md:text-4xl tracking-tight mb-3">
+                Vagas limitadas.
+              </h2>
+              <p className="text-xs text-gray-400 mb-6">Garanta sua vaga antes que a lista feche.</p>
+
+              {/* Progress bar */}
+              <div className="mb-6">
+                <div className="flex items-center justify-between text-[10px] text-gray-500 mb-1.5">
+                  <span>37 de 50 vagas preenchidas</span>
+                  <span className="text-[#00FF88]">74%</span>
+                </div>
+                <div className="h-1.5 bg-[#1a1a2e] rounded-full overflow-hidden">
+                  <div className="h-full bg-gradient-to-r from-[#00D4FF] to-[#00FF88] rounded-full" style={{ width: "74%" }} />
+                </div>
+              </div>
+
+              {earlySubmitted ? (
+                <div className="py-4">
+                  <CheckCircle2 className="h-8 w-8 text-[#00FF88] mx-auto mb-2" />
+                  <p className="text-sm font-medium">Vaga garantida! 🎉</p>
+                  <p className="text-xs text-gray-400 mt-1">Você receberá um e-mail em breve.</p>
+                </div>
+              ) : (
+                <form onSubmit={handleEarlySubmit} className="space-y-2.5 text-left">
+                  <input required value={earlyForm.name} onChange={e => setEarlyForm(p => ({ ...p, name: e.target.value }))}
+                    placeholder="Seu nome" className="w-full px-3 py-2.5 rounded-lg bg-[#0A0A0F] border border-[#1a1a2e] text-sm text-white placeholder:text-gray-600 focus:outline-none focus:border-[#00D4FF]/40" />
+                  <input required type="email" value={earlyForm.email} onChange={e => setEarlyForm(p => ({ ...p, email: e.target.value }))}
+                    placeholder="Seu melhor e-mail" className="w-full px-3 py-2.5 rounded-lg bg-[#0A0A0F] border border-[#1a1a2e] text-sm text-white placeholder:text-gray-600 focus:outline-none focus:border-[#00D4FF]/40" />
+                  <input value={earlyForm.whatsapp} onChange={e => setEarlyForm(p => ({ ...p, whatsapp: e.target.value }))}
+                    placeholder="WhatsApp (opcional)" className="w-full px-3 py-2.5 rounded-lg bg-[#0A0A0F] border border-[#1a1a2e] text-sm text-white placeholder:text-gray-600 focus:outline-none focus:border-[#00D4FF]/40" />
+                  <button type="submit"
+                    className="w-full py-3 rounded-lg bg-gradient-to-r from-[#00FF88] to-[#00D4FF] text-sm font-bold text-[#0A0A0F] hover:shadow-[0_0_25px_rgba(0,255,136,0.3)] transition-all">
+                    Quero minha vaga →
+                  </button>
+                </form>
+              )}
+
+              <p className="text-[10px] text-gray-600 mt-4">Sem cartão de crédito. Sem compromisso. Com resultado.</p>
+            </div>
+          </Reveal>
+        </div>
+      </section>
+
+      {/* ═══ 8. FAQ ═══ */}
+      <section id="faq" className="py-24 md:py-32">
+        <div className="max-w-2xl mx-auto px-5">
+          <Reveal>
+            <p className="text-[10px] uppercase tracking-[0.3em] text-[#00D4FF] font-medium mb-3 text-center">Perguntas frequentes</p>
+            <h2 style={{ fontFamily: "'Bebas Neue', sans-serif" }} className="text-3xl md:text-4xl tracking-tight mb-10 text-center">
+              Tire suas dúvidas
+            </h2>
+          </Reveal>
+
+          <div className="space-y-2">
+            {[
+              { q: "O VS SALES substitui 100% do meu time comercial?", a: "Depende da sua operação. Para negócios com ticket médio até R$ 5.000, sim — o VS SALES faz prospecção, qualificação e fechamento completos. Para tickets maiores, recomendamos que o Closer humano assuma após a qualificação automática." },
+              { q: "Quanto tempo leva para implementar?", a: "Menos de 48 horas. A configuração é guiada e o sistema já começa a operar assim que o ICP é definido e as integrações são conectadas." },
+              { q: "Funciona para qualquer segmento?", a: "Sim. O VS SALES opera com IA adaptativa que se ajusta a qualquer segmento B2B ou B2C. Você define o ICP e os critérios de qualificação." },
+              { q: "E se o lead não quiser falar com IA?", a: "O sistema é configurável. Você pode definir que leads acima de determinado score sejam direcionados diretamente para um humano, sem passar pela IA de fechamento." },
+              { q: "Posso configurar o score de qualificação?", a: "Totalmente. O threshold de qualificação é 100% configurável — você define os critérios, pesos e pontuação mínima para encaminhamento." },
+              { q: "Como funciona a integração com meu CRM atual?", a: "O VS SALES alimenta automaticamente seu CRM via API. Suportamos integração nativa com os principais CRMs do mercado, além de webhooks e Zapier." },
+            ].map((item) => (
+              <Reveal key={item.q}>
+                <FAQItem question={item.q} answer={item.a} />
+              </Reveal>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ═══ 9. FOOTER / CTA FINAL ═══ */}
+      <section className="py-24 md:py-32 relative">
+        <div className="absolute inset-0 bg-gradient-to-t from-[#070712] via-transparent to-transparent" />
+        <div className="max-w-3xl mx-auto px-5 text-center relative z-10">
+          <Reveal>
+            <h2 style={{ fontFamily: "'Bebas Neue', sans-serif" }} className="text-3xl md:text-5xl lg:text-6xl tracking-tight mb-4">
+              Sua concorrência já vai usar isso.<br />
+              <span className="bg-gradient-to-r from-[#00D4FF] to-[#00FF88] bg-clip-text text-transparent">Você vai esperar?</span>
+            </h2>
+            <p className="text-sm text-gray-400 mb-8 max-w-md mx-auto">
+              Comece agora e transforme sua operação comercial em uma máquina de receita previsível.
+            </p>
+            <a
+              href="#acesso"
+              className="inline-flex items-center gap-2 px-8 py-4 rounded-lg bg-gradient-to-r from-[#00D4FF] to-[#0057FF] font-semibold text-sm hover:shadow-[0_0_40px_rgba(0,212,255,0.4)] transition-all"
+            >
+              Começar agora com o VS SALES
+              <ArrowRight className="h-4 w-4" />
+            </a>
+          </Reveal>
+        </div>
+      </section>
+
+      {/* Footer */}
+      <footer className="border-t border-[#1a1a2e] py-10">
+        <div className="max-w-6xl mx-auto px-5">
+          <div className="flex flex-col md:flex-row items-center justify-between gap-6">
+            <div className="flex items-center gap-2">
+              <div className="h-6 w-6 rounded-md bg-gradient-to-br from-[#00D4FF] to-[#0057FF] flex items-center justify-center text-[8px] font-black">VS</div>
+              <div>
+                <span className="text-xs font-semibold text-white">VS Soluções</span>
+                <span className="text-[10px] text-gray-600 ml-2">Tecnologia que substitui. Resultado que comprova.</span>
+              </div>
+            </div>
+            <div className="flex items-center gap-6 text-[10px] text-gray-600">
+              <a href="#" className="hover:text-gray-400 transition-colors">Política de Privacidade</a>
+              <a href="#" className="hover:text-gray-400 transition-colors">Termos de Uso</a>
+              <a href="#" className="hover:text-gray-400 transition-colors">Contato</a>
+            </div>
+          </div>
+          <p className="text-[10px] text-gray-700 text-center mt-6">© 2026 VS Soluções. Todos os direitos reservados.</p>
+        </div>
+      </footer>
+
+      {/* Glitch CSS */}
+      <style>{`
+        .glitch-text {
+          position: relative;
+        }
+        .glitch-text::before,
+        .glitch-text::after {
+          content: attr(data-text);
+          position: absolute;
+          top: 0; left: 0;
+          width: 100%; height: 100%;
+          pointer-events: none;
+        }
+        @keyframes glitch-1 {
+          0%, 100% { clip-path: inset(0 0 96% 0); transform: translateX(0); }
+          20% { clip-path: inset(40% 0 30% 0); transform: translateX(-2px); }
+          40% { clip-path: inset(60% 0 10% 0); transform: translateX(2px); }
+          60% { clip-path: inset(20% 0 60% 0); transform: translateX(-1px); }
+          80% { clip-path: inset(80% 0 5% 0); transform: translateX(1px); }
+        }
+      `}</style>
+    </div>
+  );
+}
