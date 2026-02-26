@@ -1048,7 +1048,7 @@ export default function AdminPanel() {
                           return o.name.toLowerCase().includes(q);
                         }).map(org => {
                           const ownerUser = users.find(u => u.id === org.owner_id);
-                          const formUrl = `${window.location.origin}/forms/${org.form_token}`;
+                          const formUrl = `https://vssalesreal.lovable.app/forms/${org.form_token}`;
                           return (
                             <div
                               key={org.id}
