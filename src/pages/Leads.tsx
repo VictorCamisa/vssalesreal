@@ -82,13 +82,31 @@ export default function Leads() {
   const fetchLeads = async () => {
     if (!profile?.org_id) return;
     setLoading(true);
-    const { data } = await supabase
-      .from("leads_raw")
-      .select("id, name, phone, email, source, status, tags, created_at, enrichment_data")
-      .eq("org_id", profile.org_id)
-      .order("created_at", { ascending: false })
-      .limit(500);
-    setLeads(data ?? []);
+    
+    // Fetch all leads without limit using pagination
+    let allLeads: Lead[] = [];
+    let from = 0;
+    const pageSize = 1000;
+    let hasMore = true;
+    
+    while (hasMore) {
+      const { data } = await supabase
+        .from("leads_raw")
+        .select("id, name, phone, email, source, status, tags, created_at, enrichment_data")
+        .eq("org_id", profile.org_id)
+        .order("created_at", { ascending: false })
+        .range(from, from + pageSize - 1);
+      
+      if (data && data.length > 0) {
+        allLeads = [...allLeads, ...data];
+        from += pageSize;
+        hasMore = data.length === pageSize;
+      } else {
+        hasMore = false;
+      }
+    }
+    
+    setLeads(allLeads);
     setLoading(false);
   };
 
