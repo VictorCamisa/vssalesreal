@@ -12,6 +12,7 @@ import {
 import { NavLink } from "@/components/NavLink";
 import { useAuth } from "@/contexts/AuthContext";
 import { OnboardingDialog } from "@/components/OnboardingDialog";
+import vsLogo from "@/assets/vs-sales-logo.png";
 import {
   Sidebar,
   SidebarContent,
@@ -67,11 +68,9 @@ export function AppSidebar() {
     <Sidebar collapsible="icon" className="border-r border-sidebar-border">
       <SidebarHeader className="px-4 py-5">
         <div className="flex items-center gap-2.5">
-          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground font-bold text-sm">
-            VS
-          </div>
+          <img src={vsLogo} alt="VS SALES" className="h-8 w-auto shrink-0" />
           <div className="group-data-[collapsible=icon]:hidden">
-            <p className="text-sm font-semibold text-foreground leading-none">VS LEADS</p>
+            <p className="text-sm font-semibold text-foreground leading-none">VS SALES</p>
             <p className="text-[10px] text-muted-foreground mt-0.5">por VS Soluções</p>
           </div>
         </div>

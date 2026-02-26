@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { Lock, User, Shield } from "lucide-react";
-import vsLogo from "@/assets/vs-logo.png";
+import vsLogo from "@/assets/vs-sales-logo.png";
 
 export default function AdminAuth() {
   const [email, setEmail] = useState("");
