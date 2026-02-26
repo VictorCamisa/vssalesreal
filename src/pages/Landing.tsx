@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, FormEvent } from "react";
+import { supabase } from "@/integrations/supabase/client";
 import vsLogo from "@/assets/vs-logo.png";
 import { ParticleCanvas } from "@/components/landing/ParticleCanvas";
 import { useScrollAnimation, useAnimatedCounter } from "@/hooks/useScrollAnimation";
@@ -175,15 +176,29 @@ export default function Landing() {
   const [partnerForm, setPartnerForm] = useState({ name: "", email: "", company: "", type: "", message: "" });
   const [partnerSubmitted, setPartnerSubmitted] = useState(false);
 
-  const handleEarlySubmit = (e: FormEvent) => {
+  const handleEarlySubmit = async (e: FormEvent) => {
     e.preventDefault();
+    await supabase.from("site_leads").insert({
+      name: earlyForm.name,
+      email: earlyForm.email,
+      phone: earlyForm.whatsapp,
+      form_source: "early_access",
+    });
     setEarlySubmitted(true);
     setTimeout(() => setEarlySubmitted(false), 4000);
     setEarlyForm({ name: "", email: "", whatsapp: "" });
   };
 
-  const handlePartnerSubmit = (e: FormEvent) => {
+  const handlePartnerSubmit = async (e: FormEvent) => {
     e.preventDefault();
+    await supabase.from("site_leads").insert({
+      name: partnerForm.name,
+      email: partnerForm.email,
+      company: partnerForm.company,
+      partnership_type: partnerForm.type,
+      message: partnerForm.message,
+      form_source: "partnership",
+    });
     setPartnerSubmitted(true);
     setTimeout(() => setPartnerSubmitted(false), 4000);
     setPartnerForm({ name: "", email: "", company: "", type: "", message: "" });
