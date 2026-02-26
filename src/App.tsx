@@ -21,6 +21,7 @@ import Checkout from "./pages/Checkout";
 import AdminAuth from "./pages/AdminAuth";
 import AdminPanel from "./pages/AdminPanel";
 import CompanyProfile from "./pages/CompanyProfile";
+import CompanyForm from "./pages/CompanyForm";
 
 const queryClient = new QueryClient();
 
@@ -42,6 +43,7 @@ function AppRoutes() {
         <Route path="/checkout" element={<Checkout />} />
         <Route path="/admin" element={<AdminAuth />} />
         <Route path="/auth" element={<Auth />} />
+        <Route path="/forms/:token" element={<CompanyForm />} />
         <Route path="*" element={<Navigate to="/auth" replace />} />
       </Routes>
     );
@@ -64,6 +66,7 @@ function AppRoutes() {
       <Route path="/checkout" element={<Checkout />} />
       <Route path="/admin" element={<AdminAuth />} />
       <Route path="/admin/panel" element={<AdminPanel />} />
+      <Route path="/forms/:token" element={<CompanyForm />} />
       <Route path="/auth" element={<Navigate to="/" replace />} />
       <Route path="*" element={<NotFound />} />
     </Routes>
