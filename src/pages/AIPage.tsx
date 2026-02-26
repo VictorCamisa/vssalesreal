@@ -182,6 +182,248 @@ async function streamAI(
 
 const AI_CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-chat`;
 
+// ========== FOLLOW-UP SECTION ==========
+type FollowUpRule = {
+  id?: string;
+  org_id: string;
+  ai_config_id: string;
+  name: string;
+  delay_minutes: number;
+  step_order: number;
+  enabled: boolean;
+  context_hint: string;
+};
+
+function FollowUpSection({ orgId, aiConfigId, instanceName }: { orgId: string; aiConfigId: string; instanceName: string }) {
+  const { toast } = useToast();
+  const [rules, setRules] = useState<FollowUpRule[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [activeConvos, setActiveConvos] = useState(0);
+
+  useEffect(() => {
+    loadRules();
+    loadActiveConversations();
+  }, [aiConfigId]);
+
+  const loadRules = async () => {
+    setLoading(true);
+    const { data } = await supabase
+      .from("follow_up_rules")
+      .select("*")
+      .eq("ai_config_id", aiConfigId)
+      .order("step_order", { ascending: true });
+    setRules((data as any[]) || []);
+    setLoading(false);
+  };
+
+  const loadActiveConversations = async () => {
+    const { count } = await supabase
+      .from("conversation_tracker")
+      .select("id", { count: "exact", head: true })
+      .eq("ai_config_id", aiConfigId)
+      .eq("follow_up_paused", false);
+    setActiveConvos(count || 0);
+  };
+
+  const addRule = () => {
+    const nextOrder = rules.length + 1;
+    const defaults: Record<number, { delay: number; hint: string; name: string }> = {
+      1: { delay: 30, hint: "reativar conversa de forma sutil", name: "Primeiro toque" },
+      2: { delay: 120, hint: "relembrar proposta ou benefício", name: "Segundo toque" },
+      3: { delay: 1440, hint: "última tentativa, oferecer ajuda", name: "Último toque" },
+    };
+    const d = defaults[nextOrder] || { delay: 60, hint: "reengajar lead", name: `Follow-up #${nextOrder}` };
+    setRules(prev => [...prev, {
+      org_id: orgId, ai_config_id: aiConfigId,
+      name: d.name, delay_minutes: d.delay, step_order: nextOrder,
+      enabled: true, context_hint: d.hint,
+    }]);
+  };
+
+  const updateRule = (index: number, partial: Partial<FollowUpRule>) => {
+    setRules(prev => prev.map((r, i) => i === index ? { ...r, ...partial } : r));
+  };
+
+  const removeRule = (index: number) => {
+    const rule = rules[index];
+    if (rule.id) {
+      supabase.from("follow_up_rules").delete().eq("id", rule.id);
+    }
+    setRules(prev => prev.filter((_, i) => i !== index).map((r, i) => ({ ...r, step_order: i + 1 })));
+    toast({ title: "Etapa removida" });
+  };
+
+  const saveRules = async () => {
+    setSaving(true);
+    try {
+      for (const rule of rules) {
+        const payload = {
+          org_id: orgId, ai_config_id: aiConfigId,
+          name: rule.name, delay_minutes: rule.delay_minutes,
+          step_order: rule.step_order, enabled: rule.enabled,
+          context_hint: rule.context_hint,
+        };
+        if (rule.id) {
+          await supabase.from("follow_up_rules").update(payload).eq("id", rule.id);
+        } else {
+          const { data } = await supabase.from("follow_up_rules").insert(payload).select().single();
+          if (data) rule.id = data.id;
+        }
+      }
+      toast({ title: "Cadência salva!", description: "As regras de follow-up foram atualizadas." });
+    } catch (e: any) {
+      toast({ title: "Erro", description: e.message, variant: "destructive" });
+    }
+    setSaving(false);
+  };
+
+  const formatDelay = (minutes: number) => {
+    if (minutes < 60) return `${minutes} min`;
+    if (minutes < 1440) return `${Math.round(minutes / 60)}h`;
+    return `${Math.round(minutes / 1440)}d`;
+  };
+
+  const DELAY_OPTIONS = [
+    { value: 5, label: "5 min" },
+    { value: 10, label: "10 min" },
+    { value: 15, label: "15 min" },
+    { value: 30, label: "30 min" },
+    { value: 60, label: "1 hora" },
+    { value: 120, label: "2 horas" },
+    { value: 360, label: "6 horas" },
+    { value: 720, label: "12 horas" },
+    { value: 1440, label: "24 horas" },
+    { value: 2880, label: "48 horas" },
+    { value: 4320, label: "72 horas" },
+  ];
+
+  return (
+    <div className="glass rounded-2xl p-5 space-y-4">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-warning/15">
+            <RefreshCw className="h-5 w-5 text-warning" />
+          </div>
+          <div>
+            <h3 className="font-semibold">Cadência de Follow-up</h3>
+            <p className="text-xs text-muted-foreground">A IA reenvia automaticamente se o lead não responder</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          {activeConvos > 0 && (
+            <Badge variant="outline" className="text-[10px] gap-1 bg-primary/10 text-primary border-primary/30">
+              <Users className="h-3 w-3" />{activeConvos} ativas
+            </Badge>
+          )}
+        </div>
+      </div>
+
+      {loading ? (
+        <div className="flex justify-center py-4"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>
+      ) : (
+        <>
+          {/* Visual cadence timeline */}
+          {rules.length > 0 && (
+            <div className="flex items-center gap-1 px-2 py-3 bg-secondary/30 rounded-xl overflow-x-auto">
+              <div className="flex items-center gap-1 shrink-0">
+                <div className="w-8 h-8 rounded-full bg-success/20 flex items-center justify-center">
+                  <MessageCircle className="h-3.5 w-3.5 text-success" />
+                </div>
+                <span className="text-[9px] text-muted-foreground">Conversa</span>
+              </div>
+              {rules.map((rule, i) => (
+                <div key={i} className="flex items-center gap-1 shrink-0">
+                  <div className="w-12 h-0.5 bg-border relative">
+                    <span className="absolute -top-3 left-1/2 -translate-x-1/2 text-[8px] text-muted-foreground whitespace-nowrap font-mono">
+                      {formatDelay(rule.delay_minutes)}
+                    </span>
+                  </div>
+                  <div className={`w-8 h-8 rounded-full flex items-center justify-center text-[10px] font-bold ${
+                    rule.enabled ? "bg-warning/20 text-warning" : "bg-secondary text-muted-foreground"
+                  }`}>
+                    {i + 1}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Rules list */}
+          <div className="space-y-2">
+            {rules.map((rule, index) => (
+              <div key={index} className={`border rounded-xl p-3 space-y-2 transition-colors ${rule.enabled ? "" : "opacity-50"}`}>
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2 flex-1 min-w-0">
+                    <Badge variant="outline" className="text-[10px] font-mono shrink-0">#{rule.step_order}</Badge>
+                    <Input
+                      value={rule.name}
+                      onChange={e => updateRule(index, { name: e.target.value })}
+                      className="h-7 text-xs rounded-lg bg-transparent border-none px-1 font-medium"
+                      placeholder="Nome da etapa"
+                    />
+                  </div>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <Switch
+                      checked={rule.enabled}
+                      onCheckedChange={v => updateRule(index, { enabled: v })}
+                    />
+                    <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-destructive" onClick={() => removeRule(index)}>
+                      <Trash2 className="h-3 w-3" />
+                    </Button>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="space-y-1">
+                    <Label className="text-[10px] text-muted-foreground">Tempo sem resposta</Label>
+                    <Select value={String(rule.delay_minutes)} onValueChange={v => updateRule(index, { delay_minutes: Number(v) })}>
+                      <SelectTrigger className="h-7 text-xs rounded-lg"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {DELAY_OPTIONS.map(opt => (
+                          <SelectItem key={opt.value} value={String(opt.value)}>{opt.label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-[10px] text-muted-foreground">Objetivo do follow-up</Label>
+                    <Input
+                      value={rule.context_hint}
+                      onChange={e => updateRule(index, { context_hint: e.target.value })}
+                      placeholder="ex: reativar conversa"
+                      className="h-7 text-xs rounded-lg"
+                    />
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" className="text-xs rounded-xl gap-1 flex-1" onClick={addRule}>
+              <Plus className="h-3 w-3" /> Adicionar Etapa
+            </Button>
+            {rules.length > 0 && (
+              <Button size="sm" className="text-xs rounded-xl gap-1 flex-1" onClick={saveRules} disabled={saving}>
+                {saving ? <Loader2 className="h-3 w-3 animate-spin" /> : <Save className="h-3 w-3" />}
+                Salvar Cadência
+              </Button>
+            )}
+          </div>
+
+          {rules.length === 0 && (
+            <div className="text-center py-4 text-xs text-muted-foreground">
+              <RefreshCw className="h-8 w-8 mx-auto mb-2 text-muted-foreground/30" />
+              <p>Nenhuma etapa de follow-up configurada.</p>
+              <p className="text-[10px] mt-1">Adicione etapas para a IA reengajar leads automaticamente.</p>
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
 // ========== CHATBOT TAB ==========
 function ChatbotTab({ orgId }: { orgId: string }) {
   const { toast } = useToast();
@@ -413,6 +655,11 @@ function ChatbotTab({ orgId }: { orgId: string }) {
           </>
         )}
       </div>
+
+      {/* Follow-up Rules */}
+      {currentConfig.id && selectedInstance && (
+        <FollowUpSection orgId={orgId} aiConfigId={currentConfig.id} instanceName={selectedInstance} />
+      )}
 
       <Button onClick={handleSave} disabled={saving} className="w-full rounded-xl gradient-primary hover:opacity-90 h-11">
         {saving ? <><Loader2 className="h-4 w-4 animate-spin mr-2" />Salvando...</> : <><Save className="h-4 w-4 mr-2" />Salvar Configuração</>}

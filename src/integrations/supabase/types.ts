@@ -296,6 +296,76 @@ export type Database = {
           },
         ]
       }
+      conversation_tracker: {
+        Row: {
+          ai_config_id: string | null
+          created_at: string
+          follow_up_paused: boolean
+          id: string
+          instance_name: string
+          last_bot_msg_at: string | null
+          last_customer_msg_at: string
+          last_follow_up_step: number
+          lead_id: string | null
+          org_id: string
+          push_name: string | null
+          remote_jid: string
+          updated_at: string
+        }
+        Insert: {
+          ai_config_id?: string | null
+          created_at?: string
+          follow_up_paused?: boolean
+          id?: string
+          instance_name: string
+          last_bot_msg_at?: string | null
+          last_customer_msg_at?: string
+          last_follow_up_step?: number
+          lead_id?: string | null
+          org_id: string
+          push_name?: string | null
+          remote_jid: string
+          updated_at?: string
+        }
+        Update: {
+          ai_config_id?: string | null
+          created_at?: string
+          follow_up_paused?: boolean
+          id?: string
+          instance_name?: string
+          last_bot_msg_at?: string | null
+          last_customer_msg_at?: string
+          last_follow_up_step?: number
+          lead_id?: string | null
+          org_id?: string
+          push_name?: string | null
+          remote_jid?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "conversation_tracker_ai_config_id_fkey"
+            columns: ["ai_config_id"]
+            isOneToOne: false
+            referencedRelation: "ai_configs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "conversation_tracker_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads_raw"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "conversation_tracker_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       crm_stages: {
         Row: {
           created_at: string
@@ -321,6 +391,60 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "crm_stages_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      follow_up_rules: {
+        Row: {
+          ai_config_id: string
+          context_hint: string | null
+          created_at: string
+          delay_minutes: number
+          enabled: boolean
+          id: string
+          name: string
+          org_id: string
+          step_order: number
+          updated_at: string
+        }
+        Insert: {
+          ai_config_id: string
+          context_hint?: string | null
+          created_at?: string
+          delay_minutes?: number
+          enabled?: boolean
+          id?: string
+          name?: string
+          org_id: string
+          step_order?: number
+          updated_at?: string
+        }
+        Update: {
+          ai_config_id?: string
+          context_hint?: string | null
+          created_at?: string
+          delay_minutes?: number
+          enabled?: boolean
+          id?: string
+          name?: string
+          org_id?: string
+          step_order?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "follow_up_rules_ai_config_id_fkey"
+            columns: ["ai_config_id"]
+            isOneToOne: false
+            referencedRelation: "ai_configs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "follow_up_rules_org_id_fkey"
             columns: ["org_id"]
             isOneToOne: false
             referencedRelation: "organizations"
