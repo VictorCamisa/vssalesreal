@@ -5,6 +5,7 @@ import { lovable } from "@/integrations/lovable/index";
 import vsLogo from "@/assets/vs-sales-logo.png";
 import { useToast } from "@/hooks/use-toast";
 import { Mail, Lock, Eye, EyeOff, ArrowRight, Zap } from "lucide-react";
+import { ParticleCanvas } from "@/components/landing/ParticleCanvas";
 
 export default function Auth() {
   const [email, setEmail] = useState("");
@@ -46,23 +47,16 @@ export default function Auth() {
     <div className="min-h-screen flex items-center justify-center relative overflow-hidden" style={{ background: "#06060F" }}>
       {/* Background effects */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        <ParticleCanvas />
         {/* Radial glow top */}
         <div
-          className="absolute -top-[40%] left-1/2 -translate-x-1/2 w-[800px] h-[800px] rounded-full opacity-[0.07]"
+          className="absolute -top-[40%] left-1/2 -translate-x-1/2 w-[800px] h-[800px] rounded-full opacity-[0.12]"
           style={{ background: "radial-gradient(circle, hsl(221 83% 53%), transparent 70%)" }}
         />
         {/* Radial glow bottom-right */}
         <div
-          className="absolute -bottom-[30%] -right-[10%] w-[600px] h-[600px] rounded-full opacity-[0.05]"
+          className="absolute -bottom-[30%] -right-[10%] w-[600px] h-[600px] rounded-full opacity-[0.08]"
           style={{ background: "radial-gradient(circle, hsl(190 90% 50%), transparent 70%)" }}
-        />
-        {/* Grid pattern */}
-        <div
-          className="absolute inset-0 opacity-[0.03]"
-          style={{
-            backgroundImage: `linear-gradient(rgba(255,255,255,0.1) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.1) 1px, transparent 1px)`,
-            backgroundSize: "60px 60px",
-          }}
         />
       </div>
 
