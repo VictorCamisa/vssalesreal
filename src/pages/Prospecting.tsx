@@ -6,7 +6,7 @@ import { useNavigate } from "react-router-dom";
 import {
   Search, Globe, MessageCircle, Loader2, Plus, Users2, MessageSquare,
   Contact, Smartphone, QrCode, RefreshCw, Trash2, Wifi, WifiOff,
-  CheckCircle2, Tag, X, Zap, ChevronRight, Eye,
+  CheckCircle2, Tag, X, Zap, Eye,
   Sparkles, Phone, Building2, User, Upload,
   FileSpreadsheet, AlertCircle, MapPin, Hash, ArrowRight, Send
 } from "lucide-react";
@@ -36,24 +36,24 @@ type ScrapeJob = {
   created_at: string; error_message?: string;
 };
 
-const PRESET_NICHES = [
+const PRESET_SEGMENTS = [
+  { label: "Bares e Restaurantes", value: "bares restaurantes", icon: "🍽️" },
   { label: "Imobiliárias", value: "imobiliárias", icon: "🏠" },
   { label: "Clínicas Médicas", value: "clínicas médicas", icon: "🏥" },
   { label: "Advocacia", value: "escritórios de advocacia", icon: "⚖️" },
-  { label: "Restaurantes", value: "restaurantes", icon: "🍽️" },
-  { label: "Academias", value: "academias e fitness", icon: "💪" },
+  { label: "Academias", value: "academias fitness", icon: "💪" },
   { label: "E-commerces", value: "lojas online e-commerce", icon: "🛒" },
   { label: "Odontologia", value: "clínicas odontológicas", icon: "🦷" },
-  { label: "Contabilidade", value: "escritórios de contabilidade", icon: "📊" },
-  { label: "Educação", value: "escolas e cursos", icon: "📚" },
-  { label: "Marketing", value: "agências de marketing digital", icon: "📢" },
-  { label: "Pet Shops", value: "pet shops e veterinários", icon: "🐾" },
-  { label: "Tecnologia", value: "empresas de tecnologia e SaaS", icon: "💻" },
+  { label: "Contabilidade", value: "escritórios contabilidade", icon: "📊" },
+  { label: "Educação", value: "escolas cursos", icon: "📚" },
+  { label: "Marketing", value: "agências marketing digital", icon: "📢" },
+  { label: "Pet Shops", value: "pet shops veterinários", icon: "🐾" },
+  { label: "Tecnologia", value: "empresas tecnologia SaaS", icon: "💻" },
 ];
 
-const CITIES = [
-  "", "São Paulo", "Rio de Janeiro", "Belo Horizonte", "Curitiba", "Porto Alegre",
-  "Brasília", "Salvador", "Recife", "Fortaleza", "Goiânia", "Campinas", "Florianópolis",
+const STATES = [
+  "AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG",
+  "PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO",
 ];
 
 export default function Prospecting() {
@@ -69,13 +69,11 @@ export default function Prospecting() {
 
   // Wizard
   const [wizardOpen, setWizardOpen] = useState(false);
-  const [wizardStep, setWizardStep] = useState(1);
   const [selectedNiche, setSelectedNiche] = useState("");
   const [customNiche, setCustomNiche] = useState("");
-  const [keywords, setKeywords] = useState<string[]>([]);
-  const [keywordInput, setKeywordInput] = useState("");
+  const [selectedState, setSelectedState] = useState("");
   const [selectedCity, setSelectedCity] = useState("");
-  const [customCity, setCustomCity] = useState("");
+  const [selectedBairro, setSelectedBairro] = useState("");
   const [leadCount, setLeadCount] = useState(20);
 
   // WhatsApp state
@@ -214,19 +212,12 @@ export default function Prospecting() {
 
   // === Web Scraping ===
   const activeNiche = customNiche || selectedNiche;
-  const activeCity = customCity || selectedCity;
+  const activeLocation = [selectedCity, selectedBairro, selectedState].filter(Boolean).join(", ");
 
   const resetWizard = () => {
-    setWizardStep(1); setSelectedNiche(""); setCustomNiche("");
-    setKeywords([]); setKeywordInput(""); setSelectedCity(""); setCustomCity("");
+    setSelectedNiche(""); setCustomNiche("");
+    setSelectedState(""); setSelectedCity(""); setSelectedBairro("");
     setLeadCount(20);
-  };
-
-  const addKeyword = () => {
-    if (keywordInput.trim() && !keywords.includes(keywordInput.trim())) {
-      setKeywords(prev => [...prev, keywordInput.trim()]);
-      setKeywordInput("");
-    }
   };
 
   const handleScrape = async () => {
@@ -236,7 +227,7 @@ export default function Prospecting() {
 
     const jobId = crypto.randomUUID();
     const newJob: ScrapeJob = {
-      id: jobId, niche: activeNiche, keywords: keywords.join(", "), city: activeCity,
+      id: jobId, niche: activeNiche, keywords: "", city: activeLocation,
       status: "running", results: [], results_count: 0, total_found: 0,
       duplicates_skipped: 0, pages_searched: 0, created_at: new Date().toISOString(),
     };
@@ -247,8 +238,9 @@ export default function Prospecting() {
         body: {
           org_id: profile.org_id,
           niche: activeNiche,
-          keywords: keywords.join(", "),
-          city: activeCity || undefined,
+          city: selectedCity || undefined,
+          state: selectedState || undefined,
+          bairro: selectedBairro || undefined,
           limit: leadCount,
         },
       });
@@ -765,156 +757,86 @@ export default function Prospecting() {
               <Sparkles className="h-4 w-4 text-primary" />
               Nova Pesquisa de Demanda
             </DialogTitle>
-            <DialogDescription className="text-xs">
-              {wizardStep === 1 && "Escolha o segmento e localidade"}
-              {wizardStep === 2 && "Refine a busca e configure quantidade"}
-              {wizardStep === 3 && "Revise e inicie a pesquisa"}
-            </DialogDescription>
+          <DialogDescription className="text-xs">
+              Escolha o segmento, localização e quantidade de empresas
+          </DialogDescription>
           </DialogHeader>
 
-          <div className="flex items-center gap-2 my-1">
-            {[1, 2, 3].map(s => (
-              <div key={s} className="flex items-center gap-2 flex-1">
-                <div className={`h-7 w-7 rounded-full flex items-center justify-center text-xs font-semibold transition-colors ${
-                  s <= wizardStep ? "bg-primary text-primary-foreground" : "bg-secondary text-muted-foreground"
-                }`}>
-                  {s < wizardStep ? <CheckCircle2 className="h-3.5 w-3.5" /> : s}
-                </div>
-                {s < 3 && <div className={`flex-1 h-px transition-colors ${s < wizardStep ? "bg-primary" : "bg-border"}`} />}
+          <div className="space-y-5">
+            {/* Segment */}
+            <div>
+              <Label className="text-sm font-medium">Segmento *</Label>
+              <div className="grid grid-cols-3 gap-2 mt-2">
+                {PRESET_SEGMENTS.map(n => (
+                  <button key={n.value} onClick={() => { setSelectedNiche(n.value); setCustomNiche(""); }}
+                    className={`text-left p-3 rounded-lg border transition-all text-xs ${
+                      selectedNiche === n.value ? "border-primary bg-primary/5 ring-1 ring-primary/30" : "border-border hover:border-primary/30 hover:bg-secondary/50"
+                    }`}>
+                    <span className="text-base">{n.icon}</span>
+                    <p className="font-medium mt-1.5">{n.label}</p>
+                  </button>
+                ))}
               </div>
-            ))}
+              <Input value={customNiche} onChange={e => { setCustomNiche(e.target.value); setSelectedNiche(""); }}
+                placeholder="Ou digite um segmento personalizado..." className="mt-2 text-sm" />
+            </div>
+
+            {/* Location */}
+            <div className="border-t pt-4 space-y-3">
+              <Label className="text-sm font-medium flex items-center gap-1.5"><MapPin className="h-3.5 w-3.5" />Localização *</Label>
+              <div className="grid grid-cols-3 gap-3">
+                <div className="space-y-1">
+                  <Label className="text-xs text-muted-foreground">Estado *</Label>
+                  <Select value={selectedState} onValueChange={setSelectedState}>
+                    <SelectTrigger className="text-sm"><SelectValue placeholder="UF" /></SelectTrigger>
+                    <SelectContent>
+                      {STATES.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs text-muted-foreground">Cidade *</Label>
+                  <Input value={selectedCity} onChange={e => setSelectedCity(e.target.value)}
+                    placeholder="Ex: Taubaté" className="text-sm" />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs text-muted-foreground">Bairro (opcional)</Label>
+                  <Input value={selectedBairro} onChange={e => setSelectedBairro(e.target.value)}
+                    placeholder="Ex: Centro" className="text-sm" />
+                </div>
+              </div>
+            </div>
+
+            {/* Count */}
+            <div className="border-t pt-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <Label className="text-sm font-medium flex items-center gap-1.5"><Building2 className="h-3.5 w-3.5" />Nº de empresas</Label>
+                <Badge variant="outline" className="text-sm font-semibold">{leadCount}</Badge>
+              </div>
+              <Slider value={[leadCount]} onValueChange={v => setLeadCount(v[0])} min={5} max={50} step={5} className="w-full" />
+              <div className="flex justify-between text-[10px] text-muted-foreground">
+                <span>5</span><span>25</span><span>50</span>
+              </div>
+            </div>
+
+            {/* Summary */}
+            {activeNiche && selectedCity && selectedState && (
+              <div className="border rounded-lg p-3 bg-secondary/30 space-y-1.5">
+                <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Resumo da busca</p>
+                <p className="text-sm"><span className="font-medium">{activeNiche}</span> em <span className="font-medium">{activeLocation}</span> — até <span className="font-medium">{leadCount}</span> empresas</p>
+                <p className="text-xs text-muted-foreground">A IA vai buscar empresas reais nessa localidade exata e extrair contatos com telefone, email e dados comerciais.</p>
+              </div>
+            )}
+
           </div>
 
-          {/* Step 1: Niche + City */}
-          {wizardStep === 1 && (
-            <div className="space-y-4">
-              <div>
-                <Label className="text-sm font-medium">Segmento / Nicho *</Label>
-                <div className="grid grid-cols-3 gap-2 mt-2">
-                  {PRESET_NICHES.map(n => (
-                    <button key={n.value} onClick={() => { setSelectedNiche(n.value); setCustomNiche(""); }}
-                      className={`text-left p-3 rounded-lg border transition-all text-xs ${
-                        selectedNiche === n.value ? "border-primary bg-primary/5 ring-1 ring-primary/30" : "border-border hover:border-primary/30 hover:bg-secondary/50"
-                      }`}>
-                      <span className="text-base">{n.icon}</span>
-                      <p className="font-medium mt-1.5">{n.label}</p>
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <div>
-                <Label className="text-xs text-muted-foreground">Ou digite um nicho personalizado</Label>
-                <Input value={customNiche} onChange={e => { setCustomNiche(e.target.value); setSelectedNiche(""); }}
-                  placeholder="Ex: clínicas estéticas, autoescolas..." className="mt-1 text-sm" />
-              </div>
-              <div>
-                <Label className="text-sm font-medium flex items-center gap-1.5"><MapPin className="h-3.5 w-3.5" />Cidade / Região</Label>
-                <Select value={selectedCity} onValueChange={v => { setSelectedCity(v); setCustomCity(""); }}>
-                  <SelectTrigger className="mt-1 text-sm"><SelectValue placeholder="Qualquer cidade" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value=" ">Qualquer cidade</SelectItem>
-                    {CITIES.filter(Boolean).map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-                <Input value={customCity} onChange={e => { setCustomCity(e.target.value); setSelectedCity(""); }}
-                  placeholder="Ou digite uma cidade..." className="mt-1.5 text-sm" />
-              </div>
-            </div>
-          )}
-
-          {/* Step 2: Keywords + Count */}
-          {wizardStep === 2 && (
-            <div className="space-y-4">
-              <div className="space-y-3">
-                <Label className="text-sm font-medium">Palavras-chave (opcional)</Label>
-                <p className="text-xs text-muted-foreground -mt-1">Refine a busca com termos específicos</p>
-                <div className="flex gap-2">
-                  <Input value={keywordInput} onChange={e => setKeywordInput(e.target.value)} placeholder="Ex: vendas, diretor..." className="flex-1 text-sm"
-                    onKeyDown={e => e.key === "Enter" && (e.preventDefault(), addKeyword())} />
-                  <Button variant="outline" size="sm" onClick={addKeyword} className="text-xs">Adicionar</Button>
-                </div>
-                {keywords.length > 0 && (
-                  <div className="flex flex-wrap gap-1.5">
-                    {keywords.map(kw => (
-                      <Badge key={kw} variant="secondary" className="gap-1 pr-1 text-xs">
-                        {kw}
-                        <button onClick={() => setKeywords(prev => prev.filter(k => k !== kw))} className="ml-0.5 hover:text-destructive"><X className="h-3 w-3" /></button>
-                      </Badge>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              <div className="space-y-3 border-t pt-4">
-                <div className="flex items-center justify-between">
-                  <Label className="text-sm font-medium flex items-center gap-1.5"><Hash className="h-3.5 w-3.5" />Quantidade de leads</Label>
-                  <Badge variant="outline" className="text-sm font-semibold">{leadCount}</Badge>
-                </div>
-                <Slider
-                  value={[leadCount]}
-                  onValueChange={v => setLeadCount(v[0])}
-                  min={5}
-                  max={50}
-                  step={5}
-                  className="w-full"
-                />
-                <div className="flex justify-between text-[10px] text-muted-foreground">
-                  <span>5 leads</span>
-                  <span>25 leads</span>
-                  <span>50 leads</span>
-                </div>
-                <p className="text-xs text-muted-foreground">Quanto mais leads, mais páginas serão analisadas (pode demorar mais).</p>
-              </div>
-            </div>
-          )}
-
-          {/* Step 3: Review */}
-          {wizardStep === 3 && (
-            <div className="border rounded-lg p-4 space-y-3 bg-secondary/30">
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Nicho</p>
-                  <p className="text-sm font-medium mt-0.5">{activeNiche}</p>
-                </div>
-                <div>
-                  <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Cidade</p>
-                  <p className="text-sm font-medium mt-0.5">{activeCity || "Qualquer"}</p>
-                </div>
-                <div>
-                  <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Quantidade</p>
-                  <p className="text-sm font-medium mt-0.5">Até {leadCount} leads</p>
-                </div>
-                {keywords.length > 0 && (
-                  <div>
-                    <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Palavras-chave</p>
-                    <div className="flex flex-wrap gap-1 mt-1">
-                      {keywords.map(kw => <Badge key={kw} variant="secondary" className="text-[10px]">{kw}</Badge>)}
-                    </div>
-                  </div>
-                )}
-              </div>
-              <p className="text-xs text-muted-foreground border-t pt-3">
-                A IA vai pesquisar em sites reais, extrair contatos com telefone, email, empresa e cargo, e salvar sem duplicatas.
-              </p>
-            </div>
-          )}
-
-          <DialogFooter className="flex items-center justify-between sm:justify-between">
-            <div>
-              {wizardStep > 1 && <Button variant="ghost" size="sm" onClick={() => setWizardStep(s => s - 1)} className="text-xs">Voltar</Button>}
-            </div>
-            <div className="flex gap-2">
-              {wizardStep < 3 && (
-                <Button onClick={() => setWizardStep(s => s + 1)} size="sm" disabled={wizardStep === 1 && !activeNiche} className="gap-1 text-xs">
-                  Próximo <ChevronRight className="h-3.5 w-3.5" />
-                </Button>
-              )}
-              {wizardStep === 3 && (
-                <Button onClick={handleScrape} size="sm" disabled={scrapingLoading} className="gap-1.5 text-xs">
-                  {scrapingLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Zap className="h-3.5 w-3.5" />}Iniciar Pesquisa
-                </Button>
-              )}
-            </div>
+          <DialogFooter>
+            <Button onClick={handleScrape} size="sm" 
+              disabled={scrapingLoading || !activeNiche || !selectedCity || !selectedState} 
+              className="gap-1.5 text-xs w-full">
+              {scrapingLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Zap className="h-3.5 w-3.5" />}
+              Iniciar Pesquisa
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
