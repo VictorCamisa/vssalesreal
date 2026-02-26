@@ -209,9 +209,9 @@ export default function Landing() {
 
       {/* ═══ NAVBAR ═══ */}
       <nav className="fixed top-0 left-0 right-0 z-50 bg-[#0A0A0F]/80 backdrop-blur-xl border-b border-white/5">
-        <div className="max-w-7xl mx-auto px-5 h-14 flex items-center justify-between">
+        <div className="max-w-7xl mx-auto px-4 sm:px-5 h-14 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <img src={vsLogo} alt="VS Soluções" className="h-9 w-9 object-contain" />
+            <img src={vsLogo} alt="VS Soluções" className="h-8 w-8 sm:h-9 sm:w-9 object-contain" />
             <span style={{ fontFamily: "'Bebas Neue', sans-serif" }} className="text-lg tracking-wider">VS SALES</span>
           </div>
           <div className="hidden md:flex items-center gap-6 text-xs text-gray-400">
@@ -221,9 +221,15 @@ export default function Landing() {
             <a href="#parceiros" className="hover:text-white transition-colors">Parceiros</a>
             <a href="#faq" className="hover:text-white transition-colors">FAQ</a>
           </div>
-          <a href="#acesso" className="text-xs font-medium px-4 py-2 rounded-lg bg-gradient-to-r from-[#00D4FF] to-[#0057FF] text-white hover:shadow-[0_0_20px_rgba(0,212,255,0.3)] transition-all">
-            Quero acesso
-          </a>
+          <div className="flex items-center gap-2 sm:gap-3">
+            <a href="/auth" className="text-xs font-medium px-3 sm:px-4 py-2 rounded-lg border border-white/10 text-gray-300 hover:text-white hover:border-white/25 transition-all">
+              Entrar
+            </a>
+            <a href="#acesso" className="text-xs font-medium px-3 sm:px-4 py-2 rounded-lg bg-gradient-to-r from-[#00D4FF] to-[#0057FF] text-white hover:shadow-[0_0_20px_rgba(0,212,255,0.3)] transition-all">
+              <span className="hidden sm:inline">Quero acesso</span>
+              <span className="sm:hidden">Acesso</span>
+            </a>
+          </div>
         </div>
       </nav>
 
@@ -237,41 +243,41 @@ export default function Landing() {
           backgroundSize: "80px 80px",
         }} />
 
-        <div className="relative z-10 max-w-4xl mx-auto px-5 text-center">
+        <div className="relative z-10 max-w-4xl mx-auto px-4 sm:px-5 text-center">
           <HeroLine delay={200}>
-            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-[#00D4FF]/20 bg-[#00D4FF]/5 text-[10px] text-[#00D4FF] font-medium mb-8 tracking-wider uppercase">
+            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-[#00D4FF]/20 bg-[#00D4FF]/5 text-[10px] text-[#00D4FF] font-medium mb-6 sm:mb-8 tracking-wider uppercase">
               <Sparkles className="h-3 w-3" /> Powered by VS Soluções Labs
             </div>
           </HeroLine>
 
           <h1
             style={{ fontFamily: "'Bebas Neue', sans-serif" }}
-            className="text-5xl sm:text-7xl md:text-8xl lg:text-9xl leading-[0.9] tracking-tight mb-6"
+            className="text-4xl sm:text-7xl md:text-8xl lg:text-9xl leading-[0.9] tracking-tight mb-5 sm:mb-6"
           >
             <HeroLine delay={400}>Prospecção.</HeroLine>
             <HeroLine delay={600}>Qualificação.</HeroLine>
             <HeroLine delay={800} className="bg-gradient-to-r from-[#00D4FF] to-[#00FF88] bg-clip-text text-transparent glitch-text">Fechamento.</HeroLine>
-            <HeroLine delay={1100} className="text-gray-500 text-3xl sm:text-4xl md:text-5xl mt-2">Sem humanos.</HeroLine>
+            <HeroLine delay={1100} className="text-gray-500 text-2xl sm:text-4xl md:text-5xl mt-2">Sem humanos.</HeroLine>
           </h1>
 
           <HeroLine delay={1400}>
-            <p className="text-gray-400 max-w-xl mx-auto text-sm md:text-base leading-relaxed mb-8">
+            <p className="text-gray-400 max-w-xl mx-auto text-xs sm:text-sm md:text-base leading-relaxed mb-6 sm:mb-8 px-2">
               O VS SALES substitui sua equipe comercial inteira com IA. SDR, BDR, Closer — tudo automatizado, 24/7, por uma fração do custo.
             </p>
           </HeroLine>
 
           <HeroLine delay={1700}>
-            <div className="flex flex-col sm:flex-row items-center justify-center gap-3 mb-12">
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-3 mb-8 sm:mb-12 px-2">
               <a
                 href="#acesso"
-                className="group flex items-center gap-2 px-6 py-3 rounded-lg bg-gradient-to-r from-[#00D4FF] to-[#0057FF] font-medium text-sm hover:shadow-[0_0_30px_rgba(0,212,255,0.4)] transition-all duration-300 hover:scale-[1.03]"
+                className="group flex items-center gap-2 px-5 sm:px-6 py-3 rounded-lg bg-gradient-to-r from-[#00D4FF] to-[#0057FF] font-medium text-xs sm:text-sm hover:shadow-[0_0_30px_rgba(0,212,255,0.4)] transition-all duration-300 hover:scale-[1.03] w-full sm:w-auto justify-center"
               >
                 Quero ver o VS SALES em ação
                 <ArrowRight className="h-4 w-4 group-hover:translate-x-1 transition-transform duration-300" />
               </a>
               <a
                 href="#como-funciona"
-                className="flex items-center gap-2 px-6 py-3 rounded-lg border border-white/10 text-sm text-gray-300 hover:border-white/25 hover:text-white transition-all duration-300"
+                className="flex items-center gap-2 px-5 sm:px-6 py-3 rounded-lg border border-white/10 text-xs sm:text-sm text-gray-300 hover:border-white/25 hover:text-white transition-all duration-300 w-full sm:w-auto justify-center"
               >
                 Como funciona?
               </a>
@@ -280,26 +286,26 @@ export default function Landing() {
 
           {/* Counters */}
           <HeroLine delay={2000}>
-            <div className="flex items-center justify-center gap-8 md:gap-12 text-center">
+            <div className="flex items-center justify-center gap-4 sm:gap-8 md:gap-12 text-center">
               <div>
-                <p className="text-2xl md:text-3xl font-bold text-white" style={{ fontFamily: "'Bebas Neue', sans-serif", letterSpacing: "0.05em" }}>
+                <p className="text-xl sm:text-2xl md:text-3xl font-bold text-white" style={{ fontFamily: "'Bebas Neue', sans-serif", letterSpacing: "0.05em" }}>
                   <Counter end={12400} />
                 </p>
-                <p className="text-[10px] text-gray-500 uppercase tracking-wider mt-1">Leads qualificados</p>
+                <p className="text-[9px] sm:text-[10px] text-gray-500 uppercase tracking-wider mt-1">Leads qualificados</p>
               </div>
-              <div className="h-8 w-px bg-white/10" />
+              <div className="h-6 sm:h-8 w-px bg-white/10" />
               <div>
-                <p className="text-2xl md:text-3xl font-bold text-white" style={{ fontFamily: "'Bebas Neue', sans-serif", letterSpacing: "0.05em" }}>
+                <p className="text-xl sm:text-2xl md:text-3xl font-bold text-white" style={{ fontFamily: "'Bebas Neue', sans-serif", letterSpacing: "0.05em" }}>
                   <Counter end={8300} suffix="h" />
                 </p>
-                <p className="text-[10px] text-gray-500 uppercase tracking-wider mt-1">Horas economizadas</p>
+                <p className="text-[9px] sm:text-[10px] text-gray-500 uppercase tracking-wider mt-1">Horas economizadas</p>
               </div>
-              <div className="h-8 w-px bg-white/10" />
+              <div className="h-6 sm:h-8 w-px bg-white/10" />
               <div>
-                <p className="text-2xl md:text-3xl font-bold text-[#00FF88]" style={{ fontFamily: "'Bebas Neue', sans-serif", letterSpacing: "0.05em" }}>
+                <p className="text-xl sm:text-2xl md:text-3xl font-bold text-[#00FF88]" style={{ fontFamily: "'Bebas Neue', sans-serif", letterSpacing: "0.05em" }}>
                   <Counter end={97} suffix="%" />
                 </p>
-                <p className="text-[10px] text-gray-500 uppercase tracking-wider mt-1">Satisfação</p>
+                <p className="text-[9px] sm:text-[10px] text-gray-500 uppercase tracking-wider mt-1">Satisfação</p>
               </div>
             </div>
           </HeroLine>
@@ -310,18 +316,18 @@ export default function Landing() {
       </section>
 
       {/* ═══ 2. O PROBLEMA ═══ */}
-      <section id="problema" className="py-24 md:py-32 relative">
-        <div className="max-w-6xl mx-auto px-5">
+      <section id="problema" className="py-16 sm:py-24 md:py-32 relative">
+        <div className="max-w-6xl mx-auto px-4 sm:px-5">
           <Reveal>
             <p className="text-[10px] uppercase tracking-[0.3em] text-[#00D4FF] font-medium mb-3">O problema</p>
-            <h2 style={{ fontFamily: "'Bebas Neue', sans-serif" }} className="text-3xl md:text-5xl tracking-tight mb-4">
-              Você ainda paga salário para alguém<br />
+            <h2 style={{ fontFamily: "'Bebas Neue', sans-serif" }} className="text-2xl sm:text-3xl md:text-5xl tracking-tight mb-4">
+              Você ainda paga salário para alguém<br className="hidden sm:block" />
               <span className="text-gray-500">procurar lead no LinkedIn?</span>
             </h2>
-            <p className="text-gray-400 text-sm max-w-xl mb-12">Enquanto isso, sua concorrência já opera com IA 24/7.</p>
+            <p className="text-gray-400 text-xs sm:text-sm max-w-xl mb-8 sm:mb-12">Enquanto isso, sua concorrência já opera com IA 24/7.</p>
           </Reveal>
 
-          <div className="grid md:grid-cols-2 gap-4 mb-12">
+          <div className="grid sm:grid-cols-2 gap-3 sm:gap-4 mb-8 sm:mb-12">
             {[
               { icon: Users, title: "SDR custa R$ 3.500/mês", desc: "E prospecta no máximo 40 leads por dia. Nos bons dias." },
               { icon: Target, title: "BDR qualifica errado", desc: "Desperdiça o tempo do Closer com leads que nunca vão comprar." },
@@ -329,10 +335,10 @@ export default function Landing() {
               { icon: BarChart3, title: "Planilha e CRM desatualizado", desc: "Follow-up esquecido. Pipeline fictício. Forecast que nunca bate." },
             ].map((card, i) => (
               <Reveal key={card.title} delay={i * 100}>
-                <div className="group p-5 rounded-xl border border-[#1a1a2e] bg-[#0d0d18]/60 hover:border-red-500/20 hover:bg-red-500/[0.03] transition-all duration-300">
-                  <card.icon className="h-5 w-5 text-red-400/70 mb-3" />
-                  <h3 className="text-sm font-semibold text-white mb-1">{card.title}</h3>
-                  <p className="text-xs text-gray-500 leading-relaxed">{card.desc}</p>
+                <div className="group p-4 sm:p-5 rounded-xl border border-[#1a1a2e] bg-[#0d0d18]/60 hover:border-red-500/20 hover:bg-red-500/[0.03] transition-all duration-300">
+                  <card.icon className="h-5 w-5 text-red-400/70 mb-2 sm:mb-3" />
+                  <h3 className="text-xs sm:text-sm font-semibold text-white mb-1">{card.title}</h3>
+                  <p className="text-[10px] sm:text-xs text-gray-500 leading-relaxed">{card.desc}</p>
                 </div>
               </Reveal>
             ))}
@@ -363,21 +369,21 @@ export default function Landing() {
       </section>
 
       {/* ═══ 3. COMO FUNCIONA ═══ */}
-      <section id="como-funciona" className="py-24 md:py-36 relative overflow-hidden">
+      <section id="como-funciona" className="py-16 sm:py-24 md:py-36 relative overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-b from-transparent via-[#00D4FF]/[0.02] to-transparent" />
-        <div className="max-w-6xl mx-auto px-5 relative z-10">
+        <div className="max-w-6xl mx-auto px-4 sm:px-5 relative z-10">
           <Reveal>
             <p className="text-[10px] uppercase tracking-[0.3em] text-[#00D4FF] font-medium mb-3 text-center">Como funciona</p>
-            <h2 style={{ fontFamily: "'Bebas Neue', sans-serif" }} className="text-3xl md:text-5xl tracking-tight mb-3 text-center">
+            <h2 style={{ fontFamily: "'Bebas Neue', sans-serif" }} className="text-2xl sm:text-3xl md:text-5xl tracking-tight mb-3 text-center">
               Um sistema. Quatro papéis.
             </h2>
-            <p style={{ fontFamily: "'Bebas Neue', sans-serif" }} className="text-3xl md:text-5xl tracking-tight mb-16 text-center text-gray-500">
+            <p style={{ fontFamily: "'Bebas Neue', sans-serif" }} className="text-2xl sm:text-3xl md:text-5xl tracking-tight mb-10 sm:mb-16 text-center text-gray-500">
               Zero desperdício.
             </p>
           </Reveal>
 
           {/* Horizontal pipeline */}
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-6 md:gap-4">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4 sm:gap-6 md:gap-4">
             {[
               { icon: Search, emoji: "🔍", title: "Prospecção Inteligente", desc: "IA rastreia e mapeia leads do ICP ideal em tempo real.", color: "#00D4FF" },
               { icon: PuzzleIcon, emoji: "🧩", title: "Enriquecimento", desc: "Contato, empresa, cargo e redes sociais completados.", color: "#00A0FF" },
@@ -455,20 +461,20 @@ export default function Landing() {
       </section>
 
       {/* ═══ 5. PLANOS + COMPARATIVO ═══ */}
-      <section id="comparativo" className="py-24 md:py-32">
-        <div className="max-w-6xl mx-auto px-5">
+      <section id="comparativo" className="py-16 sm:py-24 md:py-32">
+        <div className="max-w-6xl mx-auto px-4 sm:px-5">
           <Reveal>
             <p className="text-[10px] uppercase tracking-[0.3em] text-[#00D4FF] font-medium mb-3 text-center">Planos & Preços</p>
-            <h2 style={{ fontFamily: "'Bebas Neue', sans-serif" }} className="text-3xl md:text-5xl tracking-tight mb-4 text-center">
+            <h2 style={{ fontFamily: "'Bebas Neue', sans-serif" }} className="text-2xl sm:text-3xl md:text-5xl tracking-tight mb-4 text-center">
               Escolha o plano ideal<br /><span className="text-gray-500">para sua operação.</span>
             </h2>
-            <p className="text-sm text-gray-500 text-center mb-12 max-w-2xl mx-auto">
+            <p className="text-xs sm:text-sm text-gray-500 text-center mb-8 sm:mb-12 max-w-2xl mx-auto">
               Todos os planos incluem operação 24/7, integração com CRM e suporte dedicado. Cancele quando quiser.
             </p>
           </Reveal>
 
           {/* Pricing Cards */}
-          <div className="grid md:grid-cols-3 gap-5 mb-20">
+          <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-4 sm:gap-5 mb-12 sm:mb-20">
             {[
               {
                 name: "Starter",
@@ -814,27 +820,27 @@ export default function Landing() {
       </section>
 
       {/* Footer */}
-      <footer className="border-t border-[#1a1a2e] py-10">
-        <div className="max-w-6xl mx-auto px-5">
-          <div className="flex flex-col md:flex-row items-center justify-between gap-6">
+      <footer className="border-t border-[#1a1a2e] py-8 sm:py-10">
+        <div className="max-w-6xl mx-auto px-4 sm:px-5">
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-4 sm:gap-6">
             <div className="flex items-center gap-2">
               <img src={vsLogo} alt="VS Soluções" className="h-7 w-7 object-contain" />
               <div>
                 <span className="text-xs font-semibold text-white">VS Soluções</span>
-                <span className="text-[10px] text-gray-600 ml-2">Tecnologia que substitui. Resultado que comprova.</span>
+                <span className="text-[10px] text-gray-600 ml-2 hidden sm:inline">Tecnologia que substitui. Resultado que comprova.</span>
               </div>
             </div>
-            <div className="flex items-center gap-6 text-[10px] text-gray-600">
-              <a href="#" className="hover:text-gray-400 transition-colors">Política de Privacidade</a>
-              <a href="#" className="hover:text-gray-400 transition-colors">Termos de Uso</a>
+            <div className="flex items-center gap-4 sm:gap-6 text-[10px] text-gray-600 flex-wrap justify-center">
+              <a href="#" className="hover:text-gray-400 transition-colors">Privacidade</a>
+              <a href="#" className="hover:text-gray-400 transition-colors">Termos</a>
               <a href="#" className="hover:text-gray-400 transition-colors">Contato</a>
+              <a href="/auth" className="hover:text-[#00D4FF] transition-colors">Entrar</a>
               <a href="/admin" className="hover:text-[#00D4FF] transition-colors flex items-center gap-1">
-                <Shield className="h-3 w-3" />
-                Página do Admin
+                <Shield className="h-3 w-3" />Admin
               </a>
             </div>
           </div>
-          <p className="text-[10px] text-gray-700 text-center mt-6">© 2026 VS Soluções. Todos os direitos reservados.</p>
+          <p className="text-[10px] text-gray-700 text-center mt-4 sm:mt-6">© 2026 VS Soluções. Todos os direitos reservados.</p>
         </div>
       </footer>
 

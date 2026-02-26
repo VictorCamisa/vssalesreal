@@ -64,50 +64,50 @@ export default function Index() {
   ];
 
   return (
-    <div className="space-y-5 max-w-5xl">
+    <div className="space-y-4 sm:space-y-5 max-w-5xl">
       {/* Welcome */}
       <div>
-        <h1 className="page-title">
+        <h1 className="page-title text-base sm:text-lg">
           Olá, {profile?.full_name?.split(" ")[0] || "Usuário"} 👋
         </h1>
         <p className="page-description">Aqui está o resumo da sua operação.</p>
       </div>
 
       {/* KPI Cards */}
-      <div className="grid gap-3 grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+      <div className="grid gap-2.5 sm:gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-6">
         {cards.map((card) => (
-          <div key={card.title} className="stat-card">
-            <div className={`flex h-8 w-8 items-center justify-center rounded-lg ${card.bg} mb-3`}>
-              <card.icon className={`h-4 w-4 ${card.accent}`} />
+          <div key={card.title} className="stat-card p-3 sm:p-4">
+            <div className={`flex h-7 w-7 sm:h-8 sm:w-8 items-center justify-center rounded-lg ${card.bg} mb-2 sm:mb-3`}>
+              <card.icon className={`h-3.5 w-3.5 sm:h-4 sm:w-4 ${card.accent}`} />
             </div>
             {loading ? (
               <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
             ) : (
-              <p className="text-xl font-semibold tracking-tight">{card.value}</p>
+              <p className="text-lg sm:text-xl font-semibold tracking-tight">{card.value}</p>
             )}
-            <p className="text-[11px] text-muted-foreground mt-0.5">{card.title}</p>
+            <p className="text-[10px] sm:text-[11px] text-muted-foreground mt-0.5">{card.title}</p>
           </div>
         ))}
       </div>
 
       {/* Quick Actions */}
       <div>
-        <p className="text-xs font-medium text-muted-foreground mb-2.5 uppercase tracking-wider">Ações rápidas</p>
-        <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
+        <p className="text-[10px] sm:text-xs font-medium text-muted-foreground mb-2 sm:mb-2.5 uppercase tracking-wider">Ações rápidas</p>
+        <div className="grid gap-2 sm:gap-2.5 grid-cols-2 lg:grid-cols-3">
           {quickActions.map((action) => (
             <Link
               key={action.label}
               to={action.href}
-              className="glass-card p-3.5 flex items-center gap-3 group hover:border-primary/20 hover:shadow-md transition-all duration-200"
+              className="glass-card p-3 sm:p-3.5 flex items-center gap-2.5 sm:gap-3 group hover:border-primary/20 hover:shadow-md transition-all duration-200"
             >
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-secondary/80">
-                <action.icon className={`h-4 w-4 ${action.accent}`} />
+              <div className="flex h-8 w-8 sm:h-9 sm:w-9 shrink-0 items-center justify-center rounded-lg bg-secondary/80">
+                <action.icon className={`h-3.5 w-3.5 sm:h-4 sm:w-4 ${action.accent}`} />
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-[13px] font-medium group-hover:text-primary transition-colors">{action.label}</p>
-                <p className="text-[11px] text-muted-foreground">{action.desc}</p>
+                <p className="text-[12px] sm:text-[13px] font-medium group-hover:text-primary transition-colors">{action.label}</p>
+                <p className="text-[10px] sm:text-[11px] text-muted-foreground">{action.desc}</p>
               </div>
-              <ArrowRight className="h-3.5 w-3.5 text-muted-foreground/30 group-hover:text-primary/50 transition-colors" />
+              <ArrowRight className="h-3 w-3 sm:h-3.5 sm:w-3.5 text-muted-foreground/30 group-hover:text-primary/50 transition-colors hidden sm:block" />
             </Link>
           ))}
         </div>
@@ -115,30 +115,30 @@ export default function Index() {
 
       {/* Pipeline Summary */}
       {stats.opportunities > 0 && (
-        <div className="glass-card p-4">
-          <div className="flex items-center justify-between mb-3">
+        <div className="glass-card p-3 sm:p-4">
+          <div className="flex items-center justify-between mb-2.5 sm:mb-3">
             <div className="flex items-center gap-2">
               <Kanban className="h-4 w-4 text-muted-foreground" />
-              <p className="text-sm font-medium">Pipeline ativo</p>
+              <p className="text-xs sm:text-sm font-medium">Pipeline ativo</p>
             </div>
-            <Link to="/crm" className="text-xs text-primary hover:underline flex items-center gap-1">
+            <Link to="/crm" className="text-[10px] sm:text-xs text-primary hover:underline flex items-center gap-1">
               Ver CRM <ArrowRight className="h-3 w-3" />
             </Link>
           </div>
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3 sm:gap-4">
             <div>
-              <p className="text-2xl font-semibold">{stats.opportunities}</p>
-              <p className="text-[11px] text-muted-foreground">oportunidades</p>
+              <p className="text-xl sm:text-2xl font-semibold">{stats.opportunities}</p>
+              <p className="text-[10px] sm:text-[11px] text-muted-foreground">oportunidades</p>
             </div>
             <div className="h-8 w-px bg-border" />
             <div>
-              <p className="text-2xl font-semibold">{stats.converted}</p>
-              <p className="text-[11px] text-muted-foreground">convertidos</p>
+              <p className="text-xl sm:text-2xl font-semibold">{stats.converted}</p>
+              <p className="text-[10px] sm:text-[11px] text-muted-foreground">convertidos</p>
             </div>
             <div className="h-8 w-px bg-border" />
             <div>
-              <p className="text-2xl font-semibold text-primary">{conversionRate}%</p>
-              <p className="text-[11px] text-muted-foreground">taxa</p>
+              <p className="text-xl sm:text-2xl font-semibold text-primary">{conversionRate}%</p>
+              <p className="text-[10px] sm:text-[11px] text-muted-foreground">taxa</p>
             </div>
           </div>
         </div>
