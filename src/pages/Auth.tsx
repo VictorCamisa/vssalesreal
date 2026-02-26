@@ -3,165 +3,218 @@ import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { lovable } from "@/integrations/lovable/index";
 import vsLogo from "@/assets/vs-sales-logo.png";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { Separator } from "@/components/ui/separator";
-import { Rocket, Mail, Lock, CheckCircle2, Brain, MessageCircle, TrendingUp, ArrowLeft } from "lucide-react";
+import { Mail, Lock, Eye, EyeOff, ArrowRight, Zap } from "lucide-react";
 
 export default function Auth() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
   const { toast } = useToast();
   const navigate = useNavigate();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-
     try {
-        const { error } = await supabase.auth.signInWithPassword({ email, password });
-        if (error) throw error;
-        navigate("/");
+      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) throw error;
+      navigate("/");
     } catch (error: any) {
-      toast({
-        title: "Erro",
-        description: error.message,
-        variant: "destructive",
-      });
+      toast({ title: "Erro ao entrar", description: error.message, variant: "destructive" });
     } finally {
       setLoading(false);
     }
   };
 
-  const benefits = [
-    { icon: Brain, text: "Agente de IA que qualifica e fecha vendas 24/7" },
-    { icon: MessageCircle, text: "Integração direta com WhatsApp via Evolution API" },
-    { icon: TrendingUp, text: "Dashboard com métricas em tempo real" },
-    { icon: CheckCircle2, text: "Extração automática de leads de grupos e conversas" },
-  ];
+  const handleGoogle = async () => {
+    setGoogleLoading(true);
+    try {
+      const { error } = await lovable.auth.signInWithOAuth("google", {
+        redirect_uri: window.location.origin,
+      });
+      if (error) throw error;
+    } catch (error: any) {
+      toast({ title: "Erro", description: error.message, variant: "destructive" });
+      setGoogleLoading(false);
+    }
+  };
 
   return (
-    <div className="flex min-h-screen">
-      {/* Left: Form */}
-      <div className="flex flex-1 items-center justify-center bg-background px-4 py-8 sm:p-6 lg:p-12">
-        <div className="w-full max-w-md space-y-6 sm:space-y-8 animate-fade-in">
-          <Button variant="ghost" size="sm" className="self-start" onClick={() => navigate("/site")}>
-            <ArrowLeft className="h-4 w-4 mr-1" /> Voltar ao site
-          </Button>
-          {/* Logo */}
-          <div className="flex flex-col items-center gap-3 sm:gap-4 lg:items-start">
-            <img src={vsLogo} alt="VS SALES" className="h-12 sm:h-14 w-auto" />
-            <div className="text-center lg:text-left">
-              <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">VS SALES</h1>
-              <p className="text-xs sm:text-sm text-muted-foreground mt-1">por VS Soluções</p>
-            </div>
-          </div>
+    <div className="min-h-screen flex items-center justify-center relative overflow-hidden" style={{ background: "#06060F" }}>
+      {/* Background effects */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        {/* Radial glow top */}
+        <div
+          className="absolute -top-[40%] left-1/2 -translate-x-1/2 w-[800px] h-[800px] rounded-full opacity-[0.07]"
+          style={{ background: "radial-gradient(circle, hsl(221 83% 53%), transparent 70%)" }}
+        />
+        {/* Radial glow bottom-right */}
+        <div
+          className="absolute -bottom-[30%] -right-[10%] w-[600px] h-[600px] rounded-full opacity-[0.05]"
+          style={{ background: "radial-gradient(circle, hsl(190 90% 50%), transparent 70%)" }}
+        />
+        {/* Grid pattern */}
+        <div
+          className="absolute inset-0 opacity-[0.03]"
+          style={{
+            backgroundImage: `linear-gradient(rgba(255,255,255,0.1) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.1) 1px, transparent 1px)`,
+            backgroundSize: "60px 60px",
+          }}
+        />
+      </div>
 
-          {/* Form Card */}
-          <div className="glass rounded-2xl p-5 sm:p-6 space-y-4 sm:space-y-5">
-            <div>
-              <h2 className="text-base sm:text-lg font-semibold">Entrar</h2>
-              <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">
-                Acesse sua conta para continuar
-              </p>
-            </div>
-
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="email" className="text-xs font-medium">Email</Label>
-                <div className="relative">
-                  <Mail className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    id="email" type="email" placeholder="seu@email.com"
-                    value={email} onChange={(e) => setEmail(e.target.value)}
-                    className="pl-10 h-11 rounded-xl bg-secondary/50 border-border/50 focus:border-primary/50" required
-                  />
-                </div>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="password" className="text-xs font-medium">Senha</Label>
-                <div className="relative">
-                  <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    id="password" type="password" placeholder="••••••••"
-                    value={password} onChange={(e) => setPassword(e.target.value)}
-                    className="pl-10 h-11 rounded-xl bg-secondary/50 border-border/50 focus:border-primary/50" required minLength={6}
-                  />
-                </div>
-              </div>
-              <Button type="submit" className="w-full h-11 rounded-xl gradient-primary hover:opacity-90 transition-opacity font-semibold" disabled={loading}>
-                {loading ? "Carregando..." : "Entrar"}
-              </Button>
-            </form>
-
-            <div className="relative">
-              <Separator className="opacity-30" />
-              <span className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 bg-card/60 backdrop-blur px-3 text-[11px] text-muted-foreground">
-                ou continue com
-              </span>
-            </div>
-
-            <Button
-              type="button" variant="outline"
-              className="w-full h-11 rounded-xl border-border/50 hover:bg-secondary/50"
-              onClick={async () => {
-                const { error } = await lovable.auth.signInWithOAuth("google", {
-                  redirect_uri: window.location.origin,
-                });
-                if (error) {
-                  toast({ title: "Erro", description: error.message, variant: "destructive" });
-                }
-              }}
+      {/* Login card */}
+      <div className="relative z-10 w-full max-w-[420px] mx-4 animate-fade-in">
+        {/* Header */}
+        <div className="flex flex-col items-center mb-8">
+          <div className="flex items-center gap-3 mb-3">
+            <img src={vsLogo} alt="VS SALES" className="h-10 w-10 object-contain" />
+            <span
+              className="text-xl font-bold tracking-[0.15em] text-white"
+              style={{ fontFamily: "'Inter', sans-serif" }}
             >
-              <svg className="mr-2 h-4 w-4" viewBox="0 0 24 24">
+              VS SALES
+            </span>
+          </div>
+          <p className="text-sm text-[#7a7f9a]">
+            Plataforma inteligente de vendas
+          </p>
+        </div>
+
+        {/* Card */}
+        <div
+          className="rounded-2xl p-[1px]"
+          style={{
+            background: "linear-gradient(135deg, rgba(59,130,246,0.2), rgba(59,130,246,0.05) 40%, rgba(255,255,255,0.03) 60%, rgba(6,182,212,0.1))",
+          }}
+        >
+          <div className="rounded-2xl px-7 py-8 sm:px-8 sm:py-9" style={{ background: "#0C0C1A" }}>
+            <h2 className="text-lg font-semibold text-white mb-1">Bem-vindo de volta</h2>
+            <p className="text-[13px] text-[#6b7094] mb-7">Entre com suas credenciais para acessar</p>
+
+            {/* Google button */}
+            <button
+              onClick={handleGoogle}
+              disabled={googleLoading}
+              className="w-full h-11 rounded-xl flex items-center justify-center gap-2.5 text-sm font-medium transition-all duration-200 disabled:opacity-50 mb-6"
+              style={{
+                background: "#12122a",
+                border: "1px solid rgba(255,255,255,0.06)",
+                color: "#c8cce0",
+              }}
+              onMouseEnter={e => (e.currentTarget.style.borderColor = "rgba(255,255,255,0.12)")}
+              onMouseLeave={e => (e.currentTarget.style.borderColor = "rgba(255,255,255,0.06)")}
+            >
+              <svg className="h-4 w-4" viewBox="0 0 24 24">
                 <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.27-4.74 3.27-8.1z" fill="#4285F4"/>
                 <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
                 <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
                 <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
               </svg>
-              Continuar com Google
-            </Button>
+              {googleLoading ? "Conectando..." : "Continuar com Google"}
+            </button>
 
+            {/* Divider */}
+            <div className="flex items-center gap-3 mb-6">
+              <div className="flex-1 h-px" style={{ background: "rgba(255,255,255,0.06)" }} />
+              <span className="text-[11px] text-[#4a4e6a] uppercase tracking-widest font-medium">ou</span>
+              <div className="flex-1 h-px" style={{ background: "rgba(255,255,255,0.06)" }} />
+            </div>
+
+            {/* Form */}
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div className="space-y-1.5">
+                <label className="text-[12px] font-medium text-[#8b90b0] ml-0.5">Email</label>
+                <div className="relative">
+                  <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-[#4a4e6a]" />
+                  <input
+                    type="email"
+                    placeholder="nome@empresa.com"
+                    value={email}
+                    onChange={e => setEmail(e.target.value)}
+                    required
+                    className="w-full h-11 pl-10 pr-4 rounded-xl text-sm text-white placeholder:text-[#3a3e58] outline-none transition-all duration-200 focus:ring-1"
+                    style={{
+                      background: "#0A0A1E",
+                      border: "1px solid rgba(255,255,255,0.06)",
+                    }}
+                    onFocus={e => { e.currentTarget.style.borderColor = "rgba(59,130,246,0.4)"; e.currentTarget.style.boxShadow = "0 0 0 3px rgba(59,130,246,0.08)"; }}
+                    onBlur={e => { e.currentTarget.style.borderColor = "rgba(255,255,255,0.06)"; e.currentTarget.style.boxShadow = "none"; }}
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-[12px] font-medium text-[#8b90b0] ml-0.5">Senha</label>
+                <div className="relative">
+                  <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-[#4a4e6a]" />
+                  <input
+                    type={showPassword ? "text" : "password"}
+                    placeholder="••••••••"
+                    value={password}
+                    onChange={e => setPassword(e.target.value)}
+                    required
+                    minLength={6}
+                    className="w-full h-11 pl-10 pr-11 rounded-xl text-sm text-white placeholder:text-[#3a3e58] outline-none transition-all duration-200"
+                    style={{
+                      background: "#0A0A1E",
+                      border: "1px solid rgba(255,255,255,0.06)",
+                    }}
+                    onFocus={e => { e.currentTarget.style.borderColor = "rgba(59,130,246,0.4)"; e.currentTarget.style.boxShadow = "0 0 0 3px rgba(59,130,246,0.08)"; }}
+                    onBlur={e => { e.currentTarget.style.borderColor = "rgba(255,255,255,0.06)"; e.currentTarget.style.boxShadow = "none"; }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3.5 top-1/2 -translate-y-1/2 text-[#4a4e6a] hover:text-[#8b90b0] transition-colors"
+                  >
+                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full h-11 rounded-xl text-sm font-semibold text-white flex items-center justify-center gap-2 transition-all duration-200 disabled:opacity-50 mt-2 group"
+                style={{
+                  background: "linear-gradient(135deg, hsl(221 83% 50%), hsl(221 83% 60%))",
+                  boxShadow: "0 4px 15px -3px rgba(59,130,246,0.3), inset 0 1px 0 rgba(255,255,255,0.1)",
+                }}
+                onMouseEnter={e => (e.currentTarget.style.boxShadow = "0 6px 25px -3px rgba(59,130,246,0.45), inset 0 1px 0 rgba(255,255,255,0.15)")}
+                onMouseLeave={e => (e.currentTarget.style.boxShadow = "0 4px 15px -3px rgba(59,130,246,0.3), inset 0 1px 0 rgba(255,255,255,0.1)")}
+              >
+                {loading ? (
+                  <div className="h-4 w-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                ) : (
+                  <>
+                    Entrar
+                    <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
+                  </>
+                )}
+              </button>
+            </form>
           </div>
         </div>
-      </div>
 
-      {/* Right: Banner */}
-      <div className="hidden lg:flex flex-1 items-center justify-center gradient-primary relative overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-br from-primary/0 via-transparent to-primary-foreground/10" />
-        <div className="relative z-10 max-w-lg p-12 space-y-8">
-          <div>
-            <h2 className="text-4xl font-bold text-primary-foreground leading-tight">
-              Vendas 100%<br />gerenciadas por IA
-            </h2>
-            <p className="text-primary-foreground/80 mt-4 text-lg">
-              Conecte seu WhatsApp, extraia contatos e deixe a Inteligência Artificial qualificar e fechar vendas automaticamente.
-            </p>
-          </div>
+        {/* Footer */}
+        <div className="flex items-center justify-center gap-2 mt-8 text-[12px] text-[#4a4e6a]">
+          <Zap className="h-3 w-3" />
+          <span>Powered by</span>
+          <span className="font-semibold text-[#6b7094]">VS Soluções</span>
+        </div>
 
-          <div className="space-y-4">
-            {benefits.map((b, i) => (
-              <div key={i} className="flex items-center gap-3 text-primary-foreground/90">
-                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary-foreground/15 shrink-0">
-                  <b.icon className="h-4 w-4" />
-                </div>
-                <span className="text-sm">{b.text}</span>
-              </div>
-            ))}
-          </div>
-
-          <div className="flex items-center gap-3 pt-4">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary-foreground/15">
-              <Rocket className="h-5 w-5 text-primary-foreground" />
-            </div>
-            <div>
-              <p className="text-primary-foreground font-bold text-sm">VS Soluções</p>
-              <p className="text-primary-foreground/60 text-xs">Fábrica de Ecossistemas Operacionais</p>
-            </div>
-          </div>
+        {/* Back link */}
+        <div className="text-center mt-4">
+          <button
+            onClick={() => navigate("/site")}
+            className="text-[12px] text-[#4a4e6a] hover:text-[#8b90b0] transition-colors"
+          >
+            ← Voltar ao site
+          </button>
         </div>
       </div>
     </div>
