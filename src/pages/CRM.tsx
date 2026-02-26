@@ -195,12 +195,15 @@ export default function CRM() {
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
-  // Map DB stages to pipeline definition by order
+  // Map DB stages to pipeline definition by name (robust matching)
   const stageMap = useMemo(() => {
     const map = new Map<string, typeof PIPELINE_STAGES[0]>();
-    stages.forEach((s, i) => {
-      if (i < PIPELINE_STAGES.length) {
-        map.set(s.id, PIPELINE_STAGES[i]);
+    stages.forEach((s) => {
+      // Match by name (case-insensitive, trimmed)
+      const normalizedName = s.name.trim().toLowerCase();
+      const def = PIPELINE_STAGES.find(p => p.name.toLowerCase() === normalizedName);
+      if (def) {
+        map.set(s.id, def);
       }
     });
     return map;
