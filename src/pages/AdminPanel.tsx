@@ -9,10 +9,10 @@ import {
   Edit3, Save, X, Search, ShoppingCart, MessageCircle,
   CheckCircle2, XCircle, AlertCircle,
   DollarSign, RefreshCw, UserPlus, Copy,
-  Loader2, Trash2
+  Loader2, Trash2, User
 } from "lucide-react";
 
-type Tab = "metrics" | "sales" | "users" | "leads" | "content";
+type Tab = "metrics" | "pending" | "users" | "leads" | "content";
 
 interface SiteLead {
   id: string;
@@ -228,9 +228,11 @@ export default function AdminPanel() {
     return (u.full_name || "").toLowerCase().includes(q) || (u.email || "").toLowerCase().includes(q);
   });
 
+  const pendingUsers = users.filter(u => !u.org_id);
+
   const tabs: { key: Tab; label: string; icon: React.ElementType; badge?: number }[] = [
     { key: "metrics", label: "Métricas", icon: BarChart3 },
-    { key: "sales", label: "Vendas", icon: ShoppingCart, badge: pendingSales.length },
+    { key: "pending", label: "Pendentes", icon: AlertCircle, badge: pendingSales.length + pendingUsers.length },
     { key: "users", label: "Usuários", icon: Users },
     { key: "leads", label: "Formulários", icon: FileText },
     { key: "content", label: "Conteúdo", icon: Settings },
@@ -496,7 +498,7 @@ export default function AdminPanel() {
         <header className="h-14 border-b border-[#1a1a2e] flex items-center justify-between px-6 bg-[#0A0A14]/50 backdrop-blur-sm sticky top-0 z-10">
           <h1 className="text-sm font-semibold text-white">{tabs.find(t => t.key === tab)?.label}</h1>
           <div className="flex items-center gap-3">
-            {(tab === "users" || tab === "leads" || tab === "sales") && (
+            {(tab === "users" || tab === "leads" || tab === "pending") && (
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-600" />
                 <input
@@ -558,7 +560,7 @@ export default function AdminPanel() {
                       ].map(s => (
                         <button
                           key={s.label}
-                          onClick={() => { setTab("sales"); }}
+                          onClick={() => { setTab("pending"); }}
                           className="text-center p-4 rounded-lg border border-[#1a1a2e] hover:border-opacity-60 transition-all hover:bg-white/[0.02]"
                         >
                           <p className="text-2xl font-bold mb-1" style={{ color: s.color }}>{s.count}</p>
@@ -592,17 +594,101 @@ export default function AdminPanel() {
               )}
 
               {/* ══════ SALES TAB ══════ */}
-              {tab === "sales" && (
+              {tab === "pending" && (
                 <div className="space-y-6">
-                  {/* Pending sales */}
+                  {/* Pending checkout sales */}
                   {pendingSales.length > 0 && (
                     <div>
                       <h2 className="text-xs font-semibold text-white mb-3 flex items-center gap-2 uppercase tracking-wider">
-                        <AlertCircle className="h-4 w-4 text-[#FFB800]" />
-                        Aguardando aprovação ({pendingSales.length})
+                        <ShoppingCart className="h-4 w-4 text-[#FFB800]" />
+                        Vendas aguardando aprovação ({pendingSales.length})
                       </h2>
                       <div className="space-y-3">
                         {pendingSales.map(sale => renderSaleCard(sale))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Pending users without org */}
+                  {pendingUsers.length > 0 && (
+                    <div>
+                      <h2 className="text-xs font-semibold text-white mb-3 flex items-center gap-2 uppercase tracking-wider">
+                        <Users className="h-4 w-4 text-[#00D4FF]" />
+                        Usuários sem organização ({pendingUsers.length})
+                      </h2>
+                      <div className="space-y-3">
+                        {pendingUsers.map(u => (
+                          <div key={u.id} className="rounded-xl border border-[#1a1a2e] bg-[#0d0d18] p-4 flex items-center gap-4">
+                            <div className="h-10 w-10 rounded-lg flex items-center justify-center bg-[#00D4FF]/10 shrink-0">
+                              <User className="h-5 w-5 text-[#00D4FF]" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-semibold text-white">{u.full_name || "Sem nome"}</p>
+                              <div className="flex items-center gap-3 text-[11px] text-gray-500">
+                                <span className="flex items-center gap-1"><Mail className="h-3 w-3" />{u.email}</span>
+                                <span className={`px-1.5 py-0.5 rounded-full text-[10px] border ${
+                                  u.provider === "google"
+                                    ? "bg-[#4285F4]/10 text-[#4285F4] border-[#4285F4]/20"
+                                    : "bg-[#00D4FF]/10 text-[#00D4FF] border-[#00D4FF]/20"
+                                }`}>{u.provider === "google" ? "Google" : "Email"}</span>
+                              </div>
+                              <p className="text-[10px] text-gray-600 mt-0.5">
+                                Cadastro: {new Date(u.created_at).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit" })}
+                              </p>
+                            </div>
+                            <div className="flex gap-2 shrink-0">
+                              <button
+                                onClick={async () => {
+                                  setCreatingUser(u.id);
+                                  try {
+                                    const session = (await supabase.auth.getSession()).data.session;
+                                    const { data, error: fnError } = await supabase.functions.invoke("admin-create-user", {
+                                      headers: { Authorization: `Bearer ${session?.access_token}` },
+                                      body: { email: u.email, full_name: u.full_name, existing_user_id: u.id },
+                                    });
+                                    if (fnError || data?.error) {
+                                      toast({ title: "Erro", description: data?.error || fnError?.message, variant: "destructive" });
+                                    } else {
+                                      toast({ title: "✅ Usuário aprovado!", description: `Organização criada para ${u.email}.` });
+                                      loadData();
+                                    }
+                                  } catch (err: any) {
+                                    toast({ title: "Erro", description: err.message, variant: "destructive" });
+                                  }
+                                  setCreatingUser(null);
+                                }}
+                                disabled={creatingUser === u.id}
+                                className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-[#00FF88]/10 text-[#00FF88] text-[11px] font-semibold hover:bg-[#00FF88]/20 transition-colors border border-[#00FF88]/20 disabled:opacity-50"
+                              >
+                                {creatingUser === u.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
+                                {creatingUser === u.id ? "Aprovando..." : "Aprovar"}
+                              </button>
+                              <button
+                                onClick={async () => {
+                                  if (!confirm(`Recusar e remover o usuário ${u.email}? Esta ação não pode ser desfeita.`)) return;
+                                  try {
+                                    const session = (await supabase.auth.getSession()).data.session;
+                                    const { error: fnError } = await supabase.functions.invoke("admin-delete-user", {
+                                      headers: { Authorization: `Bearer ${session?.access_token}` },
+                                      body: { user_id: u.id },
+                                    });
+                                    if (fnError) {
+                                      toast({ title: "Erro", description: fnError.message, variant: "destructive" });
+                                    } else {
+                                      toast({ title: "Usuário removido." });
+                                      loadData();
+                                    }
+                                  } catch (err: any) {
+                                    toast({ title: "Erro", description: err.message, variant: "destructive" });
+                                  }
+                                }}
+                                className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-red-500/10 text-red-400 text-[11px] font-medium hover:bg-red-500/20 transition-colors border border-red-500/20"
+                              >
+                                <XCircle className="h-3.5 w-3.5" /> Recusar
+                              </button>
+                            </div>
+                          </div>
+                        ))}
                       </div>
                     </div>
                   )}
@@ -633,10 +719,10 @@ export default function AdminPanel() {
                     </div>
                   )}
 
-                  {checkoutLeads.length === 0 && (
+                  {checkoutLeads.length === 0 && pendingUsers.length === 0 && (
                     <div className="text-center py-16 text-sm text-gray-600">
-                      <ShoppingCart className="h-8 w-8 mx-auto mb-3 text-gray-700" />
-                      Nenhuma venda registrada ainda.
+                      <CheckCircle2 className="h-8 w-8 mx-auto mb-3 text-gray-700" />
+                      Nenhum item pendente. Tudo em dia! 🎉
                     </div>
                   )}
                 </div>
