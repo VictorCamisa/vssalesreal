@@ -56,11 +56,33 @@ Deno.serve(async (req) => {
         stageByName.set(normalized, { id: s.id, name: s.name, order: s.stage_order });
       }
 
+      // Flexible stage matching — supports different naming conventions
+      const STAGE_ALIASES: Record<string, string[]> = {
+        lead: ["lead", "novo lead", "novo", "new lead", "new"],
+        enriched: ["enriquecidas", "enriquecida", "enriched", "enriquecido"],
+        contacted: ["contato feito", "contatado", "contacted", "contact made"],
+        prospecting: ["em prospecção", "prospecção", "prospecting", "qualificação"],
+        qualified: ["qualificado", "qualified"],
+        scheduled: ["agendado", "scheduled", "agendamento"],
+        proposal: ["reunião / proposta", "reunião/proposta", "proposta", "proposal", "negociação"],
+        won: ["ganho", "won", "fechado", "fechamento"],
+        lost: ["perdido", "lost"],
+      };
+
       const findStageId = (key: string): string | null => {
+        const aliases = STAGE_ALIASES[key] || [];
+        for (const alias of aliases) {
+          const found = stageByName.get(alias);
+          if (found) return found.id;
+        }
+        // Fallback: try to match by order position
         const def = PIPELINE_STAGES.find(p => p.key === key);
-        if (!def) return null;
-        const found = stageByName.get(def.name.toLowerCase());
-        return found?.id || null;
+        if (def) {
+          for (const [, stage] of stageByName) {
+            if (stage.order === def.order) return stage.id;
+          }
+        }
+        return null;
       };
 
       const leadStageId = findStageId("lead");
@@ -70,12 +92,18 @@ Deno.serve(async (req) => {
       const qualifiedStageId = findStageId("qualified");
       const scheduledStageId = findStageId("scheduled");
 
-      if (!leadStageId || !enrichedStageId || !contactedStageId) continue;
+      // Need at least the first stage to work
+      if (!leadStageId) continue;
 
-      // Get Evolution API integration for sending messages
+      // If org doesn't have enriched/contacted stages, create them dynamically
+      // For simple pipelines, we still process leads but skip intermediate stages
+      const canAutoEnrich = !!enrichedStageId;
+      const canAutoContact = !!contactedStageId;
+
+      // Get Evolution API integration config (for instance mapping)
       const { data: evoInteg } = await supabase
         .from("integrations")
-        .select("api_key, endpoint_url, config")
+        .select("config")
         .eq("org_id", orgId)
         .eq("service_name", "evolution")
         .maybeSingle();
@@ -88,12 +116,12 @@ Deno.serve(async (req) => {
         .maybeSingle();
 
       // =========================================
-      // STAGE 1: Lead → Enriquecidas
+      // STAGE 1: Lead → Enriquecidas (or direct enrichment if no enriched stage)
       // Move leads with name + phone to Enriquecidas
       // =========================================
       const { data: leadOpps } = await supabase
         .from("opportunities")
-        .select("id, lead_id, automation_status, leads_raw!inner(name, phone, email)")
+        .select("id, lead_id, automation_status, leads_raw!inner(id, name, phone, email, enrichment_data)")
         .eq("org_id", orgId)
         .eq("stage_id", leadStageId)
         .in("automation_status", ["idle", null]);
@@ -102,11 +130,47 @@ Deno.serve(async (req) => {
       for (const opp of leadOpps || []) {
         const lead = (opp as any).leads_raw;
         if (lead?.name && lead?.phone) {
-          await supabase
-            .from("opportunities")
-            .update({ stage_id: enrichedStageId, automation_status: "pending_enrichment" })
-            .eq("id", opp.id);
-          movedToEnriched++;
+          if (canAutoEnrich) {
+            // Has enriched stage — move there for processing
+            await supabase
+              .from("opportunities")
+              .update({ stage_id: enrichedStageId, automation_status: "pending_enrichment" })
+              .eq("id", opp.id);
+            movedToEnriched++;
+          } else {
+            // No enriched stage — do enrichment + send directly from lead stage
+            try {
+              const enrichmentData = await deepEnrichLead(lead, FIRECRAWL_API_KEY, LOVABLE_API_KEY);
+              await supabase.from("leads_raw").update({ enrichment_data: enrichmentData, status: "enriched" }).eq("id", lead.id);
+              
+              const personalizedMsg = await generatePersonalizedMessage(lead, enrichmentData, companyProfile, LOVABLE_API_KEY);
+              
+              const globalEvoUrl = (Deno.env.get("EVOLUTION_API_URL") || "").replace(/\/$/, "");
+              const globalEvoKey = Deno.env.get("EVOLUTION_API_KEY") || "";
+              let messageSent = false;
+              if (globalEvoUrl && globalEvoKey && lead.phone && evoInteg) {
+                messageSent = await sendWhatsAppMessage(globalEvoUrl, globalEvoKey, evoInteg.config, lead.phone, personalizedMsg, orgId, supabase);
+              }
+
+              // Move to next available stage
+              const nextStageId = contactedStageId || prospectingStageId || qualifiedStageId;
+              if (messageSent && nextStageId) {
+                await supabase.from("opportunities").update({
+                  stage_id: nextStageId, automation_status: "awaiting_response",
+                  personalized_message: personalizedMsg, message_sent_at: new Date().toISOString(),
+                }).eq("id", opp.id);
+              } else {
+                await supabase.from("opportunities").update({
+                  automation_status: messageSent ? "awaiting_response" : "enriched_no_send",
+                  personalized_message: personalizedMsg,
+                }).eq("id", opp.id);
+              }
+              movedToEnriched++;
+            } catch (err) {
+              console.error("Direct enrichment error:", err);
+              await supabase.from("opportunities").update({ automation_status: "enrichment_failed" }).eq("id", opp.id);
+            }
+          }
         }
       }
 
@@ -114,6 +178,7 @@ Deno.serve(async (req) => {
       // STAGE 2: Enriquecidas → Contato Feito
       // Deep enrich + generate message + send WhatsApp
       // =========================================
+      if (canAutoEnrich && enrichedStageId) {
       const { data: enrichOpps } = await supabase
         .from("opportunities")
         .select("id, lead_id, leads_raw!inner(id, name, phone, email, enrichment_data)")
@@ -121,7 +186,7 @@ Deno.serve(async (req) => {
         .eq("stage_id", enrichedStageId)
         .eq("automation_status", "pending_enrichment");
 
-      let enrichedAndSent = 0;
+      let enrichedAndSent2 = 0;
       for (const opp of enrichOpps || []) {
         const lead = (opp as any).leads_raw;
         try {
@@ -139,11 +204,13 @@ Deno.serve(async (req) => {
             lead, enrichmentData, companyProfile, LOVABLE_API_KEY
           );
 
-          // Step C: Send WhatsApp message
+          // Step C: Send WhatsApp message using global Evolution credentials
           let messageSent = false;
-          if (evoInteg?.api_key && evoInteg?.endpoint_url && lead.phone) {
+          const globalEvoUrl = (Deno.env.get("EVOLUTION_API_URL") || "").replace(/\/$/, "");
+          const globalEvoKey = Deno.env.get("EVOLUTION_API_KEY") || "";
+          if (globalEvoUrl && globalEvoKey && lead.phone && evoInteg) {
             messageSent = await sendWhatsAppMessage(
-              evoInteg, lead.phone, personalizedMsg, orgId, supabase
+              globalEvoUrl, globalEvoKey, evoInteg.config, lead.phone, personalizedMsg, orgId, supabase
             );
           }
 
@@ -157,7 +224,7 @@ Deno.serve(async (req) => {
                 message_sent_at: new Date().toISOString(),
               })
               .eq("id", opp.id);
-            enrichedAndSent++;
+            enrichedAndSent2++;
           } else {
             // Mark as enriched but failed to send
             await supabase
@@ -176,12 +243,13 @@ Deno.serve(async (req) => {
             .eq("id", opp.id);
         }
       }
+      } // end if canAutoEnrich
 
       // =========================================
       // STAGE 3: Contato Feito → Em Prospecção
       // After 3 customer messages, move to prospecting
       // =========================================
-      if (prospectingStageId) {
+      if (prospectingStageId && contactedStageId) {
         const { data: contactedOpps } = await supabase
           .from("opportunities")
           .select("id, lead_id, leads_raw!inner(phone)")
@@ -297,7 +365,6 @@ Deno.serve(async (req) => {
       results.push({
         org_id: orgId,
         moved_to_enriched: movedToEnriched,
-        enriched_and_sent: enrichedAndSent,
       });
     }
 
@@ -478,6 +545,8 @@ REGRAS DA MENSAGEM:
 6. NÃO use saudações genéricas como "Prezado" ou "Caro"
 7. Use o primeiro nome do lead
 8. NÃO inclua assinatura ou despedida formal
+9. Divida em blocos curtos separados por ---BLOCO--- (cada bloco = 1-2 linhas)
+10. Máximo 3 blocos
 
 Retorne APENAS o texto da mensagem, sem aspas nem formatação.`;
 
@@ -619,15 +688,15 @@ async function firecrawlSearch(query: string, apiKey: string): Promise<string | 
 // WHATSAPP SEND HELPER
 // ============================================================
 async function sendWhatsAppMessage(
-  evoInteg: any,
+  baseUrl: string,
+  apiKey: string,
+  integConfig: any,
   phone: string,
   message: string,
   orgId: string,
   supabase: any
 ): Promise<boolean> {
-  const baseUrl = evoInteg.endpoint_url.replace(/\/$/, "");
-  const apiKey = evoInteg.api_key;
-  const config = evoInteg.config || {};
+  const config = integConfig || {};
 
   // Find first connected instance for this org
   const instancesByUser = config.instances_by_user || {};
@@ -636,7 +705,6 @@ async function sendWhatsAppMessage(
   for (const userId of Object.keys(instancesByUser)) {
     const instances = instancesByUser[userId] as string[];
     if (instances?.length > 0) {
-      // Check if instance is connected
       for (const inst of instances) {
         try {
           const stateResp = await fetch(`${baseUrl}/instance/connectionState/${inst}`, {
@@ -665,24 +733,40 @@ async function sendWhatsAppMessage(
 
   const cleanPhone = phone.replace(/\D/g, "");
 
-  try {
-    const response = await fetch(`${baseUrl}/message/sendText/${instanceName}`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        apikey: apiKey,
-      },
-      body: JSON.stringify({
-        number: cleanPhone,
-        text: message,
-      }),
-    });
+  // Split message into blocks for human-like delivery
+  const blocks = message.split(/---BLOCO---/i).map((b: string) => b.trim()).filter((b: string) => b.length > 0);
+  const messageParts = blocks.length > 1 ? blocks : 
+    message.split(/\n\n+/).map((b: string) => b.trim()).filter((b: string) => b.length > 0);
+  const finalParts = messageParts.length > 0 ? messageParts : [message];
 
-    if (!response.ok) {
-      console.error("WhatsApp send error:", response.status, await response.text());
-      return false;
+  try {
+    let sendOk = false;
+    for (let i = 0; i < finalParts.length; i++) {
+      if (i > 0) {
+        const delayMs = Math.min(1000 + finalParts[i].length * 30, 3000);
+        await new Promise(resolve => setTimeout(resolve, delayMs));
+      }
+      const response = await fetch(`${baseUrl}/message/sendText/${instanceName}`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          apikey: apiKey,
+        },
+        body: JSON.stringify({
+          number: cleanPhone,
+          text: finalParts[i],
+        }),
+      });
+
+      if (!response.ok) {
+        console.error("WhatsApp send error:", response.status, await response.text());
+      } else {
+        await response.json();
+        sendOk = true;
+      }
     }
-    await response.json();
+
+    if (!sendOk) return false;
 
     // Track conversation
     const remoteJid = `${cleanPhone}@s.whatsapp.net`;
