@@ -224,67 +224,165 @@ export default function Checkout() {
       : "animate-[slideInLeft_0.45s_ease-out_forwards]";
 
   if (submitted) {
+    const nextSteps = [
+      { num: "01", title: "Confirmação enviada", desc: `Enviamos os detalhes do seu pedido para ${contact.email}. Verifique também sua caixa de spam.`, color: "#00FF88", done: true },
+      { num: "02", title: "Contato comercial", desc: "Um especialista do nosso time entrará em contato pelo WhatsApp ou telefone em até 2 horas úteis para alinhar sua operação.", color: "#00D4FF", done: false },
+      { num: "03", title: "Onboarding personalizado", desc: "Configuramos o VS SALES de acordo com seu ICP, segmento e metas comerciais — sem esforço da sua parte.", color: "#0057FF", done: false },
+      { num: "04", title: "Ativação e primeiros resultados", desc: "Seu sistema estará operando em até 48h. Os primeiros leads qualificados começam a chegar imediatamente.", color: "#00FF88", done: false },
+    ];
+
     return (
-      <div className="min-h-screen bg-[#0A0A0F] text-white flex items-center justify-center" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
-        <div className="max-w-md mx-auto px-5 text-center">
-          <div className="relative inline-block mb-6">
-            <div className="h-20 w-20 rounded-full bg-gradient-to-br from-[#00FF88]/20 to-[#00D4FF]/20 flex items-center justify-center mx-auto animate-[pulse_2s_ease-in-out_infinite]">
-              <CheckCircle2 className="h-10 w-10 text-[#00FF88]" />
+      <div className="min-h-screen bg-[#0A0A0F] text-white" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
+        {/* Background */}
+        <div className="fixed inset-0 opacity-[0.02] pointer-events-none" style={{
+          backgroundImage: "linear-gradient(rgba(0,212,255,1) 1px, transparent 1px), linear-gradient(90deg, rgba(0,212,255,1) 1px, transparent 1px)",
+          backgroundSize: "80px 80px",
+        }} />
+
+        {/* Header */}
+        <header className="sticky top-0 z-50 bg-[#0A0A0F]/80 backdrop-blur-xl border-b border-white/5">
+          <div className="max-w-5xl mx-auto px-5 h-14 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <img src={vsLogo} alt="VS" className="h-7 w-7 object-contain" />
+              <span style={{ fontFamily: "'Bebas Neue', sans-serif" }} className="tracking-wider">VS SALES</span>
             </div>
-            <div className="absolute -inset-4 rounded-full bg-[#00FF88]/5 animate-[ping_2s_ease-in-out_infinite]" />
-          </div>
-
-          <h1
-            style={{ fontFamily: "'Bebas Neue', sans-serif" }}
-            className="text-4xl md:text-5xl tracking-tight mb-3"
-          >
-            Pedido recebido! 🎉
-          </h1>
-          <p className="text-sm text-gray-400 mb-2 leading-relaxed">
-            Obrigado, <span className="text-white font-semibold">{contact.name}</span>!
-          </p>
-          <p className="text-sm text-gray-400 mb-6 leading-relaxed">
-            Nosso time comercial já foi notificado e entrará em contato com você em até{" "}
-            <span className="text-[#00D4FF] font-semibold">2 horas úteis</span> para finalizar
-            a ativação do plano{" "}
-            <span className="font-semibold" style={{ color: plan.color }}>
-              {plan.name}
-            </span>.
-          </p>
-
-          <div className="rounded-xl border border-[#1a1a2e] bg-[#0d0d18]/60 p-5 mb-6 text-left">
-            <p className="text-[10px] uppercase tracking-[0.2em] text-gray-500 mb-3">Resumo do pedido</p>
-            <div className="space-y-2 text-xs">
-              <div className="flex justify-between">
-                <span className="text-gray-400">Plano</span>
-                <span className="text-white font-medium">{plan.name} — R$ {plan.price}/mês</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-400">Empresa</span>
-                <span className="text-white">{company.name || "—"}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-400">Contato</span>
-                <span className="text-white">{contact.email}</span>
-              </div>
+            <div className="flex items-center gap-2 text-[10px] text-gray-500">
+              <Shield className="h-3 w-3 text-[#00FF88]" />
+              <span>Pedido confirmado</span>
             </div>
           </div>
+        </header>
 
-          <div className="rounded-xl border border-[#00D4FF]/15 bg-[#00D4FF]/[0.03] p-4 mb-8">
-            <p className="text-xs text-gray-300 leading-relaxed">
-              📧 Enviamos uma confirmação para <span className="text-white font-medium">{contact.email}</span>.
-              Verifique também sua caixa de spam.
+        <main className="max-w-2xl mx-auto px-5 py-16 relative z-10">
+          {/* Success icon */}
+          <div className="text-center mb-10">
+            <div className="relative inline-block mb-6">
+              <div className="h-20 w-20 rounded-full flex items-center justify-center mx-auto" style={{ background: "linear-gradient(135deg, rgba(0,255,136,0.15), rgba(0,212,255,0.10))" }}>
+                <CheckCircle2 className="h-10 w-10 text-[#00FF88]" />
+              </div>
+              <div className="absolute -inset-3 rounded-full animate-[ping_3s_ease-in-out_infinite]" style={{ background: "radial-gradient(circle, rgba(0,255,136,0.06), transparent 70%)" }} />
+            </div>
+
+            <h1 style={{ fontFamily: "'Bebas Neue', sans-serif" }} className="text-4xl md:text-5xl tracking-tight mb-2">
+              Parabéns pela escolha, {contact.name.split(" ")[0]}!
+            </h1>
+            <p className="text-base text-gray-400 max-w-lg mx-auto leading-relaxed">
+              Você acaba de dar o primeiro passo para transformar sua operação comercial. Veja exatamente o que vai acontecer agora:
             </p>
           </div>
 
-          <button
-            onClick={() => navigate("/site")}
-            className="inline-flex items-center gap-2 px-6 py-3 rounded-lg border border-white/10 text-sm text-gray-300 hover:text-white hover:border-white/25 transition-all"
+          {/* Order summary card */}
+          <div
+            className="rounded-2xl border p-6 mb-10"
+            style={{
+              borderColor: `${plan.color}25`,
+              background: `linear-gradient(160deg, ${plan.color}06, transparent 60%)`,
+            }}
           >
-            <ArrowLeft className="h-4 w-4" />
-            Voltar ao site
-          </button>
-        </div>
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <div className="h-11 w-11 rounded-xl flex items-center justify-center" style={{ background: `${plan.color}12` }}>
+                  <plan.icon className="h-5 w-5" style={{ color: plan.color }} />
+                </div>
+                <div>
+                  <p className="text-sm font-bold text-white">Plano {plan.name}</p>
+                  <p className="text-[11px] text-gray-500">{plan.subtitle}</p>
+                </div>
+              </div>
+              <div className="text-right">
+                <div className="flex items-baseline gap-1">
+                  <span className="text-[10px] text-gray-500">R$</span>
+                  <span className="text-2xl font-black text-white" style={{ fontFamily: "'Bebas Neue', sans-serif" }}>{plan.price}</span>
+                  <span className="text-[10px] text-gray-500">/mês</span>
+                </div>
+              </div>
+            </div>
+            <div className="h-px bg-white/5 mb-4" />
+            <div className="grid grid-cols-3 gap-4 text-xs">
+              <div>
+                <p className="text-gray-600 mb-0.5">Empresa</p>
+                <p className="text-white font-medium">{company.name || "—"}</p>
+              </div>
+              <div>
+                <p className="text-gray-600 mb-0.5">Responsável</p>
+                <p className="text-white font-medium">{contact.name}</p>
+              </div>
+              <div>
+                <p className="text-gray-600 mb-0.5">Contato</p>
+                <p className="text-white font-medium">{contact.phone}</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Next steps timeline */}
+          <div className="mb-10">
+            <p className="text-[10px] uppercase tracking-[0.3em] text-[#00D4FF] font-medium mb-6">Próximos passos</p>
+            <div className="space-y-0">
+              {nextSteps.map((s, i) => (
+                <div key={s.num} className="flex gap-4">
+                  {/* Timeline line */}
+                  <div className="flex flex-col items-center">
+                    <div
+                      className="h-8 w-8 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0"
+                      style={{
+                        background: s.done ? s.color : `${s.color}12`,
+                        color: s.done ? "#0A0A0F" : s.color,
+                      }}
+                    >
+                      {s.done ? <Check className="h-3.5 w-3.5" /> : s.num}
+                    </div>
+                    {i < nextSteps.length - 1 && (
+                      <div className="w-px flex-1 my-1" style={{ background: `${s.color}20` }} />
+                    )}
+                  </div>
+                  {/* Content */}
+                  <div className="pb-6">
+                    <p className="text-sm font-semibold text-white mb-1">{s.title}</p>
+                    <p className="text-xs text-gray-500 leading-relaxed">{s.desc}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Guarantee banner */}
+          <div className="rounded-xl border border-[#00FF88]/15 bg-[#00FF88]/[0.03] p-5 mb-10">
+            <div className="flex items-start gap-3">
+              <Shield className="h-5 w-5 text-[#00FF88] shrink-0 mt-0.5" />
+              <div>
+                <p className="text-sm font-semibold text-white mb-1">Sem surpresas. Sem compromisso antecipado.</p>
+                <p className="text-xs text-gray-400 leading-relaxed">
+                  Nenhuma cobrança será realizada agora. O pagamento só acontece após a configuração completa e sua aprovação final.
+                  Você terá total visibilidade e controle antes de qualquer compromisso financeiro.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* CTA */}
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+            <button
+              onClick={() => navigate("/site")}
+              className="flex items-center gap-2 px-6 py-3 rounded-xl border border-white/10 text-sm text-gray-300 hover:text-white hover:border-white/25 transition-all"
+            >
+              <ArrowLeft className="h-4 w-4" />
+              Voltar ao site
+            </button>
+            <a
+              href={`https://wa.me/5511999999999?text=${encodeURIComponent(`Olá! Acabei de solicitar o plano ${plan.name} do VS SALES. Meu nome é ${contact.name}, da empresa ${company.name}.`)}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-2 px-6 py-3 rounded-xl bg-gradient-to-r from-[#00FF88] to-[#00D4FF] text-sm font-bold text-[#0A0A0F] hover:shadow-[0_0_30px_rgba(0,255,136,0.25)] transition-all"
+            >
+              <MessageCircle className="h-4 w-4" />
+              Falar agora pelo WhatsApp
+            </a>
+          </div>
+
+          <p className="text-[10px] text-gray-600 text-center mt-6">
+            Caso tenha dúvidas, responda o e-mail de confirmação ou nos chame pelo WhatsApp.
+          </p>
+        </main>
       </div>
     );
   }
