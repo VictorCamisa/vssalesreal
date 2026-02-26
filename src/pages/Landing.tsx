@@ -454,18 +454,136 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* ═══ 5. COMPARATIVO ═══ */}
+      {/* ═══ 5. PLANOS + COMPARATIVO ═══ */}
       <section id="comparativo" className="py-24 md:py-32">
-        <div className="max-w-4xl mx-auto px-5">
+        <div className="max-w-6xl mx-auto px-5">
           <Reveal>
-            <p className="text-[10px] uppercase tracking-[0.3em] text-[#00D4FF] font-medium mb-3 text-center">Comparativo</p>
-            <h2 style={{ fontFamily: "'Bebas Neue', sans-serif" }} className="text-3xl md:text-5xl tracking-tight mb-12 text-center">
-              A decisão mais lógica<br /><span className="text-gray-500">que você vai tomar hoje.</span>
+            <p className="text-[10px] uppercase tracking-[0.3em] text-[#00D4FF] font-medium mb-3 text-center">Planos & Preços</p>
+            <h2 style={{ fontFamily: "'Bebas Neue', sans-serif" }} className="text-3xl md:text-5xl tracking-tight mb-4 text-center">
+              Escolha o plano ideal<br /><span className="text-gray-500">para sua operação.</span>
             </h2>
+            <p className="text-sm text-gray-500 text-center mb-12 max-w-2xl mx-auto">
+              Todos os planos incluem operação 24/7, integração com CRM e suporte dedicado. Cancele quando quiser.
+            </p>
           </Reveal>
 
+          {/* Pricing Cards */}
+          <div className="grid md:grid-cols-3 gap-5 mb-20">
+            {[
+              {
+                name: "Starter",
+                subtitle: "O SDR Digital",
+                price: "1.497",
+                color: "#00D4FF",
+                popular: false,
+                features: [
+                  "Prospecção ativa e automática",
+                  "Validação de ICP com IA",
+                  "Qualificação básica de leads",
+                  "Encaminhamento para Closer humano",
+                  "Operação 24/7 sem pausa",
+                  "Dashboard de métricas",
+                ],
+                cta: "Começar com Starter",
+                hook: "Custa menos que um estagiário de pré-vendas, mas trabalha 24h por dia.",
+              },
+              {
+                name: "Pro",
+                subtitle: "A Equipe Completa",
+                price: "2.497",
+                color: "#0057FF",
+                popular: true,
+                features: [
+                  "Tudo do Starter, mais:",
+                  "Closer com IA integrado",
+                  "Score de qualificação (0-100%)",
+                  "Agendamentos automáticos",
+                  "CRM alimentado automaticamente",
+                  "Configuração de ICP avançada",
+                  "Suporte prioritário",
+                ],
+                cta: "Escolher Pro",
+                hook: "Um departamento comercial inteiro que não tira férias e custa metade de um único funcionário.",
+              },
+              {
+                name: "Agency",
+                subtitle: "White-Label B2B2C",
+                price: "3.497",
+                color: "#00FF88",
+                popular: false,
+                features: [
+                  "Tudo do Pro, mais:",
+                  "White-label com sua marca",
+                  "Múltiplas instâncias de IA",
+                  "Gestão multi-cliente",
+                  "Revenue share disponível",
+                  "API completa + documentação",
+                  "Onboarding dedicado",
+                ],
+                cta: "Falar com comercial",
+                hook: "Entregue leads qualificados e agendados para seus clientes. Prove ROI e ganhe comissão recorrente.",
+              },
+            ].map((plan) => (
+              <Reveal key={plan.name}>
+                <div
+                  className={`relative rounded-2xl border p-6 flex flex-col h-full transition-all duration-300 hover:translate-y-[-4px] ${
+                    plan.popular
+                      ? "border-[#0057FF]/50 bg-gradient-to-b from-[#0057FF]/[0.08] to-transparent shadow-[0_0_40px_rgba(0,87,255,0.12)]"
+                      : "border-[#1a1a2e] bg-[#0d0d18]/60 hover:border-[#1a1a2e]/80"
+                  }`}
+                >
+                  {plan.popular && (
+                    <div className="absolute -top-3 left-1/2 -translate-x-1/2">
+                      <span className="px-4 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-[#0057FF] text-white">
+                        Recomendado
+                      </span>
+                    </div>
+                  )}
+
+                  <div className="mb-5">
+                    <p className="text-[10px] uppercase tracking-[0.2em] font-semibold mb-1" style={{ color: plan.color }}>{plan.subtitle}</p>
+                    <h3 className="text-xl font-bold text-white mb-1" style={{ fontFamily: "'Bebas Neue', sans-serif", letterSpacing: "0.05em" }}>{plan.name}</h3>
+                  </div>
+
+                  <div className="mb-5">
+                    <div className="flex items-baseline gap-1">
+                      <span className="text-xs text-gray-500">R$</span>
+                      <span className="text-4xl font-black text-white" style={{ fontFamily: "'Bebas Neue', sans-serif" }}>{plan.price}</span>
+                      <span className="text-xs text-gray-500">/mês</span>
+                    </div>
+                  </div>
+
+                  <ul className="space-y-2.5 mb-6 flex-1">
+                    {plan.features.map(f => (
+                      <li key={f} className="flex items-start gap-2 text-xs text-gray-300">
+                        <CheckCircle2 className="h-3.5 w-3.5 shrink-0 mt-0.5" style={{ color: plan.color }} />
+                        <span>{f}</span>
+                      </li>
+                    ))}
+                  </ul>
+
+                  <p className="text-[10px] text-gray-500 italic mb-4 leading-relaxed">"{plan.hook}"</p>
+
+                  <a
+                    href="#acesso"
+                    className={`w-full text-center py-3 rounded-xl text-sm font-semibold transition-all duration-300 block ${
+                      plan.popular
+                        ? "bg-gradient-to-r from-[#0057FF] to-[#00D4FF] text-white hover:shadow-[0_0_30px_rgba(0,87,255,0.3)]"
+                        : "border text-white hover:bg-white/[0.05]"
+                    }`}
+                    style={!plan.popular ? { borderColor: `${plan.color}30` } : undefined}
+                  >
+                    {plan.cta}
+                  </a>
+                </div>
+              </Reveal>
+            ))}
+          </div>
+
+          {/* Comparativo Table */}
           <Reveal>
-            <div className="overflow-x-auto">
+            <p className="text-[10px] uppercase tracking-[0.3em] text-gray-500 font-medium mb-4 text-center">Time Humano vs VS SALES</p>
+            <div className="overflow-x-auto max-w-3xl mx-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr>
@@ -478,14 +596,14 @@ export default function Landing() {
                 </thead>
                 <tbody className="text-xs">
                   {[
-                    ["Custo mensal", "R$ 15.000+", "A partir de R$ 1.497"],
+                    ["Custo mensal", "R$ 10.000 – 15.000+", "A partir de R$ 1.497"],
                     ["Horário de operação", "8h/dia", "24/7"],
                     ["Consistência", "Variável", "100%"],
                     ["Escalabilidade", "Lenta e cara", "Imediata"],
                     ["Integração com CRM", "Manual", "Automática"],
                     ["Tempo de ramp-up", "30-90 dias", "< 48 horas"],
                     ["Follow-up", "Esquecido", "Garantido"],
-                  ].map(([feature, human, vs], i) => (
+                  ].map(([feature, human, vs]) => (
                     <tr key={feature} className="border-b border-[#1a1a2e]/50">
                       <td className="p-4 text-gray-400 font-medium">{feature}</td>
                       <td className="p-4 text-center text-gray-500">{human}</td>
