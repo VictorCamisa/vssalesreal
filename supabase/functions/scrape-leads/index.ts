@@ -39,7 +39,7 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-    const { org_id, niche, keywords, city, limit = 20 } = await req.json();
+    const { org_id, niche, city, state, bairro, limit = 20 } = await req.json();
     if (!org_id || !niche) {
       return new Response(JSON.stringify({ error: "org_id e niche são obrigatórios" }), {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -48,16 +48,18 @@ Deno.serve(async (req) => {
 
     const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
-    // Build search query for maximum contact extraction
-    const searchTerms = [niche];
-    if (city) searchTerms.push(city);
-    if (keywords) searchTerms.push(keywords);
-    searchTerms.push("contato telefone email");
+    // Build precise location-based search query
+    const locationParts: string[] = [];
+    if (bairro) locationParts.push(bairro);
+    if (city) locationParts.push(city);
+    if (state) locationParts.push(state);
+    const locationStr = locationParts.join(", ");
 
-    const searchQuery = searchTerms.join(" ");
-    const searchLimit = Math.min(Math.max(limit, 5), 50); // 5-50 results
+    // Build search query: segment + exact location
+    const searchQuery = `${niche} ${locationStr} contato telefone whatsapp`;
+    const searchLimit = Math.min(Math.max(limit, 5), 50);
 
-    console.log(`Searching: "${searchQuery}" (limit: ${searchLimit})`);
+    console.log(`Searching: "${searchQuery}" (limit: ${searchLimit}, location: ${locationStr})`);
 
     // Step 1: Firecrawl SEARCH - find real business pages
     const searchResponse = await fetch("https://api.firecrawl.dev/v1/search", {
@@ -107,7 +109,7 @@ Deno.serve(async (req) => {
     }).join("\n\n");
 
     // Step 3: Use AI to extract structured contacts from all pages
-    const extractionPrompt = `Analise as páginas abaixo e extraia TODOS os contatos comerciais/empresariais que encontrar.
+    const extractionPrompt = `Analise as páginas abaixo e extraia TODOS os contatos de empresas do segmento "${niche}" localizadas em ${locationStr || "qualquer lugar"}.
 
 PÁGINAS RASPADAS:
 ${pagesContent}
@@ -118,17 +120,23 @@ INSTRUÇÕES:
 - Email
 - Nome da empresa
 - Cargo/função da pessoa
-- Endereço ou cidade se disponível
+- Cidade e estado
 - Website da empresa
 - Segmento/ramo de atuação
-- Qualquer outra informação relevante (CNPJ, redes sociais, etc)
 
-IMPORTANTE:
-- Extraia TODOS os contatos, não apenas o primeiro
-- Telefones devem estar no formato brasileiro
+FILTRO OBRIGATÓRIO DE LOCALIDADE:
+${city ? `- APENAS extraia contatos de empresas localizadas em ${locationStr}.` : ""}
+${city ? `- Se o contato NÃO tiver relação clara com ${locationStr}, NÃO inclua.` : ""}
+${state ? `- O DDD do telefone deve ser compatível com o estado ${state}. Se for de outro estado, DESCARTE.` : ""}
+- Se não conseguir confirmar a localidade, inclua apenas se houver forte indicação de que é da região.
+
+REGRAS:
+- Extraia TODOS os contatos da região correta, não apenas o primeiro
+- Telefones devem estar no formato brasileiro com DDD
 - Se não encontrar um campo, deixe null
 - NÃO invente dados, extraia apenas o que está nas páginas
 - Priorize contatos com telefone
+- DESCARTE contatos que claramente são de outra cidade/estado
 
 Responda APENAS com JSON válido no formato:
 {
@@ -160,7 +168,7 @@ Responda APENAS com JSON válido no formato:
         messages: [
           {
             role: "system",
-            content: "Você é um especialista em extração de dados de contato comercial. Extraia com precisão todos os contatos encontrados nas páginas. Retorne APENAS JSON válido sem markdown.",
+            content: `Você é um especialista em extração de dados de contato comercial. Extraia com precisão todos os contatos encontrados nas páginas. ${locationStr ? `FILTRE RIGOROSAMENTE: inclua APENAS contatos de ${locationStr}. Descarte qualquer contato de outra cidade ou estado.` : ""} Retorne APENAS JSON válido sem markdown.`,
           },
           { role: "user", content: extractionPrompt },
         ],
@@ -268,6 +276,7 @@ Responda APENAS com JSON válido no formato:
             segment: c.segment || null,
             extra_info: c.extra_info || null,
             scraped_niche: niche,
+            scraped_location: locationStr,
             scraped_at: new Date().toISOString(),
           },
         };
