@@ -669,79 +669,60 @@ function ChatbotTab({ orgId }: { orgId: string }) {
     );
   }
 
-  // If no template selected, show template selector
+  // Show all 4 agents as pre-created cards (inactive by default)
   if (!showForm) {
-    const usedRoles = existingAgents.map(a => a.template.role);
+    const activeCount = existingAgents.filter(a => a.config.enabled).length;
     return (
       <div className="space-y-5">
-        {/* Existing agents */}
-        {existingAgents.length > 0 && (
-          <div className="space-y-3">
-            <div className="flex items-center gap-2">
-              <Bot className="h-4 w-4 text-primary" />
-              <h3 className="text-sm font-medium">Agentes Configurados</h3>
-              <Badge variant="outline" className="text-[10px] ml-auto">{existingAgents.length} ativos</Badge>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {existingAgents.map(({ template, config }) => (
+        <div className="space-y-3">
+          <div className="flex items-center gap-2">
+            <Bot className="h-4 w-4 text-primary" />
+            <h3 className="text-sm font-medium">Agentes de IA</h3>
+            <Badge variant="outline" className="text-[10px] ml-auto">
+              {activeCount} de {CHATBOT_TEMPLATES.length} ativos
+            </Badge>
+          </div>
+          <p className="text-xs text-muted-foreground">Cada agente é um especialista treinado para sua função no funil. Ative os que deseja usar.</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {CHATBOT_TEMPLATES.map((t) => {
+              const existing = existingAgents.find(a => a.template.role === t.role);
+              const isActive = existing?.config.enabled ?? false;
+              return (
                 <button
-                  key={config.id}
+                  key={t.role}
                   onClick={() => {
-                    setSelectedTemplate(template);
-                    if (config.instance_name) setSelectedInstance(config.instance_name);
+                    setSelectedTemplate(t);
+                    if (existing?.config.instance_name) setSelectedInstance(existing.config.instance_name);
+                    if (existing) {
+                      // Load existing config into form
+                      setConfigs(prev => ({
+                        ...prev,
+                        [existing.config.instance_name || selectedInstance]: existing.config,
+                      }));
+                    } else {
+                      updateConfig({ system_prompt: t.prompt, config: { ...currentConfig.config, agent_role: t.role } });
+                    }
                     setShowForm(true);
                   }}
                   className="glass rounded-xl p-4 text-left hover:border-primary/30 hover:shadow-md transition-all group"
                 >
                   <div className="flex items-center gap-3 mb-2">
-                    <span className="text-2xl">{template.emoji}</span>
+                    <span className="text-2xl">{t.emoji}</span>
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold group-hover:text-primary transition-colors">{template.role}</p>
-                      <p className="text-[10px] text-muted-foreground truncate">{config.instance_name || "Sem instância"}</p>
+                      <p className="text-sm font-semibold group-hover:text-primary transition-colors">{t.role}</p>
+                      <p className="text-[10px] text-muted-foreground truncate">
+                        {existing?.config.instance_name || "Não configurado"}
+                      </p>
                     </div>
-                    <Badge variant="outline" className={`text-[10px] ${config.enabled ? "bg-success/10 text-success border-success/30" : "text-muted-foreground"}`}>
-                      {config.enabled ? "Ativo" : "Inativo"}
+                    <Badge variant="outline" className={`text-[10px] ${
+                      isActive 
+                        ? "bg-success/10 text-success border-success/30" 
+                        : "bg-secondary text-muted-foreground"
+                    }`}>
+                      {isActive ? "Ativo" : "Inativo"}
                     </Badge>
                   </div>
-                  <p className="text-[11px] text-muted-foreground">{template.description}</p>
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Available templates to create */}
-        <div className="space-y-3">
-          <div className="flex items-center gap-2">
-            <Plus className="h-4 w-4 text-muted-foreground" />
-            <h3 className="text-sm font-medium">Criar Novo Agente</h3>
-          </div>
-          <p className="text-xs text-muted-foreground">Selecione o perfil do agente. Cada template é um especialista treinado para sua função no funil.</p>
-          <div className="grid grid-cols-2 gap-3">
-            {CHATBOT_TEMPLATES.map((t) => {
-              const isUsed = usedRoles.includes(t.role);
-              return (
-                <button
-                  key={t.name}
-                  disabled={isUsed}
-                  className={`text-left border rounded-xl p-4 space-y-2 transition-all group ${
-                    isUsed
-                      ? "opacity-40 cursor-not-allowed border-border/30"
-                      : "hover:border-primary/50 hover:bg-primary/5 cursor-pointer"
-                  }`}
-                  onClick={() => {
-                    if (isUsed) return;
-                    setSelectedTemplate(t);
-                    updateConfig({ system_prompt: t.prompt, config: { ...currentConfig.config, agent_role: t.role } });
-                    setShowForm(true);
-                  }}
-                >
-                  <div className="flex items-center gap-2">
-                    <span className="text-xl">{t.emoji}</span>
-                    <span className="text-xs font-semibold group-hover:text-primary transition-colors">{t.role}</span>
-                    {isUsed && <Badge variant="outline" className="text-[9px] ml-auto">Já criado</Badge>}
-                  </div>
-                  <p className="text-[10px] text-muted-foreground leading-snug">{t.description}</p>
+                  <p className="text-[11px] text-muted-foreground">{t.description}</p>
                 </button>
               );
             })}
