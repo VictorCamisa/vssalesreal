@@ -15,6 +15,7 @@ import SettingsPage from "./pages/SettingsPage";
 import AIPage from "./pages/AIPage";
 import WhatsAppConnection from "./pages/WhatsAppConnection";
 import NotFound from "./pages/NotFound";
+import Landing from "./pages/Landing";
 
 const queryClient = new QueryClient();
 
@@ -32,6 +33,7 @@ function AppRoutes() {
   if (!user) {
     return (
       <Routes>
+        <Route path="/site" element={<Landing />} />
         <Route path="/auth" element={<Auth />} />
         <Route path="*" element={<Navigate to="/auth" replace />} />
       </Routes>
@@ -50,6 +52,7 @@ function AppRoutes() {
         <Route path="/ai" element={<AIPage />} />
         <Route path="/settings" element={<SettingsPage />} />
       </Route>
+      <Route path="/site" element={<Landing />} />
       <Route path="/auth" element={<Navigate to="/" replace />} />
       <Route path="*" element={<NotFound />} />
     </Routes>
