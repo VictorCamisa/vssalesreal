@@ -311,13 +311,10 @@ export default function CRM() {
       <div className="space-y-5 h-full flex flex-col">
         {/* ─── Header ─── */}
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-          <div className="flex items-center gap-3">
-            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-primary/80 shadow-lg shadow-primary/20">
-              <Workflow className="h-5 w-5 text-primary-foreground" />
-            </div>
+           <div className="flex items-center gap-3">
             <div>
-              <h1 className="text-xl font-bold tracking-tight">Pipeline de Vendas</h1>
-              <p className="text-muted-foreground text-xs">
+              <h1 className="page-title">Pipeline de Vendas</h1>
+              <p className="page-description">
                 {opportunities.length} {opportunities.length === 1 ? "oportunidade" : "oportunidades"} ativas
               </p>
             </div>
