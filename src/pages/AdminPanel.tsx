@@ -9,10 +9,56 @@ import {
   Edit3, Save, X, Search, ShoppingCart, MessageCircle,
   CheckCircle2, XCircle, AlertCircle,
   DollarSign, RefreshCw, UserPlus, Copy,
-  Loader2, Trash2, User
+  Loader2, Trash2, User, ArrowLeft, Package, Plus,
+  Target, Lightbulb, ShieldCheck, Globe, Instagram,
+  Linkedin, Facebook, MapPin, Upload, Sparkles, HelpCircle
 } from "lucide-react";
 
-type Tab = "metrics" | "pending" | "users" | "leads" | "content";
+type Tab = "metrics" | "pending" | "users" | "leads" | "content" | "companies";
+
+interface Organization {
+  id: string;
+  name: string;
+  owner_id: string;
+  created_at: string;
+}
+
+type CompanyProfileData = {
+  id: string;
+  org_id: string;
+  company_name: string;
+  logo_url: string | null;
+  segment: string | null;
+  description: string;
+  mission: string;
+  vision: string;
+  values: string;
+  products_services: { name: string; description: string; price?: string }[];
+  target_audience: string;
+  differentials: string;
+  tone_of_voice: string;
+  website: string | null;
+  instagram: string | null;
+  linkedin: string | null;
+  facebook: string | null;
+  phone: string | null;
+  email: string | null;
+  address: string | null;
+  cnpj: string | null;
+  founded_year: number | null;
+  team_size: string | null;
+  avg_ticket: string | null;
+  sales_process: string;
+  objections_faq: { question: string; answer: string }[];
+};
+
+const emptyCompanyProfile: Omit<CompanyProfileData, "id" | "org_id"> = {
+  company_name: "", logo_url: null, segment: null, description: "", mission: "", vision: "", values: "",
+  products_services: [], target_audience: "", differentials: "", tone_of_voice: "",
+  website: null, instagram: null, linkedin: null, facebook: null, phone: null, email: null,
+  address: null, cnpj: null, founded_year: null, team_size: null, avg_ticket: null,
+  sales_process: "", objections_faq: [],
+};
 
 interface SiteLead {
   id: string;
@@ -95,6 +141,11 @@ export default function AdminPanel() {
   const [notesValue, setNotesValue] = useState("");
   const [creatingUser, setCreatingUser] = useState<string | null>(null);
   const [createdCredentials, setCreatedCredentials] = useState<Record<string, { email: string; password: string }>>({});
+  const [organizations, setOrganizations] = useState<Organization[]>([]);
+  const [selectedOrgId, setSelectedOrgId] = useState<string | null>(null);
+  const [companyProfile, setCompanyProfile] = useState<CompanyProfileData | null>(null);
+  const [savingCompany, setSavingCompany] = useState(false);
+  const [loadingCompany, setLoadingCompany] = useState(false);
   const { toast } = useToast();
   const navigate = useNavigate();
 
@@ -103,16 +154,18 @@ export default function AdminPanel() {
   const loadData = async () => {
     setLoading(true);
     const session = (await supabase.auth.getSession()).data.session;
-    const [leadsRes, contentRes, usersRes] = await Promise.all([
+    const [leadsRes, contentRes, usersRes, orgsRes] = await Promise.all([
       supabase.from("site_leads").select("*").order("created_at", { ascending: false }),
       supabase.from("site_content").select("*"),
       supabase.functions.invoke("admin-list-users", {
         headers: { Authorization: `Bearer ${session?.access_token}` },
       }),
+      supabase.from("organizations").select("*").order("created_at", { ascending: false }),
     ]);
     if (leadsRes.data) setSiteLeads(leadsRes.data as SiteLead[]);
     if (contentRes.data) setSiteContent(contentRes.data);
     if (usersRes.data?.users) setUsers(usersRes.data.users);
+    if (orgsRes.data) setOrganizations(orgsRes.data);
     setLoading(false);
   };
 
@@ -233,10 +286,86 @@ export default function AdminPanel() {
   const tabs: { key: Tab; label: string; icon: React.ElementType; badge?: number }[] = [
     { key: "metrics", label: "Métricas", icon: BarChart3 },
     { key: "pending", label: "Pendentes", icon: AlertCircle, badge: pendingSales.length + pendingUsers.length },
+    { key: "companies", label: "Empresas", icon: Building2, badge: organizations.length },
     { key: "users", label: "Usuários", icon: Users },
     { key: "leads", label: "Formulários", icon: FileText },
     { key: "content", label: "Conteúdo", icon: Settings },
   ];
+
+  // Company profile management
+  const loadCompanyProfile = async (orgId: string) => {
+    setLoadingCompany(true);
+    setSelectedOrgId(orgId);
+    const { data: cp } = await supabase
+      .from("company_profiles")
+      .select("*")
+      .eq("org_id", orgId)
+      .maybeSingle();
+    if (cp) {
+      setCompanyProfile({
+        ...cp,
+        products_services: (cp.products_services as any) || [],
+        objections_faq: (cp.objections_faq as any) || [],
+      } as CompanyProfileData);
+    } else {
+      setCompanyProfile({ ...emptyCompanyProfile, id: "", org_id: orgId } as CompanyProfileData);
+    }
+    setLoadingCompany(false);
+  };
+
+  const updateCompanyField = (field: keyof CompanyProfileData, value: any) => {
+    setCompanyProfile(prev => prev ? { ...prev, [field]: value } : prev);
+  };
+
+  const saveCompanyProfile = async () => {
+    if (!companyProfile || !selectedOrgId) return;
+    setSavingCompany(true);
+    const { id, ...rest } = companyProfile;
+    const payload = { ...rest, org_id: selectedOrgId };
+
+    if (id) {
+      const { error } = await supabase.from("company_profiles").update(payload).eq("id", id);
+      if (error) toast({ title: "Erro ao salvar", description: error.message, variant: "destructive" });
+      else toast({ title: "Perfil da empresa salvo!" });
+    } else {
+      const { data: inserted, error } = await supabase.from("company_profiles").insert(payload).select().single();
+      if (error) toast({ title: "Erro ao criar", description: error.message, variant: "destructive" });
+      else {
+        setCompanyProfile({ ...companyProfile, id: inserted.id } as CompanyProfileData);
+        toast({ title: "Perfil da empresa criado!" });
+      }
+    }
+    setSavingCompany(false);
+  };
+
+  const addCompanyProduct = () => {
+    if (!companyProfile) return;
+    updateCompanyField("products_services", [...companyProfile.products_services, { name: "", description: "", price: "" }]);
+  };
+  const updateCompanyProduct = (idx: number, field: string, value: string) => {
+    if (!companyProfile) return;
+    const updated = [...companyProfile.products_services];
+    (updated[idx] as any)[field] = value;
+    updateCompanyField("products_services", updated);
+  };
+  const removeCompanyProduct = (idx: number) => {
+    if (!companyProfile) return;
+    updateCompanyField("products_services", companyProfile.products_services.filter((_, i) => i !== idx));
+  };
+  const addCompanyFaq = () => {
+    if (!companyProfile) return;
+    updateCompanyField("objections_faq", [...companyProfile.objections_faq, { question: "", answer: "" }]);
+  };
+  const updateCompanyFaq = (idx: number, field: string, value: string) => {
+    if (!companyProfile) return;
+    const updated = [...companyProfile.objections_faq];
+    (updated[idx] as any)[field] = value;
+    updateCompanyField("objections_faq", updated);
+  };
+  const removeCompanyFaq = (idx: number) => {
+    if (!companyProfile) return;
+    updateCompanyField("objections_faq", companyProfile.objections_faq.filter((_, i) => i !== idx));
+  };
 
   // Metrics
   const totalUsers = users.length;
@@ -498,7 +627,7 @@ export default function AdminPanel() {
         <header className="h-14 border-b border-[#1a1a2e] flex items-center justify-between px-6 bg-[#0A0A14]/50 backdrop-blur-sm sticky top-0 z-10">
           <h1 className="text-sm font-semibold text-white">{tabs.find(t => t.key === tab)?.label}</h1>
           <div className="flex items-center gap-3">
-            {(tab === "users" || tab === "leads" || tab === "pending") && (
+            {(tab === "users" || tab === "leads" || tab === "pending" || (tab === "companies" && !selectedOrgId)) && (
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-600" />
                 <input
@@ -901,6 +1030,302 @@ export default function AdminPanel() {
                       </div>
                     </div>
                   ))}
+                </div>
+              )}
+
+              {/* ══════ COMPANIES TAB ══════ */}
+              {tab === "companies" && (
+                <div className="space-y-6">
+                  {!selectedOrgId ? (
+                    /* Organization List */
+                    <div className="space-y-4">
+                      <p className="text-xs text-gray-500">Selecione uma organização para configurar o módulo empresa.</p>
+                      <div className="grid gap-3">
+                        {organizations.filter(o => {
+                          if (!searchQuery) return true;
+                          const q = searchQuery.toLowerCase();
+                          return o.name.toLowerCase().includes(q);
+                        }).map(org => {
+                          const ownerUser = users.find(u => u.id === org.owner_id);
+                          return (
+                            <div
+                              key={org.id}
+                              onClick={() => loadCompanyProfile(org.id)}
+                              className="rounded-xl border border-[#1a1a2e] bg-[#0d0d18] p-4 flex items-center gap-4 cursor-pointer hover:bg-white/[0.02] hover:border-[#00D4FF]/20 transition-all"
+                            >
+                              <div className="h-10 w-10 rounded-lg flex items-center justify-center bg-[#0057FF]/10 shrink-0">
+                                <Building2 className="h-5 w-5 text-[#00D4FF]" />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-semibold text-white">{org.name}</p>
+                                <div className="flex items-center gap-3 text-[11px] text-gray-500">
+                                  {ownerUser && <span className="flex items-center gap-1"><User className="h-3 w-3" />{ownerUser.full_name || ownerUser.email}</span>}
+                                  <span>Criada em {new Date(org.created_at).toLocaleDateString("pt-BR")}</span>
+                                </div>
+                              </div>
+                              <Edit3 className="h-4 w-4 text-gray-600" />
+                            </div>
+                          );
+                        })}
+                        {organizations.length === 0 && (
+                          <div className="text-center py-16 text-sm text-gray-600">
+                            <Building2 className="h-8 w-8 mx-auto mb-3 text-gray-700" />
+                            Nenhuma organização cadastrada.
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ) : (
+                    /* Company Profile Editor */
+                    <div className="space-y-6">
+                      {/* Header */}
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <button
+                            onClick={() => { setSelectedOrgId(null); setCompanyProfile(null); }}
+                            className="h-8 w-8 rounded-lg bg-white/[0.03] text-gray-400 hover:text-white hover:bg-white/[0.06] flex items-center justify-center transition-colors"
+                          >
+                            <ArrowLeft className="h-4 w-4" />
+                          </button>
+                          <div>
+                            <p className="text-sm font-semibold text-white">
+                              {organizations.find(o => o.id === selectedOrgId)?.name || "Organização"}
+                            </p>
+                            <p className="text-[10px] text-gray-500">Configurar módulo empresa</p>
+                          </div>
+                        </div>
+                        <button
+                          onClick={saveCompanyProfile}
+                          disabled={savingCompany || loadingCompany}
+                          className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-[#00FF88]/10 text-[#00FF88] text-[11px] font-semibold hover:bg-[#00FF88]/20 transition-colors border border-[#00FF88]/20 disabled:opacity-50"
+                        >
+                          {savingCompany ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
+                          {savingCompany ? "Salvando..." : "Salvar Tudo"}
+                        </button>
+                      </div>
+
+                      {loadingCompany ? (
+                        <div className="flex items-center justify-center h-64">
+                          <div className="h-6 w-6 animate-spin rounded-full border-2 border-[#00D4FF]/30 border-t-[#00D4FF]" />
+                        </div>
+                      ) : companyProfile ? (
+                        <div className="space-y-6">
+                          {/* Completeness */}
+                          {(() => {
+                            const cp = companyProfile;
+                            const fields = [
+                              cp.company_name, cp.description, cp.segment, cp.mission,
+                              cp.target_audience, cp.differentials, cp.tone_of_voice,
+                              cp.phone, cp.email, cp.sales_process, cp.logo_url,
+                              cp.products_services.length > 0 ? "yes" : "",
+                              cp.objections_faq.length > 0 ? "yes" : "",
+                            ];
+                            const completeness = Math.round((fields.filter(Boolean).length / fields.length) * 100);
+                            return (
+                              <div className="rounded-xl border border-[#1a1a2e] bg-[#0d0d18]/60 p-4">
+                                <div className="flex items-center justify-between mb-2">
+                                  <span className="text-xs font-medium text-white flex items-center gap-2"><Sparkles className="h-3.5 w-3.5 text-[#00D4FF]" /> Perfil de IA</span>
+                                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#0057FF]/10 text-[#00D4FF] border border-[#00D4FF]/20">{completeness}% completo</span>
+                                </div>
+                                <div className="w-full h-1.5 bg-[#1a1a2e] rounded-full overflow-hidden">
+                                  <div className="h-full bg-[#00D4FF] rounded-full transition-all duration-500" style={{ width: `${completeness}%` }} />
+                                </div>
+                              </div>
+                            );
+                          })()}
+
+                          {/* Identity */}
+                          <div className="rounded-xl border border-[#1a1a2e] bg-[#0d0d18]/60 p-5 space-y-4">
+                            <h3 className="text-xs font-semibold text-white uppercase tracking-wider flex items-center gap-2">
+                              <Building2 className="h-4 w-4 text-[#00D4FF]" /> Identidade
+                            </h3>
+                            <div className="grid grid-cols-2 gap-4">
+                              <div>
+                                <label className="text-[10px] text-gray-500 uppercase tracking-wider mb-1 block">Nome da Empresa *</label>
+                                <input
+                                  value={companyProfile.company_name}
+                                  onChange={e => updateCompanyField("company_name", e.target.value)}
+                                  className="w-full h-9 px-3 rounded-lg bg-[#0A0A14] border border-[#1a1a2e] text-sm text-white focus:outline-none focus:border-[#00D4FF]/30"
+                                  placeholder="Ex: VS Soluções"
+                                />
+                              </div>
+                              <div>
+                                <label className="text-[10px] text-gray-500 uppercase tracking-wider mb-1 block">Segmento</label>
+                                <input
+                                  value={companyProfile.segment || ""}
+                                  onChange={e => updateCompanyField("segment", e.target.value)}
+                                  className="w-full h-9 px-3 rounded-lg bg-[#0A0A14] border border-[#1a1a2e] text-sm text-white focus:outline-none focus:border-[#00D4FF]/30"
+                                  placeholder="Ex: Tecnologia B2B"
+                                />
+                              </div>
+                              <div>
+                                <label className="text-[10px] text-gray-500 uppercase tracking-wider mb-1 block">CNPJ</label>
+                                <input
+                                  value={companyProfile.cnpj || ""}
+                                  onChange={e => updateCompanyField("cnpj", e.target.value)}
+                                  className="w-full h-9 px-3 rounded-lg bg-[#0A0A14] border border-[#1a1a2e] text-sm text-white focus:outline-none focus:border-[#00D4FF]/30"
+                                  placeholder="00.000.000/0000-00"
+                                />
+                              </div>
+                              <div>
+                                <label className="text-[10px] text-gray-500 uppercase tracking-wider mb-1 block">Ano de Fundação</label>
+                                <input
+                                  type="number"
+                                  value={companyProfile.founded_year || ""}
+                                  onChange={e => updateCompanyField("founded_year", e.target.value ? Number(e.target.value) : null)}
+                                  className="w-full h-9 px-3 rounded-lg bg-[#0A0A14] border border-[#1a1a2e] text-sm text-white focus:outline-none focus:border-[#00D4FF]/30"
+                                  placeholder="2020"
+                                />
+                              </div>
+                            </div>
+                            <div>
+                              <label className="text-[10px] text-gray-500 uppercase tracking-wider mb-1 block">Descrição</label>
+                              <textarea
+                                rows={3}
+                                value={companyProfile.description}
+                                onChange={e => updateCompanyField("description", e.target.value)}
+                                className="w-full px-3 py-2 rounded-lg bg-[#0A0A14] border border-[#1a1a2e] text-sm text-white focus:outline-none focus:border-[#00D4FF]/30 resize-none"
+                                placeholder="O que a empresa faz, qual problema resolve..."
+                              />
+                            </div>
+                            <div className="grid grid-cols-3 gap-4">
+                              <div>
+                                <label className="text-[10px] text-gray-500 uppercase tracking-wider mb-1 block">Missão</label>
+                                <textarea rows={2} value={companyProfile.mission} onChange={e => updateCompanyField("mission", e.target.value)} className="w-full px-3 py-2 rounded-lg bg-[#0A0A14] border border-[#1a1a2e] text-sm text-white focus:outline-none focus:border-[#00D4FF]/30 resize-none" placeholder="Propósito" />
+                              </div>
+                              <div>
+                                <label className="text-[10px] text-gray-500 uppercase tracking-wider mb-1 block">Visão</label>
+                                <textarea rows={2} value={companyProfile.vision} onChange={e => updateCompanyField("vision", e.target.value)} className="w-full px-3 py-2 rounded-lg bg-[#0A0A14] border border-[#1a1a2e] text-sm text-white focus:outline-none focus:border-[#00D4FF]/30 resize-none" placeholder="Onde quer chegar" />
+                              </div>
+                              <div>
+                                <label className="text-[10px] text-gray-500 uppercase tracking-wider mb-1 block">Valores</label>
+                                <textarea rows={2} value={companyProfile.values} onChange={e => updateCompanyField("values", e.target.value)} className="w-full px-3 py-2 rounded-lg bg-[#0A0A14] border border-[#1a1a2e] text-sm text-white focus:outline-none focus:border-[#00D4FF]/30 resize-none" placeholder="O que guia a empresa" />
+                              </div>
+                            </div>
+                            <div className="grid grid-cols-2 gap-4">
+                              <div>
+                                <label className="text-[10px] text-gray-500 uppercase tracking-wider mb-1 block">Tamanho da Equipe</label>
+                                <input value={companyProfile.team_size || ""} onChange={e => updateCompanyField("team_size", e.target.value)} className="w-full h-9 px-3 rounded-lg bg-[#0A0A14] border border-[#1a1a2e] text-sm text-white focus:outline-none focus:border-[#00D4FF]/30" placeholder="Ex: 10-50" />
+                              </div>
+                              <div>
+                                <label className="text-[10px] text-gray-500 uppercase tracking-wider mb-1 block">Ticket Médio</label>
+                                <input value={companyProfile.avg_ticket || ""} onChange={e => updateCompanyField("avg_ticket", e.target.value)} className="w-full h-9 px-3 rounded-lg bg-[#0A0A14] border border-[#1a1a2e] text-sm text-white focus:outline-none focus:border-[#00D4FF]/30" placeholder="Ex: R$ 2.000/mês" />
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Products */}
+                          <div className="rounded-xl border border-[#1a1a2e] bg-[#0d0d18]/60 p-5 space-y-4">
+                            <div className="flex items-center justify-between">
+                              <h3 className="text-xs font-semibold text-white uppercase tracking-wider flex items-center gap-2">
+                                <Package className="h-4 w-4 text-[#00FF88]" /> Produtos & Serviços
+                              </h3>
+                              <button onClick={addCompanyProduct} className="flex items-center gap-1 text-[10px] text-[#00D4FF] hover:text-white transition-colors">
+                                <Plus className="h-3 w-3" /> Adicionar
+                              </button>
+                            </div>
+                            {companyProfile.products_services.length === 0 && (
+                              <p className="text-xs text-gray-600 text-center py-4">Nenhum produto cadastrado.</p>
+                            )}
+                            {companyProfile.products_services.map((product, idx) => (
+                              <div key={idx} className="p-3 rounded-lg border border-[#1a1a2e] bg-[#0A0A14]/50 space-y-2">
+                                <div className="flex items-center justify-between">
+                                  <span className="text-[10px] text-gray-500">Produto {idx + 1}</span>
+                                  <button onClick={() => removeCompanyProduct(idx)} className="text-gray-600 hover:text-red-400"><X className="h-3 w-3" /></button>
+                                </div>
+                                <div className="grid grid-cols-2 gap-2">
+                                  <input value={product.name} onChange={e => updateCompanyProduct(idx, "name", e.target.value)} className="h-8 px-3 rounded-lg bg-[#0A0A14] border border-[#1a1a2e] text-xs text-white focus:outline-none focus:border-[#00D4FF]/30" placeholder="Nome" />
+                                  <input value={product.price || ""} onChange={e => updateCompanyProduct(idx, "price", e.target.value)} className="h-8 px-3 rounded-lg bg-[#0A0A14] border border-[#1a1a2e] text-xs text-white focus:outline-none focus:border-[#00D4FF]/30" placeholder="Preço" />
+                                </div>
+                                <textarea rows={2} value={product.description} onChange={e => updateCompanyProduct(idx, "description", e.target.value)} className="w-full px-3 py-2 rounded-lg bg-[#0A0A14] border border-[#1a1a2e] text-xs text-white focus:outline-none focus:border-[#00D4FF]/30 resize-none" placeholder="Descrição" />
+                              </div>
+                            ))}
+                          </div>
+
+                          {/* Strategy */}
+                          <div className="rounded-xl border border-[#1a1a2e] bg-[#0d0d18]/60 p-5 space-y-4">
+                            <h3 className="text-xs font-semibold text-white uppercase tracking-wider flex items-center gap-2">
+                              <Target className="h-4 w-4 text-[#FFB800]" /> Estratégia Comercial
+                            </h3>
+                            <div>
+                              <label className="text-[10px] text-gray-500 uppercase tracking-wider mb-1 block">Público-Alvo</label>
+                              <textarea rows={3} value={companyProfile.target_audience} onChange={e => updateCompanyField("target_audience", e.target.value)} className="w-full px-3 py-2 rounded-lg bg-[#0A0A14] border border-[#1a1a2e] text-sm text-white focus:outline-none focus:border-[#00D4FF]/30 resize-none" placeholder="Cliente ideal, segmento, porte..." />
+                            </div>
+                            <div>
+                              <label className="text-[10px] text-gray-500 uppercase tracking-wider mb-1 block">Diferenciais</label>
+                              <textarea rows={3} value={companyProfile.differentials} onChange={e => updateCompanyField("differentials", e.target.value)} className="w-full px-3 py-2 rounded-lg bg-[#0A0A14] border border-[#1a1a2e] text-sm text-white focus:outline-none focus:border-[#00D4FF]/30 resize-none" placeholder="O que diferencia da concorrência..." />
+                            </div>
+                            <div>
+                              <label className="text-[10px] text-gray-500 uppercase tracking-wider mb-1 block">Tom de Voz</label>
+                              <textarea rows={2} value={companyProfile.tone_of_voice} onChange={e => updateCompanyField("tone_of_voice", e.target.value)} className="w-full px-3 py-2 rounded-lg bg-[#0A0A14] border border-[#1a1a2e] text-sm text-white focus:outline-none focus:border-[#00D4FF]/30 resize-none" placeholder="Profissional, consultivo..." />
+                            </div>
+                            <div>
+                              <label className="text-[10px] text-gray-500 uppercase tracking-wider mb-1 block">Processo de Vendas</label>
+                              <textarea rows={3} value={companyProfile.sales_process} onChange={e => updateCompanyField("sales_process", e.target.value)} className="w-full px-3 py-2 rounded-lg bg-[#0A0A14] border border-[#1a1a2e] text-sm text-white focus:outline-none focus:border-[#00D4FF]/30 resize-none" placeholder="Etapas do funil, qualificação..." />
+                            </div>
+                          </div>
+
+                          {/* FAQ / Objections */}
+                          <div className="rounded-xl border border-[#1a1a2e] bg-[#0d0d18]/60 p-5 space-y-4">
+                            <div className="flex items-center justify-between">
+                              <h3 className="text-xs font-semibold text-white uppercase tracking-wider flex items-center gap-2">
+                                <HelpCircle className="h-4 w-4 text-[#FF4444]" /> Objeções & FAQ
+                              </h3>
+                              <button onClick={addCompanyFaq} className="flex items-center gap-1 text-[10px] text-[#00D4FF] hover:text-white transition-colors">
+                                <Plus className="h-3 w-3" /> Adicionar
+                              </button>
+                            </div>
+                            {companyProfile.objections_faq.length === 0 && (
+                              <p className="text-xs text-gray-600 text-center py-4">Nenhuma objeção cadastrada.</p>
+                            )}
+                            {companyProfile.objections_faq.map((faq, idx) => (
+                              <div key={idx} className="p-3 rounded-lg border border-[#1a1a2e] bg-[#0A0A14]/50 space-y-2">
+                                <div className="flex items-center justify-between">
+                                  <span className="text-[10px] text-gray-500">Objeção {idx + 1}</span>
+                                  <button onClick={() => removeCompanyFaq(idx)} className="text-gray-600 hover:text-red-400"><X className="h-3 w-3" /></button>
+                                </div>
+                                <input value={faq.question} onChange={e => updateCompanyFaq(idx, "question", e.target.value)} className="w-full h-8 px-3 rounded-lg bg-[#0A0A14] border border-[#1a1a2e] text-xs text-white focus:outline-none focus:border-[#00D4FF]/30" placeholder="Pergunta / Objeção" />
+                                <textarea rows={2} value={faq.answer} onChange={e => updateCompanyFaq(idx, "answer", e.target.value)} className="w-full px-3 py-2 rounded-lg bg-[#0A0A14] border border-[#1a1a2e] text-xs text-white focus:outline-none focus:border-[#00D4FF]/30 resize-none" placeholder="Resposta / Contorno" />
+                              </div>
+                            ))}
+                          </div>
+
+                          {/* Contact */}
+                          <div className="rounded-xl border border-[#1a1a2e] bg-[#0d0d18]/60 p-5 space-y-4">
+                            <h3 className="text-xs font-semibold text-white uppercase tracking-wider flex items-center gap-2">
+                              <Globe className="h-4 w-4 text-[#0057FF]" /> Contato & Redes
+                            </h3>
+                            <div className="grid grid-cols-2 gap-4">
+                              <div>
+                                <label className="text-[10px] text-gray-500 uppercase tracking-wider mb-1 block">Telefone</label>
+                                <input value={companyProfile.phone || ""} onChange={e => updateCompanyField("phone", e.target.value)} className="w-full h-9 px-3 rounded-lg bg-[#0A0A14] border border-[#1a1a2e] text-sm text-white focus:outline-none focus:border-[#00D4FF]/30" placeholder="+55 11 99999-9999" />
+                              </div>
+                              <div>
+                                <label className="text-[10px] text-gray-500 uppercase tracking-wider mb-1 block">Email</label>
+                                <input value={companyProfile.email || ""} onChange={e => updateCompanyField("email", e.target.value)} className="w-full h-9 px-3 rounded-lg bg-[#0A0A14] border border-[#1a1a2e] text-sm text-white focus:outline-none focus:border-[#00D4FF]/30" placeholder="contato@empresa.com" />
+                              </div>
+                              <div>
+                                <label className="text-[10px] text-gray-500 uppercase tracking-wider mb-1 block">Website</label>
+                                <input value={companyProfile.website || ""} onChange={e => updateCompanyField("website", e.target.value)} className="w-full h-9 px-3 rounded-lg bg-[#0A0A14] border border-[#1a1a2e] text-sm text-white focus:outline-none focus:border-[#00D4FF]/30" placeholder="https://www.empresa.com" />
+                              </div>
+                              <div>
+                                <label className="text-[10px] text-gray-500 uppercase tracking-wider mb-1 block">Endereço</label>
+                                <input value={companyProfile.address || ""} onChange={e => updateCompanyField("address", e.target.value)} className="w-full h-9 px-3 rounded-lg bg-[#0A0A14] border border-[#1a1a2e] text-sm text-white focus:outline-none focus:border-[#00D4FF]/30" placeholder="Cidade, Estado" />
+                              </div>
+                              <div>
+                                <label className="text-[10px] text-gray-500 uppercase tracking-wider mb-1 block">Instagram</label>
+                                <input value={companyProfile.instagram || ""} onChange={e => updateCompanyField("instagram", e.target.value)} className="w-full h-9 px-3 rounded-lg bg-[#0A0A14] border border-[#1a1a2e] text-sm text-white focus:outline-none focus:border-[#00D4FF]/30" placeholder="@empresa" />
+                              </div>
+                              <div>
+                                <label className="text-[10px] text-gray-500 uppercase tracking-wider mb-1 block">LinkedIn</label>
+                                <input value={companyProfile.linkedin || ""} onChange={e => updateCompanyField("linkedin", e.target.value)} className="w-full h-9 px-3 rounded-lg bg-[#0A0A14] border border-[#1a1a2e] text-sm text-white focus:outline-none focus:border-[#00D4FF]/30" placeholder="linkedin.com/company/..." />
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      ) : null}
+                    </div>
+                  )}
                 </div>
               )}
             </>
