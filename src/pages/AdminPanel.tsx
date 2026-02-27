@@ -14,7 +14,7 @@ import {
   Linkedin, Facebook, MapPin, Upload, Sparkles, HelpCircle, Link2
 } from "lucide-react";
 
-type Tab = "metrics" | "pending" | "users" | "leads" | "content" | "companies";
+type Tab = "metrics" | "pending" | "users" | "leads" | "content" | "companies" | "logs";
 
 interface Organization {
   id: string;
@@ -148,10 +148,43 @@ export default function AdminPanel() {
   const [savingCompany, setSavingCompany] = useState(false);
   const [loadingCompany, setLoadingCompany] = useState(false);
   const [deletingUser, setDeletingUser] = useState<string | null>(null);
+  const [activityLogs, setActivityLogs] = useState<any[]>([]);
+  const [logsLoading, setLogsLoading] = useState(false);
+  const [logUserFilter, setLogUserFilter] = useState<string>("all");
+  const [logSearchQuery, setLogSearchQuery] = useState("");
   const { toast } = useToast();
   const navigate = useNavigate();
 
   useEffect(() => { loadData(); }, []);
+
+  // Load activity logs
+  const loadLogs = async () => {
+    setLogsLoading(true);
+    const { data } = await supabase
+      .from("activity_logs")
+      .select("*")
+      .order("created_at", { ascending: false })
+      .limit(200);
+    if (data) setActivityLogs(data);
+    setLogsLoading(false);
+  };
+
+  // Load logs when tab changes to logs
+  useEffect(() => {
+    if (tab === "logs") loadLogs();
+  }, [tab]);
+
+  // Realtime subscription for logs
+  useEffect(() => {
+    if (tab !== "logs") return;
+    const channel = supabase
+      .channel("admin-activity-logs")
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "activity_logs" }, (payload) => {
+        setActivityLogs(prev => [payload.new as any, ...prev].slice(0, 200));
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [tab]);
 
   const loadData = async () => {
     setLoading(true);
@@ -292,6 +325,7 @@ export default function AdminPanel() {
     { key: "users", label: "Usuários", icon: Users },
     { key: "leads", label: "Formulários", icon: FileText },
     { key: "content", label: "Conteúdo", icon: Settings },
+    { key: "logs", label: "Logs", icon: Activity },
   ];
 
   // Company profile management
@@ -1390,6 +1424,128 @@ export default function AdminPanel() {
                 </div>
               )}
             </>
+          )}
+
+          {/* === LOGS TAB === */}
+          {tab === "logs" && (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <h2 className="text-lg font-bold text-white">Logs de Atividade</h2>
+                <button onClick={loadLogs} className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[#0057FF]/10 text-[#00D4FF] text-xs font-medium hover:bg-[#0057FF]/20 transition-colors">
+                  <RefreshCw className={`h-3.5 w-3.5 ${logsLoading ? "animate-spin" : ""}`} /> Atualizar
+                </button>
+              </div>
+
+              {/* Filters */}
+              <div className="flex gap-3">
+                <div className="relative flex-1">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-600" />
+                  <input
+                    value={logSearchQuery}
+                    onChange={e => setLogSearchQuery(e.target.value)}
+                    placeholder="Buscar por ação ou descrição..."
+                    className="w-full h-9 pl-9 pr-3 rounded-lg bg-[#0A0A14] border border-[#1a1a2e] text-sm text-white placeholder:text-gray-700 focus:outline-none focus:border-[#00D4FF]/30"
+                  />
+                </div>
+                <select
+                  value={logUserFilter}
+                  onChange={e => setLogUserFilter(e.target.value)}
+                  className="h-9 px-3 rounded-lg bg-[#0A0A14] border border-[#1a1a2e] text-sm text-white focus:outline-none focus:border-[#00D4FF]/30"
+                >
+                  <option value="all">Todos os usuários</option>
+                  {Array.from(new Map(activityLogs.map(l => [l.user_id, l.user_name || l.user_email])).entries()).map(([uid, name]) => (
+                    <option key={uid} value={uid}>{name}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Log entries */}
+              {logsLoading ? (
+                <div className="flex items-center justify-center py-16">
+                  <Loader2 className="h-6 w-6 animate-spin text-gray-600" />
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {activityLogs
+                    .filter(log => {
+                      if (logUserFilter !== "all" && log.user_id !== logUserFilter) return false;
+                      if (logSearchQuery) {
+                        const q = logSearchQuery.toLowerCase();
+                        return (log.action || "").toLowerCase().includes(q) || (log.description || "").toLowerCase().includes(q) || (log.user_name || "").toLowerCase().includes(q);
+                      }
+                      return true;
+                    })
+                    .map(log => {
+                      const isSuccess = log.success;
+                      const statusColor = isSuccess ? "#00FF88" : "#FF4444";
+                      const StatusIcon = isSuccess ? CheckCircle2 : XCircle;
+                      const orgName = organizations.find(o => o.id === log.org_id)?.name;
+
+                      return (
+                        <div
+                          key={log.id}
+                          className="flex items-start gap-3 p-3 rounded-xl border border-[#1a1a2e] bg-[#0d0d18] hover:border-[#1a1a2e]/80 transition-colors"
+                        >
+                          <div
+                            className="h-8 w-8 rounded-lg flex items-center justify-center shrink-0 mt-0.5"
+                            style={{ background: `${statusColor}12` }}
+                          >
+                            <StatusIcon className="h-4 w-4" style={{ color: statusColor }} />
+                          </div>
+
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className="text-xs font-semibold text-white">{log.description}</span>
+                              <span
+                                className="text-[9px] px-1.5 py-0.5 rounded-full font-medium"
+                                style={{ background: `${statusColor}15`, color: statusColor, border: `1px solid ${statusColor}25` }}
+                              >
+                                {isSuccess ? "Sucesso" : "Falha"}
+                              </span>
+                            </div>
+
+                            <div className="flex items-center gap-3 text-[10px] text-gray-500">
+                              <span className="flex items-center gap-1">
+                                <User className="h-3 w-3" />
+                                {log.user_name || log.user_email || "—"}
+                              </span>
+                              {orgName && (
+                                <span className="flex items-center gap-1">
+                                  <Building2 className="h-3 w-3" />
+                                  {orgName}
+                                </span>
+                              )}
+                              <span className="px-1.5 py-0.5 rounded bg-[#0057FF]/10 text-[#00D4FF]">
+                                {log.action}
+                              </span>
+                            </div>
+
+                            {!isSuccess && log.error_message && (
+                              <p className="mt-1.5 text-[10px] text-red-400 bg-red-400/[0.05] px-2 py-1 rounded">
+                                ⚠ {log.error_message}
+                              </p>
+                            )}
+                          </div>
+
+                          <span className="text-[10px] text-gray-600 shrink-0 whitespace-nowrap">
+                            {new Date(log.created_at).toLocaleDateString("pt-BR", {
+                              day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit",
+                            })}
+                          </span>
+                        </div>
+                      );
+                    })}
+
+                  {activityLogs.length === 0 && (
+                    <div className="text-center py-16 text-gray-600">
+                      <Activity className="h-10 w-10 mx-auto mb-3 opacity-30" />
+                      <p className="text-sm">Nenhum log registrado ainda.</p>
+                      <p className="text-xs mt-1">As atividades dos usuários aparecerão aqui em tempo real.</p>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
           )}
         </div>
       </main>

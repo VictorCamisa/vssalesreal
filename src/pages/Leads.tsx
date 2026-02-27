@@ -2,6 +2,7 @@ import { useEffect, useState, useMemo, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
+import { logActivity } from "@/lib/activityLogger";
 import {
   Users, Search, Sparkles, ArrowRight, Trash2, Loader2, Download,
   Upload, Plus, Eye, MoreVertical, Target, BarChart3, Filter,
@@ -158,10 +159,12 @@ export default function Leads() {
       });
       if (error) throw error;
       toast({ title: "Enriquecimento concluído!", description: `${data?.enriched || 0} leads enriquecidos.` });
+      logActivity({ action: "leads_enriquecidos", description: `${data?.enriched || 0} leads enriquecidos com sucesso` });
       setSelected(new Set());
       fetchLeads();
     } catch (error: any) {
       toast({ title: "Erro", description: error.message, variant: "destructive" });
+      logActivity({ action: "leads_enriquecidos", description: "Falha ao enriquecer leads", success: false, errorMessage: error.message });
     } finally { setEnriching(false); }
   };
 
@@ -197,10 +200,12 @@ export default function Leads() {
       await supabase.from("leads_raw").update({ status: "converted" as const }).in("id", Array.from(selected));
 
       toast({ title: "Leads enviados ao CRM!", description: `${selected.size} oportunidades criadas.` });
+      logActivity({ action: "leads_convertidos", description: `${selected.size} leads convertidos para o CRM` });
       setSelected(new Set());
       fetchLeads();
     } catch (error: any) {
       toast({ title: "Erro", description: error.message, variant: "destructive" });
+      logActivity({ action: "leads_convertidos", description: "Falha ao converter leads", success: false, errorMessage: error.message });
     } finally { setConverting(false); }
   };
 
@@ -267,8 +272,9 @@ export default function Leads() {
     }).filter(r => r.name || r.phone || r.email);
     if (rows.length === 0) { toast({ title: "CSV vazio ou inválido", variant: "destructive" }); return; }
     const { error } = await supabase.from("leads_raw").insert(rows);
-    if (error) { toast({ title: "Erro", description: error.message, variant: "destructive" }); return; }
+    if (error) { toast({ title: "Erro", description: error.message, variant: "destructive" }); logActivity({ action: "leads_importados", description: "Falha na importação CSV", success: false, errorMessage: error.message }); return; }
     toast({ title: `${rows.length} leads importados!` });
+    logActivity({ action: "leads_importados", description: `${rows.length} leads importados via CSV` });
     fetchLeads();
   };
 
@@ -291,11 +297,13 @@ export default function Leads() {
       });
       if (error) throw error;
       toast({ title: "Lead adicionado!" });
+      logActivity({ action: "lead_adicionado", description: `Lead "${newLead.name}" adicionado manualmente` });
       setNewLead({ name: "", phone: "", email: "" });
       setAddOpen(false);
       fetchLeads();
     } catch (error: any) {
       toast({ title: "Erro", description: error.message, variant: "destructive" });
+      logActivity({ action: "lead_adicionado", description: `Falha ao adicionar lead "${newLead.name}"`, success: false, errorMessage: error.message });
     } finally { setAddLoading(false); }
   };
 

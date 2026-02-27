@@ -2,6 +2,7 @@ import { useEffect, useState, useRef, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
+import { logActivity } from "@/lib/activityLogger";
 import ReactMarkdown from "react-markdown";
 import {
   Bot, Brain, MessageSquare, Sparkles, Save, Loader2, Plus, Trash2,
@@ -644,8 +645,10 @@ function ChatbotTab({ orgId }: { orgId: string }) {
         if (data) updateConfig({ id: data.id });
       }
       toast({ title: "Salvo!", description: "Configuração do chatbot atualizada." });
+      logActivity({ action: "ia_config_salva", description: `Configuração do chatbot salva` });
     } catch (e: any) {
       toast({ title: "Erro", description: e.message, variant: "destructive" });
+      logActivity({ action: "ia_config_salva", description: "Falha ao salvar configuração do chatbot", success: false, errorMessage: e.message });
     }
     setSaving(false);
   };
