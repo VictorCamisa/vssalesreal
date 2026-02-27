@@ -212,13 +212,40 @@ export default function Leads() {
     fetchLeads();
   };
 
+  const [deleting, setDeleting] = useState(false);
+
   const handleDelete = async () => {
     if (selected.size === 0) return;
-    const { error } = await supabase.from("leads_raw").delete().in("id", Array.from(selected));
-    if (error) { toast({ title: "Erro", description: error.message, variant: "destructive" }); return; }
-    toast({ title: `${selected.size} leads excluídos.` });
-    setSelected(new Set());
-    fetchLeads();
+    setDeleting(true);
+    const ids = Array.from(selected);
+    const BATCH_SIZE = 500;
+    let deletedCount = 0;
+    let lastError: string | null = null;
+
+    try {
+      for (let i = 0; i < ids.length; i += BATCH_SIZE) {
+        const batch = ids.slice(i, i + BATCH_SIZE);
+        const { error } = await supabase.from("leads_raw").delete().in("id", batch);
+        if (error) {
+          lastError = error.message;
+          console.error(`Batch delete error:`, error.message);
+        } else {
+          deletedCount += batch.length;
+        }
+      }
+
+      if (lastError && deletedCount === 0) {
+        toast({ title: "Erro ao excluir", description: lastError, variant: "destructive" });
+      } else {
+        toast({ title: `${deletedCount} leads excluídos.` });
+      }
+      setSelected(new Set());
+      fetchLeads();
+    } catch (error: any) {
+      toast({ title: "Erro", description: error.message, variant: "destructive" });
+    } finally {
+      setDeleting(false);
+    }
   };
 
   const handleCSVUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -389,8 +416,8 @@ export default function Leads() {
           <Button size="sm" variant="outline" className="rounded-xl h-8 text-xs gap-1.5" onClick={handleDiscard}>
             <X className="h-3 w-3" /> Descartar
           </Button>
-          <Button size="sm" variant="destructive" className="rounded-xl h-8 text-xs gap-1.5" onClick={handleDelete}>
-            <Trash2 className="h-3 w-3" /> Excluir
+          <Button size="sm" variant="destructive" className="rounded-xl h-8 text-xs gap-1.5" onClick={handleDelete} disabled={deleting}>
+            {deleting ? <Loader2 className="h-3 w-3 animate-spin" /> : <Trash2 className="h-3 w-3" />} Excluir
           </Button>
         </div>
       )}
