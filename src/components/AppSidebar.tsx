@@ -1,6 +1,6 @@
 import {
   LayoutDashboard, Search, Users, Kanban, LogOut, Brain,
-  Smartphone, Send, Building2, Calendar,
+  Smartphone, Send, Building2, Calendar, UserCheck,
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useAuth } from "@/contexts/AuthContext";
@@ -25,6 +25,7 @@ const toolsNav = [
   { title: "CRM Pipeline", url: "/crm", icon: Kanban },
   { title: "Agendamentos", url: "/appointments", icon: Calendar },
   { title: "Agente IA", url: "/ai", icon: Brain },
+  { title: "Meu Vendedor", url: "/my-seller", icon: UserCheck },
   { title: "Empresa", url: "/company", icon: Building2 },
 ];
 
