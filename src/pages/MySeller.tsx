@@ -8,6 +8,7 @@ import {
   Loader2, Send, ChevronDown, ChevronUp, Sparkles, Shield, AlertTriangle,
   CheckCircle2, XCircle, TrendingUp, Users, Zap, MessageCircle, RefreshCw,
   Bot, Lightbulb, HelpCircle, Save, Plus, X, Trash2,
+  ArrowDown, Radio, Clock, Workflow,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -744,6 +745,132 @@ export default function MySeller() {
           </Collapsible>
         )}
       </div>
+
+        {/* ---- WORKFLOW / PIPELINE STEPS ---- */}
+        <Collapsible open={openSections["workflow"]} onOpenChange={() => toggleSection("workflow")}>
+          <CollapsibleTrigger asChild>
+            <button className="w-full glass-card p-4 flex items-center justify-between hover:border-primary/30 transition-colors">
+              <div className="flex items-center gap-3">
+                <div className="h-9 w-9 rounded-lg bg-primary/10 flex items-center justify-center"><Workflow className="h-4 w-4 text-primary" /></div>
+                <div className="text-left">
+                  <p className="text-sm font-semibold">Fluxo do Agente — Como Tudo Funciona</p>
+                  <p className="text-[11px] text-muted-foreground">Passo a passo do que acontece quando você dispara e o lead responde</p>
+                </div>
+              </div>
+              {openSections["workflow"] ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
+            </button>
+          </CollapsibleTrigger>
+          <CollapsibleContent className="glass-card border-t-0 rounded-t-none p-5 space-y-0 animate-fade-in">
+            {(() => {
+              const hasEvolution = true; // assumed configured
+              const hasAiConfig = aiConfigs.length > 0;
+              const hasActiveAgent = aiConfigs.some((c) => c.enabled);
+              const hasKnowledge = docs.length > 0;
+              const hasProducts = (company?.products_services?.length || 0) > 0;
+
+              const steps = [
+                {
+                  icon: Radio,
+                  title: "1. Disparo de Campanha",
+                  desc: "Você cria um broadcast e seleciona os leads. O sistema envia as mensagens via WhatsApp em lotes de 50, com delay humanizado entre cada envio.",
+                  agent: "Motor de Disparos",
+                  status: "always" as const,
+                  detail: "Variáveis como {nome} são substituídas automaticamente. Se IA estiver ativa, gera mensagens personalizadas.",
+                },
+                {
+                  icon: MessageCircle,
+                  title: "2. Lead Responde no WhatsApp",
+                  desc: "A mensagem do lead chega via webhook da Evolution API e é processada automaticamente.",
+                  agent: "Webhook Receptor",
+                  status: hasEvolution ? "active" as const : "inactive" as const,
+                  detail: "O sistema identifica qual organização e instância recebeu a mensagem, cria/atualiza o tracker de conversa e incrementa o contador de mensagens.",
+                },
+                {
+                  icon: Brain,
+                  title: "3. IA Gera a Resposta",
+                  desc: "O agente de IA monta o contexto completo (empresa + produtos + objeções + base de conhecimento) e gera uma resposta natural.",
+                  agent: "Agente de Vendas IA",
+                  status: hasActiveAgent ? "active" as const : "inactive" as const,
+                  detail: hasKnowledge
+                    ? `Usando ${docs.length} docs da base + ${company?.products_services?.length || 0} produtos + ${company?.objections_faq?.length || 0} objeções como contexto.`
+                    : "⚠️ Sem base de conhecimento. A IA responde só com dados da empresa.",
+                },
+                {
+                  icon: Zap,
+                  title: "4. Resposta Enviada em Blocos",
+                  desc: "A resposta é fragmentada em blocos curtos e enviada com delays variáveis, simulando digitação humana real.",
+                  agent: "Motor de Envio Humanizado",
+                  status: "always" as const,
+                  detail: "Cada bloco de 1-2 linhas é enviado com 1-3s de intervalo, calculado pelo tamanho do texto.",
+                },
+                {
+                  icon: Clock,
+                  title: "5. Follow-up Automático",
+                  desc: "Se o lead não responder, o sistema de follow-up envia mensagens de reativação baseadas nas regras configuradas.",
+                  agent: "Motor de Follow-up",
+                  status: hasAiConfig ? "active" as const : "inactive" as const,
+                  detail: "Cada etapa tem um delay configurável (ex: 30min, 2h, 24h). A IA varia a abordagem a cada step. Quando o lead responde, o follow-up reseta.",
+                },
+                {
+                  icon: TrendingUp,
+                  title: "6. Pipeline Atualiza Automaticamente",
+                  desc: "O CRM move o lead pelo pipeline baseado no engajamento: 3+ respostas avança para prospecção, 5+ qualifica via BANT.",
+                  agent: "Motor de Pipeline",
+                  status: hasAiConfig ? "active" as const : "inactive" as const,
+                  detail: "Automação roda periodicamente, analisa conversas ativas e envia mensagens personalizadas conforme o estágio do lead no pipeline.",
+                },
+                {
+                  icon: Target,
+                  title: "7. Agendamento Autônomo",
+                  desc: "Se o lead pedir para agendar uma reunião, a IA detecta e cria o agendamento automaticamente no sistema.",
+                  agent: "Agente de Agendamento",
+                  status: hasActiveAgent ? "active" as const : "inactive" as const,
+                  detail: "Comandos invisíveis [AGENDAR:DATA:HORA:NOME] são processados sem que o lead veja. Suporta cancelamento e verificação de agenda.",
+                },
+              ];
+
+              return (
+                <div className="relative">
+                  {steps.map((step, i) => {
+                    const Icon = step.icon;
+                    const isActive = step.status === "active" || step.status === "always";
+                    return (
+                      <div key={i} className="relative flex gap-4">
+                        {/* Vertical line */}
+                        <div className="flex flex-col items-center">
+                          <div className={`h-10 w-10 rounded-xl flex items-center justify-center shrink-0 ${
+                            isActive ? "bg-primary/15 text-primary border border-primary/30" : "bg-secondary text-muted-foreground border border-border"
+                          }`}>
+                            <Icon className="h-4.5 w-4.5" />
+                          </div>
+                          {i < steps.length - 1 && (
+                            <div className={`w-0.5 flex-1 min-h-[24px] my-1 ${isActive ? "bg-primary/30" : "bg-border"}`} />
+                          )}
+                        </div>
+                        {/* Content */}
+                        <div className="pb-5 flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <p className={`text-sm font-semibold ${isActive ? "text-foreground" : "text-muted-foreground"}`}>{step.title}</p>
+                            <Badge variant={isActive ? "default" : "secondary"} className="text-[9px] h-4 px-1.5">
+                              {step.agent}
+                            </Badge>
+                            {step.status === "inactive" && (
+                              <Badge variant="destructive" className="text-[9px] h-4 px-1.5">Inativo</Badge>
+                            )}
+                          </div>
+                          <p className={`text-xs mt-1 ${isActive ? "text-muted-foreground" : "text-muted-foreground/60"}`}>{step.desc}</p>
+                          <p className={`text-[11px] mt-1.5 rounded-md px-2 py-1 inline-block ${
+                            isActive ? "bg-secondary/60 text-muted-foreground" : "bg-secondary/30 text-muted-foreground/50"
+                          }`}>{step.detail}</p>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })()}
+          </CollapsibleContent>
+        </Collapsible>
 
       {/* ====== SIMULATOR ====== */}
       <div className="glass-card overflow-hidden">
