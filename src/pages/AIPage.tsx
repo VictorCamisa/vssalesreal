@@ -687,24 +687,38 @@ function ChatbotTab({ orgId }: { orgId: string }) {
             {CHATBOT_TEMPLATES.map((t) => {
               const existing = existingAgents.find(a => a.template.role === t.role);
               const isActive = existing?.config.enabled ?? false;
+              const isConfigured = !!existing;
+
+              const handleToggle = async (e: React.MouseEvent) => {
+                e.stopPropagation();
+                if (!existing) return;
+                const newEnabled = !existing.config.enabled;
+                // Optimistic update
+                setExistingAgents(prev => prev.map(a => 
+                  a.template.role === t.role ? { ...a, config: { ...a.config, enabled: newEnabled } } : a
+                ));
+                if (existing.config.instance_name) {
+                  setConfigs(prev => ({
+                    ...prev,
+                    [existing.config.instance_name!]: { ...existing.config, enabled: newEnabled },
+                  }));
+                }
+                const { error } = await supabase.from("ai_configs").update({ enabled: newEnabled }).eq("id", existing.config.id!);
+                if (error) {
+                  toast({ title: "Erro", description: error.message, variant: "destructive" });
+                  // Rollback
+                  setExistingAgents(prev => prev.map(a => 
+                    a.template.role === t.role ? { ...a, config: { ...a.config, enabled: !newEnabled } } : a
+                  ));
+                } else {
+                  toast({ title: newEnabled ? `${t.role} ativado!` : `${t.role} desativado` });
+                }
+              };
+
               return (
-                <button
+                <div
                   key={t.role}
-                  onClick={() => {
-                    setSelectedTemplate(t);
-                    if (existing?.config.instance_name) setSelectedInstance(existing.config.instance_name);
-                    if (existing) {
-                      // Load existing config into form
-                      setConfigs(prev => ({
-                        ...prev,
-                        [existing.config.instance_name || selectedInstance]: existing.config,
-                      }));
-                    } else {
-                      updateConfig({ system_prompt: t.prompt, config: { ...currentConfig.config, agent_role: t.role } });
-                    }
-                    setShowForm(true);
-                  }}
-                  className="glass rounded-xl p-4 text-left hover:border-primary/30 hover:shadow-md transition-all group"
+                  className={`glass rounded-xl p-4 text-left hover:border-primary/30 hover:shadow-md transition-all group ${isActive ? "border-success/30 bg-success/5" : ""}`}
                 >
                   <div className="flex items-center gap-3 mb-2">
                     <span className="text-2xl">{t.emoji}</span>
@@ -714,16 +728,39 @@ function ChatbotTab({ orgId }: { orgId: string }) {
                         {existing?.config.instance_name || "Não configurado"}
                       </p>
                     </div>
-                    <Badge variant="outline" className={`text-[10px] ${
-                      isActive 
-                        ? "bg-success/10 text-success border-success/30" 
-                        : "bg-secondary text-muted-foreground"
-                    }`}>
-                      {isActive ? "Ativo" : "Inativo"}
-                    </Badge>
+                    <div className="flex items-center gap-2" onClick={e => e.stopPropagation()}>
+                      {isConfigured ? (
+                        <Switch
+                          checked={isActive}
+                          onCheckedChange={() => handleToggle({ stopPropagation: () => {} } as React.MouseEvent)}
+                        />
+                      ) : (
+                        <Badge variant="secondary" className="text-[10px]">Não config.</Badge>
+                      )}
+                    </div>
                   </div>
-                  <p className="text-[11px] text-muted-foreground">{t.description}</p>
-                </button>
+                  <p className="text-[11px] text-muted-foreground mb-3">{t.description}</p>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="w-full text-xs h-7 gap-1"
+                    onClick={() => {
+                      setSelectedTemplate(t);
+                      if (existing?.config.instance_name) setSelectedInstance(existing.config.instance_name);
+                      if (existing) {
+                        setConfigs(prev => ({
+                          ...prev,
+                          [existing.config.instance_name || selectedInstance]: existing.config,
+                        }));
+                      } else {
+                        updateConfig({ system_prompt: t.prompt, config: { ...currentConfig.config, agent_role: t.role } });
+                      }
+                      setShowForm(true);
+                    }}
+                  >
+                    {isConfigured ? "Editar configuração" : "Configurar"}
+                  </Button>
+                </div>
               );
             })}
           </div>
