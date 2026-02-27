@@ -493,6 +493,13 @@ function CreateCampaignDialog({
   const [leadCount, setLeadCount] = useState<number | null>(null);
   const [countLoading, setCountLoading] = useState(false);
 
+  // Selection mode: "segment" or "manual"
+  const [selectionMode, setSelectionMode] = useState<"segment" | "manual">("segment");
+  const [manualLeads, setManualLeads] = useState<LeadRaw[]>([]);
+  const [manualSelected, setManualSelected] = useState<Set<string>>(new Set());
+  const [manualSearch, setManualSearch] = useState("");
+  const [manualLoading, setManualLoading] = useState(false);
+
   // Form state
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
@@ -535,9 +542,52 @@ function CreateCampaignDialog({
     setCountLoading(false);
   };
 
+  // Load leads for manual selection
+  const loadManualLeads = async () => {
+    if (!orgId) return;
+    setManualLoading(true);
+    const { data } = await supabase
+      .from("leads_raw")
+      .select("id, name, phone, email, source, status, tags, created_at")
+      .eq("org_id", orgId)
+      .order("created_at", { ascending: false })
+      .limit(500);
+    setManualLeads((data as LeadRaw[]) || []);
+    setManualLoading(false);
+  };
+
   useEffect(() => {
-    if (open && step === 2 && orgId) countLeads();
-  }, [step, segmentSources, segmentStatuses, segmentDateFrom, segmentDateTo]);
+    if (open && step === 2 && orgId) {
+      if (selectionMode === "segment") countLeads();
+      else loadManualLeads();
+    }
+  }, [step, segmentSources, segmentStatuses, segmentDateFrom, segmentDateTo, selectionMode]);
+
+  const filteredManualLeads = useMemo(() => {
+    if (!manualSearch) return manualLeads;
+    const q = manualSearch.toLowerCase();
+    return manualLeads.filter(l =>
+      l.name?.toLowerCase().includes(q) ||
+      l.phone?.includes(q) ||
+      l.email?.toLowerCase().includes(q)
+    );
+  }, [manualLeads, manualSearch]);
+
+  const toggleManualLead = (id: string) => {
+    setManualSelected(prev => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  };
+
+  const toggleAllManualLeads = () => {
+    if (manualSelected.size === filteredManualLeads.length) {
+      setManualSelected(new Set());
+    } else {
+      setManualSelected(new Set(filteredManualLeads.map(l => l.id)));
+    }
+  };
 
   const reset = () => {
     setStep(1); setName(""); setDescription(""); setType("manual"); setChannel("whatsapp");
@@ -545,40 +595,56 @@ function CreateCampaignDialog({
     setAiEnabled(false); setAiConfigId(""); setInstanceName(""); setMessageTemplate("");
     setFollowUpEnabled(false); setFollowUpCount(3); setFollowUpInterval(24);
     setSendRate(5); setDelayBetween(10); setScheduledAt(""); setLeadCount(null);
+    setSelectionMode("segment"); setManualSelected(new Set()); setManualSearch(""); setManualLeads([]);
   };
 
   const handleCreate = async () => {
     if (!name.trim()) { toast({ title: "Informe o nome", variant: "destructive" }); return; }
+    if (selectionMode === "manual" && manualSelected.size === 0) {
+      toast({ title: "Selecione pelo menos 1 lead", variant: "destructive" }); return;
+    }
     setSaving(true);
     try {
       const tags = segmentTags.split(",").map(t => t.trim()).filter(Boolean);
+      const totalCount = selectionMode === "manual" ? manualSelected.size : (leadCount || 0);
       const payload = {
         org_id: orgId, name, description: description || null,
         status: scheduledAt ? "scheduled" : "draft", type, channel,
-        segment_source: segmentSources, segment_status: segmentStatuses, segment_tags: tags,
-        segment_date_from: segmentDateFrom || null, segment_date_to: segmentDateTo || null,
+        segment_source: selectionMode === "segment" ? segmentSources : [],
+        segment_status: selectionMode === "segment" ? segmentStatuses : [],
+        segment_tags: selectionMode === "segment" ? tags : [],
+        segment_date_from: selectionMode === "segment" ? (segmentDateFrom || null) : null,
+        segment_date_to: selectionMode === "segment" ? (segmentDateTo || null) : null,
         ai_enabled: aiEnabled, ai_config_id: aiConfigId || null, instance_name: instanceName || null,
         message_template: messageTemplate || null,
         follow_up_enabled: followUpEnabled, follow_up_count: followUpCount, follow_up_interval_hours: followUpInterval,
         send_rate_per_minute: sendRate, delay_between_messages: delayBetween,
-        scheduled_at: scheduledAt || null, total_leads: leadCount || 0,
+        scheduled_at: scheduledAt || null, total_leads: totalCount,
       };
       const { data, error } = await supabase.from("broadcasts").insert(payload).select().single();
       if (error) throw error;
 
-      // Vincular leads à campanha
-      if (data && (leadCount || 0) > 0) {
-        let lQuery = supabase.from("leads_raw").select("id").eq("org_id", orgId);
-        if (segmentSources.length > 0) lQuery = lQuery.in("source", segmentSources as ("web" | "whatsapp" | "manual" | "import")[]);
-        if (segmentStatuses.length > 0) lQuery = lQuery.in("status", segmentStatuses as ("pending" | "enriched" | "converted" | "discarded")[]);
-        if (segmentDateFrom) lQuery = lQuery.gte("created_at", segmentDateFrom);
-        if (segmentDateTo) lQuery = lQuery.lte("created_at", segmentDateTo);
-        const { data: leadsData } = await lQuery.limit(500);
-        if (leadsData && leadsData.length > 0) {
-          const bLeads = leadsData.map(l => ({ broadcast_id: data.id, lead_id: l.id }));
+      // Link leads to campaign
+      if (data && totalCount > 0) {
+        let leadsToLink: { id: string }[] = [];
+
+        if (selectionMode === "manual") {
+          leadsToLink = Array.from(manualSelected).map(id => ({ id }));
+        } else {
+          let lQuery = supabase.from("leads_raw").select("id").eq("org_id", orgId);
+          if (segmentSources.length > 0) lQuery = lQuery.in("source", segmentSources as ("web" | "whatsapp" | "manual" | "import")[]);
+          if (segmentStatuses.length > 0) lQuery = lQuery.in("status", segmentStatuses as ("pending" | "enriched" | "converted" | "discarded")[]);
+          if (segmentDateFrom) lQuery = lQuery.gte("created_at", segmentDateFrom);
+          if (segmentDateTo) lQuery = lQuery.lte("created_at", segmentDateTo);
+          const { data: leadsData } = await lQuery.limit(500);
+          leadsToLink = leadsData || [];
+        }
+
+        if (leadsToLink.length > 0) {
+          const bLeads = leadsToLink.map(l => ({ broadcast_id: data.id, lead_id: l.id }));
           await supabase.from("broadcast_leads").insert(bLeads);
-          await supabase.from("broadcasts").update({ total_leads: leadsData.length }).eq("id", data.id);
-          (data as any).total_leads = leadsData.length;
+          await supabase.from("broadcasts").update({ total_leads: leadsToLink.length }).eq("id", data.id);
+          (data as any).total_leads = leadsToLink.length;
         }
       }
 
@@ -653,66 +719,158 @@ function CreateCampaignDialog({
           </div>
         )}
 
-        {/* Step 2: Segmentation */}
+        {/* Step 2: Segmentation / Manual Selection */}
         {step === 2 && (
           <div className="space-y-4">
-            <div className="border rounded-lg p-3 bg-secondary/30">
-              <div className="flex items-center justify-between mb-2">
-                <div className="flex items-center gap-2">
-                  <Filter className="h-4 w-4 text-primary" />
-                  <span className="text-sm font-medium">Leads correspondentes</span>
+            {/* Mode toggle */}
+            <div className="flex gap-1 p-0.5 bg-secondary rounded-lg">
+              <button
+                onClick={() => setSelectionMode("segment")}
+                className={`flex-1 text-xs py-1.5 px-3 rounded-md transition-colors ${selectionMode === "segment" ? "bg-card shadow-sm font-medium" : "text-muted-foreground hover:text-foreground"}`}
+              >
+                <Filter className="h-3 w-3 inline mr-1" />Segmentação
+              </button>
+              <button
+                onClick={() => { setSelectionMode("manual"); loadManualLeads(); }}
+                className={`flex-1 text-xs py-1.5 px-3 rounded-md transition-colors ${selectionMode === "manual" ? "bg-card shadow-sm font-medium" : "text-muted-foreground hover:text-foreground"}`}
+              >
+                <Users className="h-3 w-3 inline mr-1" />Seleção Manual
+              </button>
+            </div>
+
+            {selectionMode === "segment" ? (
+              <>
+                <div className="border rounded-lg p-3 bg-secondary/30">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                      <Filter className="h-4 w-4 text-primary" />
+                      <span className="text-sm font-medium">Leads correspondentes</span>
+                    </div>
+                    <Badge variant="outline" className="text-xs font-mono">
+                      {countLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : leadCount ?? "—"}
+                    </Badge>
+                  </div>
+                  <p className="text-[10px] text-muted-foreground">Os leads que se encaixam nos filtros abaixo serão incluídos na campanha</p>
                 </div>
-                <Badge variant="outline" className="text-xs font-mono">
-                  {countLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : leadCount ?? "—"}
-                </Badge>
-              </div>
-              <p className="text-[10px] text-muted-foreground">Os leads que se encaixam nos filtros abaixo serão incluídos na campanha</p>
-            </div>
 
-            <div className="space-y-1.5">
-              <Label className="text-xs">Origem dos Leads</Label>
-              <div className="flex flex-wrap gap-2">
-                {SOURCE_OPTIONS.map(opt => (
-                  <label key={opt.value} className="flex items-center gap-1.5 text-xs cursor-pointer">
-                    <Checkbox checked={segmentSources.includes(opt.value)} onCheckedChange={() => toggleSource(opt.value)} />
-                    {opt.label}
-                  </label>
-                ))}
-              </div>
-              <p className="text-[10px] text-muted-foreground">Nenhum selecionado = todos</p>
-            </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Origem dos Leads</Label>
+                  <div className="flex flex-wrap gap-2">
+                    {SOURCE_OPTIONS.map(opt => (
+                      <label key={opt.value} className="flex items-center gap-1.5 text-xs cursor-pointer">
+                        <Checkbox checked={segmentSources.includes(opt.value)} onCheckedChange={() => toggleSource(opt.value)} />
+                        {opt.label}
+                      </label>
+                    ))}
+                  </div>
+                  <p className="text-[10px] text-muted-foreground">Nenhum selecionado = todos</p>
+                </div>
 
-            <div className="space-y-1.5">
-              <Label className="text-xs">Status dos Leads</Label>
-              <div className="flex flex-wrap gap-2">
-                {LEAD_STATUS_OPTIONS.map(opt => (
-                  <label key={opt.value} className="flex items-center gap-1.5 text-xs cursor-pointer">
-                    <Checkbox checked={segmentStatuses.includes(opt.value)} onCheckedChange={() => toggleStatus(opt.value)} />
-                    {opt.label}
-                  </label>
-                ))}
-              </div>
-            </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Status dos Leads</Label>
+                  <div className="flex flex-wrap gap-2">
+                    {LEAD_STATUS_OPTIONS.map(opt => (
+                      <label key={opt.value} className="flex items-center gap-1.5 text-xs cursor-pointer">
+                        <Checkbox checked={segmentStatuses.includes(opt.value)} onCheckedChange={() => toggleStatus(opt.value)} />
+                        {opt.label}
+                      </label>
+                    ))}
+                  </div>
+                </div>
 
-            <div className="space-y-1.5">
-              <Label className="text-xs">Tags (separadas por vírgula)</Label>
-              <Input placeholder="ex: quente, SP, imobiliária" value={segmentTags} onChange={e => setSegmentTags(e.target.value)} className="text-sm" />
-            </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Tags (separadas por vírgula)</Label>
+                  <Input placeholder="ex: quente, SP, imobiliária" value={segmentTags} onChange={e => setSegmentTags(e.target.value)} className="text-sm" />
+                </div>
 
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label className="text-xs">Data de criação (de)</Label>
-                <Input type="date" value={segmentDateFrom} onChange={e => setSegmentDateFrom(e.target.value)} className="text-sm" />
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs">Data de criação (até)</Label>
-                <Input type="date" value={segmentDateTo} onChange={e => setSegmentDateTo(e.target.value)} className="text-sm" />
-              </div>
-            </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Data de criação (de)</Label>
+                    <Input type="date" value={segmentDateFrom} onChange={e => setSegmentDateFrom(e.target.value)} className="text-sm" />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Data de criação (até)</Label>
+                    <Input type="date" value={segmentDateTo} onChange={e => setSegmentDateTo(e.target.value)} className="text-sm" />
+                  </div>
+                </div>
 
-            <Button variant="outline" size="sm" className="text-xs gap-1" onClick={countLeads} disabled={countLoading}>
-              <RefreshCw className={`h-3 w-3 ${countLoading ? "animate-spin" : ""}`} /> Recalcular Leads
-            </Button>
+                <Button variant="outline" size="sm" className="text-xs gap-1" onClick={countLeads} disabled={countLoading}>
+                  <RefreshCw className={`h-3 w-3 ${countLoading ? "animate-spin" : ""}`} /> Recalcular Leads
+                </Button>
+              </>
+            ) : (
+              <>
+                <div className="border rounded-lg p-3 bg-secondary/30">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                      <Users className="h-4 w-4 text-primary" />
+                      <span className="text-sm font-medium">Leads selecionados</span>
+                    </div>
+                    <Badge variant="outline" className="text-xs font-mono">
+                      {manualSelected.size} de {manualLeads.length}
+                    </Badge>
+                  </div>
+                  <p className="text-[10px] text-muted-foreground">Escolha manualmente quais leads incluir nesta campanha</p>
+                </div>
+
+                <div className="relative">
+                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                  <Input
+                    placeholder="Buscar por nome, telefone ou email..."
+                    value={manualSearch}
+                    onChange={e => setManualSearch(e.target.value)}
+                    className="pl-8 h-8 text-xs"
+                  />
+                </div>
+
+                {manualLoading ? (
+                  <div className="flex justify-center py-8"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>
+                ) : (
+                  <div className="border rounded-lg overflow-hidden">
+                    <ScrollArea className="max-h-[280px]">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead className="w-8 text-[10px]">
+                              <Checkbox
+                                checked={filteredManualLeads.length > 0 && manualSelected.size === filteredManualLeads.length}
+                                onCheckedChange={toggleAllManualLeads}
+                              />
+                            </TableHead>
+                            <TableHead className="text-[10px]">Nome</TableHead>
+                            <TableHead className="text-[10px]">Contato</TableHead>
+                            <TableHead className="text-[10px]">Origem</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {filteredManualLeads.map(lead => (
+                            <TableRow key={lead.id} className="cursor-pointer" onClick={() => toggleManualLead(lead.id)}>
+                              <TableCell className="py-1.5">
+                                <Checkbox checked={manualSelected.has(lead.id)} onCheckedChange={() => toggleManualLead(lead.id)} />
+                              </TableCell>
+                              <TableCell className="text-xs py-1.5">{lead.name || "—"}</TableCell>
+                              <TableCell className="text-xs py-1.5 font-mono text-muted-foreground">{lead.phone || lead.email || "—"}</TableCell>
+                              <TableCell className="py-1.5">
+                                <Badge variant="secondary" className="text-[9px]">
+                                  {SOURCE_OPTIONS.find(o => o.value === lead.source)?.label || lead.source}
+                                </Badge>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                          {filteredManualLeads.length === 0 && (
+                            <TableRow>
+                              <TableCell colSpan={4} className="text-center text-xs text-muted-foreground py-6">
+                                Nenhum lead encontrado
+                              </TableCell>
+                            </TableRow>
+                          )}
+                        </TableBody>
+                      </Table>
+                    </ScrollArea>
+                  </div>
+                )}
+              </>
+            )}
           </div>
         )}
 
