@@ -126,6 +126,27 @@ Deno.serve(async (req) => {
         await setUserInstances(userInst);
       }
 
+      // Auto-configure webhook for AI responses
+      const webhookUrl = `${SUPABASE_URL}/functions/v1/ai-whatsapp-hook`;
+      try {
+        await fetch(`${baseUrl}/webhook/set/${instance_name}`, {
+          method: "POST",
+          headers: { apikey: apiKey, "Content-Type": "application/json" },
+          body: JSON.stringify({
+            webhook: {
+              url: webhookUrl,
+              enabled: true,
+              webhook_by_events: false,
+              webhook_base64: false,
+              events: ["MESSAGES_UPSERT"],
+            },
+          }),
+        });
+        console.log(`Webhook configured for instance: ${instance_name}`);
+      } catch (e) {
+        console.error(`Failed to set webhook for ${instance_name}:`, e);
+      }
+
       return json({ instance: data.instance, qrcode: data.qrcode, hash: data.hash });
     }
 
@@ -170,6 +191,26 @@ Deno.serve(async (req) => {
         if (!userInst.includes(instance_name)) {
           userInst.push(instance_name);
           await setUserInstances(userInst);
+        }
+
+        // Ensure webhook is configured when instance connects
+        const webhookUrl = `${SUPABASE_URL}/functions/v1/ai-whatsapp-hook`;
+        try {
+          await fetch(`${baseUrl}/webhook/set/${instance_name}`, {
+            method: "POST",
+            headers: { apikey: apiKey, "Content-Type": "application/json" },
+              body: JSON.stringify({
+                webhook: {
+                  url: webhookUrl,
+                  enabled: true,
+                  webhook_by_events: false,
+                  webhook_base64: false,
+                  events: ["MESSAGES_UPSERT"],
+                },
+              }),
+          });
+        } catch (e) {
+          console.error(`Failed to set webhook for ${instance_name}:`, e);
         }
       }
 
@@ -251,6 +292,35 @@ Deno.serve(async (req) => {
       await setUserInstances(userInst);
 
       return json({ success: true });
+    }
+
+    // ============================================
+    // ACTION: setup-webhook (force webhook config for existing instances)
+    // ============================================
+    if (action === "setup-webhook") {
+      if (!instance_name) return json({ error: "instance_name is required" }, 400);
+
+      const webhookUrl = `${SUPABASE_URL}/functions/v1/ai-whatsapp-hook`;
+      const response = await fetch(`${baseUrl}/webhook/set/${instance_name}`, {
+        method: "POST",
+        headers: { apikey: apiKey, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          webhook: {
+            url: webhookUrl,
+            enabled: true,
+            webhook_by_events: false,
+            webhook_base64: false,
+            events: ["MESSAGES_UPSERT"],
+          },
+        }),
+      });
+
+      if (!response.ok) {
+        const errText = await response.text();
+        return json({ error: `Erro ao configurar webhook: ${response.status} - ${errText}` }, 502);
+      }
+
+      return json({ success: true, message: "Webhook configurado com sucesso" });
     }
 
     return json({ error: `Ação inválida: ${action}` }, 400);
