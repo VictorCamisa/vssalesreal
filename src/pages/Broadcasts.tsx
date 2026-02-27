@@ -603,6 +603,9 @@ function CreateCampaignDialog({
     if (selectionMode === "manual" && manualSelected.size === 0) {
       toast({ title: "Selecione pelo menos 1 lead", variant: "destructive" }); return;
     }
+    if (!aiEnabled && !messageTemplate.trim()) {
+      toast({ title: "Preencha a mensagem ou ative a IA para gerar automaticamente", variant: "destructive" }); return;
+    }
     setSaving(true);
     try {
       const tags = segmentTags.split(",").map(t => t.trim()).filter(Boolean);
