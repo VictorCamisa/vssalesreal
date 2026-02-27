@@ -53,45 +53,57 @@ Deno.serve(async (req) => {
       return json({ error: "Evolution API not configured" }, 500);
     }
 
-    // Get instance to use
-    let instanceName = broadcast.instance_name;
-    if (!instanceName) {
-      // Try to find a connected instance for this org
+    // Helper: check if instance is online
+    const isInstanceOnline = async (name: string): Promise<boolean> => {
+      try {
+        const stResp = await fetch(`${EVOLUTION_API_URL}/instance/connectionState/${name}`, {
+          headers: { apikey: EVOLUTION_API_KEY },
+        });
+        if (stResp.ok) {
+          const stData = await stResp.json();
+          return (stData.instance?.state || stData.state) === "open";
+        }
+        await stResp.text();
+      } catch { /* ignore */ }
+      return false;
+    };
+
+    // Helper: find any online instance for the org
+    const findOnlineInstance = async (): Promise<string | null> => {
       const { data: evoInteg } = await supabase
         .from("integrations")
         .select("config")
         .eq("org_id", org_id)
         .eq("service_name", "evolution")
         .maybeSingle();
-
-      if (evoInteg?.config) {
-        const config = evoInteg.config as any;
-        const instancesByUser = config.instances_by_user || {};
-        for (const uid of Object.keys(instancesByUser)) {
-          const insts = instancesByUser[uid] as string[];
-          for (const inst of insts || []) {
-            try {
-              const stResp = await fetch(`${EVOLUTION_API_URL}/instance/connectionState/${inst}`, {
-                headers: { apikey: EVOLUTION_API_KEY },
-              });
-              if (stResp.ok) {
-                const stData = await stResp.json();
-                if ((stData.instance?.state || stData.state) === "open") {
-                  instanceName = inst;
-                  break;
-                }
-              } else { await stResp.text(); }
-            } catch { /* continue */ }
-          }
-          if (instanceName) break;
+      if (!evoInteg?.config) return null;
+      const config = evoInteg.config as any;
+      const instancesByUser = config.instances_by_user || {};
+      for (const uid of Object.keys(instancesByUser)) {
+        for (const inst of (instancesByUser[uid] as string[]) || []) {
+          if (await isInstanceOnline(inst)) return inst;
         }
       }
+      return null;
+    };
+
+    // Get instance to use — always verify it's online
+    let instanceName = broadcast.instance_name;
+    if (instanceName) {
+      const online = await isInstanceOnline(instanceName);
+      if (!online) {
+        console.log(`Configured instance "${instanceName}" is offline, searching for online instance...`);
+        instanceName = await findOnlineInstance();
+      }
+    } else {
+      instanceName = await findOnlineInstance();
     }
 
     if (!instanceName) {
       await supabase.from("broadcasts").update({ status: "paused" }).eq("id", broadcast_id);
-      return json({ error: "No connected WhatsApp instance found. Broadcast paused." }, 400);
+      return json({ error: "Nenhuma instância WhatsApp online encontrada. Disparo pausado." }, 400);
     }
+    console.log(`Using instance: ${instanceName}`);
 
     // Get pending broadcast leads
     const { data: bLeads } = await supabase
