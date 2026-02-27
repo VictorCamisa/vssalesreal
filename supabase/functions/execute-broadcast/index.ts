@@ -255,6 +255,22 @@ Deno.serve(async (req) => {
       await supabase.from("broadcasts").update(counts).eq("id", broadcast_id);
     }
 
+    // Auto-continue if there are remaining leads
+    if (pending > 0) {
+      const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+      const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+      // Fire and forget: trigger next batch
+      fetch(`${supabaseUrl}/functions/v1/execute-broadcast`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${serviceKey}`,
+          apikey: Deno.env.get("SUPABASE_ANON_KEY")!,
+        },
+        body: JSON.stringify({ broadcast_id, org_id }),
+      }).catch((err) => console.error("Auto-continue error:", err));
+    }
+
     return json({
       success: true,
       sent: sentCount,
