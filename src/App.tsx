@@ -22,6 +22,7 @@ import AdminAuth from "./pages/AdminAuth";
 import AdminPanel from "./pages/AdminPanel";
 import CompanyProfile from "./pages/CompanyProfile";
 import CompanyForm from "./pages/CompanyForm";
+import MySeller from "./pages/MySeller";
 
 const queryClient = new QueryClient();
 
@@ -60,6 +61,7 @@ function AppRoutes() {
         <Route path="/crm" element={<CRM />} />
         <Route path="/ai" element={<AIPage />} />
         <Route path="/company" element={<CompanyProfile />} />
+        <Route path="/my-seller" element={<MySeller />} />
         <Route path="/appointments" element={<Appointments />} />
       </Route>
       <Route path="/site" element={<Landing />} />

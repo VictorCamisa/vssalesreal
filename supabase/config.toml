@@ -41,3 +41,9 @@ verify_jwt = false
 
 [functions.execute-broadcast]
 verify_jwt = false
+
+[functions.simulate-seller]
+verify_jwt = false
+
+[functions.crm-pipeline-automation]
+verify_jwt = false
