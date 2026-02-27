@@ -29,3 +29,12 @@ verify_jwt = false
 
 [functions.process-company-form]
 verify_jwt = false
+
+[functions.manage-appointments]
+verify_jwt = false
+
+[functions.admin-create-user]
+verify_jwt = false
+
+[functions.admin-list-users]
+verify_jwt = false
