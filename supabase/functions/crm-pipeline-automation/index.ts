@@ -95,6 +95,21 @@ Deno.serve(async (req) => {
       // Need at least the first stage to work
       if (!leadStageId) continue;
 
+      // =========================================
+      // GUARD: Only process if org has automation enabled via ai_configs
+      // =========================================
+      const { data: enabledAiConfigs } = await supabase
+        .from("ai_configs")
+        .select("id")
+        .eq("org_id", orgId)
+        .eq("enabled", true)
+        .limit(1);
+
+      if (!enabledAiConfigs || enabledAiConfigs.length === 0) {
+        console.log(`Org ${orgId}: No enabled AI configs, skipping automation.`);
+        continue;
+      }
+
       // If org doesn't have enriched/contacted stages, create them dynamically
       // For simple pipelines, we still process leads but skip intermediate stages
       const canAutoEnrich = !!enrichedStageId;
