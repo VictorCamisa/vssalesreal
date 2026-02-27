@@ -827,7 +827,7 @@ function CreateCampaignDialog({
                   <div className="flex justify-center py-8"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>
                 ) : (
                   <div className="border rounded-lg overflow-hidden">
-                    <ScrollArea className="max-h-[280px]">
+                    <ScrollArea className="h-[280px]">
                       <Table>
                         <TableHeader>
                           <TableRow>
