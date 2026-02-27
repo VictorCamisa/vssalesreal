@@ -235,7 +235,101 @@ serve(async (req) => {
       }
     }
 
-    const systemPrompt = `Você é um assistente virtual via WhatsApp para uma empresa.
+    // Build system prompt from modular config or fallback to legacy prompt
+    const modularCfg = (aiConfig.config as any)?.modular;
+    let systemPrompt = "";
+
+    if (modularCfg && !modularCfg.use_custom_prompt) {
+      // --- Build prompt from modular sections ---
+      const formalityLabels = ["muito informal e descontraído", "informal e amigável", "neutro e equilibrado", "formal e profissional", "muito formal e corporativo"];
+      const energyLabels = ["calmo e tranquilo", "sereno", "equilibrado", "animado e positivo", "muito energético e entusiasmado"];
+      const formalityIdx = Math.round((modularCfg.tone?.formality || 30) / 25);
+      const energyIdx = Math.round((modularCfg.tone?.energy || 60) / 25);
+      const emojiMap: Record<string, string> = {
+        none: "NÃO use emojis em nenhuma mensagem",
+        minimal: "Use emojis com muita moderação (1 a cada 3 mensagens no máximo)",
+        moderate: "Use emojis com moderação (máximo 1 por mensagem/bloco)",
+        frequent: "Use emojis livremente (2+ por mensagem quando natural)",
+      };
+
+      const parts: string[] = [];
+      parts.push(`Você é um assistente virtual via WhatsApp para uma empresa.`);
+      parts.push(`${aiConfig.system_prompt || "Seja educado, prestativo e profissional."}`);
+
+      // Tone
+      parts.push(`\nTOM DE VOZ:`);
+      parts.push(`- Seja ${formalityLabels[formalityIdx]} no tom`);
+      parts.push(`- Energia: ${energyLabels[energyIdx]}`);
+      parts.push(`- ${emojiMap[modularCfg.tone?.emoji_usage || "moderate"]}`);
+      if (modularCfg.tone?.custom_instructions) parts.push(`- ${modularCfg.tone.custom_instructions}`);
+
+      // B2B/B2C context
+      const mode = modularCfg.business_mode || "hybrid";
+      if (mode === "b2b") {
+        parts.push(`\nCONTEXTO B2B:`);
+        parts.push(`- Ciclo de decisão: ${modularCfg.b2b_context?.decision_cycle || "médio"}`);
+        parts.push(`- Ticket médio: ${modularCfg.b2b_context?.avg_ticket || "não definido"}`);
+        parts.push(`- Personas-alvo: ${modularCfg.b2b_context?.personas || "decisores"}`);
+        parts.push(`- Método de qualificação: ${modularCfg.b2b_context?.qualification_method || "BANT"}`);
+        parts.push(`- Foque em ROI, dados, cases e resultados mensuráveis`);
+      } else if (mode === "b2c") {
+        parts.push(`\nCONTEXTO B2C:`);
+        parts.push(`- Nível de impulso de compra: ${modularCfg.b2c_context?.impulse_level || "médio"}`);
+        parts.push(`- Sensibilidade a preço: ${modularCfg.b2c_context?.price_sensitivity || "média"}`);
+        parts.push(`- Gatilhos emocionais: ${modularCfg.b2c_context?.emotional_triggers || "urgência, prova social"}`);
+        parts.push(`- Jornada de compra: ${modularCfg.b2c_context?.purchase_journey || "curta"}`);
+        parts.push(`- Foque em benefícios pessoais, emoção, experiência e facilidade`);
+      } else {
+        parts.push(`\nMODO HÍBRIDO B2B/B2C:`);
+        parts.push(modularCfg.hybrid_detection_hint || "Detecte automaticamente se o lead é B2B ou B2C pela linguagem e adapte.");
+        if (modularCfg.b2b_context?.personas) parts.push(`- Se B2B: personas ${modularCfg.b2b_context.personas}, método ${modularCfg.b2b_context.qualification_method || "BANT"}`);
+        if (modularCfg.b2c_context?.emotional_triggers) parts.push(`- Se B2C: use gatilhos ${modularCfg.b2c_context.emotional_triggers}`);
+      }
+
+      // Golden rules
+      if (modularCfg.golden_rules?.length) {
+        parts.push(`\nREGRAS DE OURO:`);
+        modularCfg.golden_rules.forEach((r: string, i: number) => { if (r.trim()) parts.push(`${i + 1}. ${r}`); });
+      }
+
+      // Objections
+      if (modularCfg.objections?.length) {
+        parts.push(`\nCONTORNO DE OBJEÇÕES:`);
+        modularCfg.objections.forEach((o: any) => {
+          if (o.trigger?.trim()) parts.push(`- Se disser "${o.trigger}" → ${o.response}`);
+        });
+      }
+
+      // CTAs
+      if (modularCfg.ctas?.length) {
+        parts.push(`\nCTAs PREFERIDOS (use quando apropriado):`);
+        modularCfg.ctas.forEach((c: any) => { if (c.label?.trim()) parts.push(`- ${c.label}: "${c.text}"`); });
+      }
+
+      // Block config
+      const blocks = modularCfg.blocks || { max_blocks: 4, max_chars_per_block: 200, max_emojis_per_block: 1 };
+      parts.push(`\nFORMATO DE RESPOSTA (CRÍTICO):`);
+      parts.push(`- Divida SEMPRE sua resposta em blocos CURTOS de no máximo ${blocks.max_chars_per_block} caracteres cada`);
+      parts.push(`- Separe cada bloco com a marcação ---BLOCO--- (numa linha isolada)`);
+      parts.push(`- Máximo ${blocks.max_blocks} blocos por resposta`);
+      parts.push(`- Máximo ${blocks.max_emojis_per_block} emoji(s) por bloco`);
+      parts.push(`- Cada bloco deve ser uma mensagem independente e natural`);
+
+      // Scheduling capability
+      parts.push(`\nCAPACIDADE DE AGENDAMENTO:`);
+      parts.push(`Quando o lead quiser agendar, pergunte data e horário. Com data e hora, inclua: [AGENDAR:YYYY-MM-DD:HH:MM:NOME_DO_LEAD]`);
+      parts.push(`Para cancelar: [CANCELAR:TELEFONE_DO_LEAD]. Para verificar agenda: [VERIFICAR:YYYY-MM-DD]`);
+      parts.push(`Esses comandos são invisíveis ao lead. NÃO mostre os comandos.`);
+
+      parts.push(`\nResponda SEMPRE em português brasileiro.`);
+
+      systemPrompt = parts.join("\n") + companyContext + knowledgeContext;
+    } else if (modularCfg?.use_custom_prompt && modularCfg?.custom_base_prompt) {
+      // Custom manual prompt
+      systemPrompt = modularCfg.custom_base_prompt + companyContext + knowledgeContext;
+    } else {
+      // Legacy fallback
+      systemPrompt = `Você é um assistente virtual via WhatsApp para uma empresa.
 ${aiConfig.system_prompt || "Seja educado, prestativo e profissional."}
 
 CAPACIDADE DE AGENDAMENTO:
@@ -251,12 +345,6 @@ FORMATO DE RESPOSTA (CRÍTICO):
 - Separe cada bloco com a marcação ---BLOCO--- (numa linha isolada)
 - Cada bloco deve ser uma mensagem independente e natural
 - Máximo 3-4 blocos por resposta
-- Exemplo correto:
-  Oi João! Tudo bem? 😊
-  ---BLOCO---
-  Vi que você se interessou pelo nosso serviço de consultoria.
-  ---BLOCO---
-  Quer que eu te explique como funciona?
 
 Regras:
 - Mensagens CURTAS e naturais (como um humano digitaria)
@@ -264,6 +352,7 @@ Regras:
 - Se não souber a resposta, diga que vai encaminhar para um atendente humano
 - Nunca invente informações
 - Responda em português brasileiro${companyContext}${knowledgeContext}`;
+    }
 
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY not configured");
@@ -362,11 +451,18 @@ Regras:
     // Ensure we have at least one message
     const finalParts = messageParts.length > 0 ? messageParts : [reply];
 
+    // Use modular delay config if available
+    const blockCfg = modularCfg?.blocks || { delay_min_ms: 1000, delay_max_ms: 3000 };
+    const delayMin = blockCfg.delay_min_ms || 1000;
+    const delayMax = blockCfg.delay_max_ms || 3000;
+
     let sendSuccess = false;
     for (let i = 0; i < finalParts.length; i++) {
-      // Add typing delay between messages (1-3 seconds based on text length)
+      // Add typing delay between messages using configured range
       if (i > 0) {
-        const delayMs = Math.min(1000 + finalParts[i].length * 30, 3000);
+        const baseDelay = delayMin + Math.random() * (delayMax - delayMin);
+        const lengthBonus = Math.min(finalParts[i].length * 10, 1000);
+        const delayMs = Math.min(baseDelay + lengthBonus, delayMax + 1000);
         await new Promise(resolve => setTimeout(resolve, delayMs));
       }
 

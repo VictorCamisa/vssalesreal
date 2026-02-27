@@ -8,8 +8,9 @@ import {
   Bot, Brain, MessageSquare, Sparkles, Save, Loader2, Plus, Trash2,
   Clock, Send, FileText, Zap, Copy, Check, RefreshCw,
   Mail, Phone, Linkedin, MessageCircle, Target, TrendingUp, Users, Lightbulb,
-  BookOpen, Download
+  BookOpen, Download, Settings2
 } from "lucide-react";
+import { ModularPromptEditor, DEFAULT_MODULAR_CONFIG, type ModularConfig } from "@/components/ai/ModularPromptEditor";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
@@ -831,15 +832,16 @@ function ChatbotTab({ orgId }: { orgId: string }) {
       </div>
 
 
-      {/* Prompt */}
+      {/* Modular Prompt Editor */}
       <div className="glass rounded-2xl p-5 space-y-3">
-        <Label className="font-semibold text-sm">Prompt / Personalidade do Bot</Label>
-        <Textarea
-          placeholder="Defina a personalidade, tom de voz, regras e objetivos do chatbot..."
-          value={currentConfig.system_prompt}
-          onChange={(e) => updateConfig({ system_prompt: e.target.value })}
-          rows={8}
-          className="rounded-xl bg-secondary/30 resize-none font-mono text-xs"
+        <div className="flex items-center gap-2">
+          <Settings2 className="h-4 w-4 text-primary" />
+          <Label className="font-semibold text-sm">Personalização do Agente</Label>
+        </div>
+        <p className="text-xs text-muted-foreground">Configure tom de voz, regras, objeções, blocos de mensagem e contexto B2B/B2C.</p>
+        <ModularPromptEditor
+          config={(currentConfig.config?.modular as ModularConfig) || DEFAULT_MODULAR_CONFIG}
+          onChange={(modular) => updateConfig({ config: { ...currentConfig.config, modular } })}
         />
       </div>
 
