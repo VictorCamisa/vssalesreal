@@ -190,6 +190,32 @@ export default function Broadcasts() {
     await supabase.from("broadcasts").update(updates).eq("id", id);
     setBroadcasts(prev => prev.map(b => b.id === id ? { ...b, ...updates } : b));
     toast({ title: "Campanha atualizada" });
+
+    // If starting, trigger execution
+    if (status === "running" && orgId) {
+      executeBroadcast(id);
+    }
+  };
+
+  const executeBroadcast = async (broadcastId: string) => {
+    if (!orgId) return;
+    try {
+      const { data, error } = await supabase.functions.invoke("execute-broadcast", {
+        body: { broadcast_id: broadcastId, org_id: orgId },
+      });
+      if (error) throw error;
+      if (data?.remaining > 0) {
+        // Continue sending in batches
+        toast({ title: `Enviando... ${data.sent} enviadas, ${data.remaining} restantes` });
+        setTimeout(() => executeBroadcast(broadcastId), 2000);
+      } else {
+        toast({ title: "✅ Disparo concluído!", description: `${data?.sent || 0} mensagens enviadas.` });
+        loadData();
+      }
+    } catch (error: any) {
+      toast({ title: "Erro no disparo", description: error.message, variant: "destructive" });
+      loadData();
+    }
   };
 
   const deleteBroadcast = async (id: string) => {

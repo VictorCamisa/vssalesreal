@@ -55,13 +55,34 @@ Deno.serve(async (req) => {
     const baseUrl = evolutionUrl.replace(/\/$/, "");
     const instance = instance_name || "default";
 
+    // Verify instance is connected before any operation
+    try {
+      const stateResp = await fetch(`${baseUrl}/instance/connectionState/${instance}`, {
+        method: "GET",
+        headers: { apikey: apiKey },
+      });
+      if (!stateResp.ok) {
+        const errText = await stateResp.text();
+        console.error("Instance state check failed:", stateResp.status, errText);
+        return json({ error: `Instância "${instance}" não encontrada. Verifique se ela existe e tente novamente.` }, 400);
+      }
+      const stateData = await stateResp.json();
+      const connState = stateData?.instance?.state || stateData?.state;
+      if (connState !== "open") {
+        return json({ error: `Instância "${instance}" não está conectada (status: ${connState || "desconhecido"}). Conecte via QR Code primeiro.` }, 400);
+      }
+    } catch (e) {
+      console.error("Instance state check error:", e);
+      return json({ error: `Erro ao verificar instância "${instance}". Tente novamente.` }, 500);
+    }
+
     // ============================================
     // MODE: list_groups - Return all groups for selection
     // ============================================
     if (mode === "list_groups") {
       console.log("Mode: list_groups | Fetching groups from:", baseUrl);
 
-      const groupsResponse = await fetch(`${baseUrl}/group/fetchAllGroups/${instance}`, {
+      const groupsResponse = await fetch(`${baseUrl}/group/fetchAllGroups/${instance}?getParticipants=false`, {
         method: "GET",
         headers: { apikey: apiKey },
       });
@@ -69,7 +90,7 @@ Deno.serve(async (req) => {
       if (!groupsResponse.ok) {
         const errText = await groupsResponse.text();
         console.error("Evolution groups error:", groupsResponse.status, errText);
-        return json({ error: `Erro ao buscar grupos: ${groupsResponse.status}` }, 502);
+        return json({ error: `Erro ao buscar grupos (${groupsResponse.status}). Verifique se o WhatsApp está conectado.`, details: errText }, 400);
       }
 
       const groups = await groupsResponse.json();
