@@ -14,6 +14,56 @@ export type Database = {
   }
   public: {
     Tables: {
+      activity_logs: {
+        Row: {
+          action: string
+          created_at: string
+          description: string
+          error_message: string | null
+          id: string
+          metadata: Json | null
+          org_id: string | null
+          success: boolean
+          user_email: string | null
+          user_id: string
+          user_name: string | null
+        }
+        Insert: {
+          action: string
+          created_at?: string
+          description: string
+          error_message?: string | null
+          id?: string
+          metadata?: Json | null
+          org_id?: string | null
+          success?: boolean
+          user_email?: string | null
+          user_id: string
+          user_name?: string | null
+        }
+        Update: {
+          action?: string
+          created_at?: string
+          description?: string
+          error_message?: string | null
+          id?: string
+          metadata?: Json | null
+          org_id?: string | null
+          success?: boolean
+          user_email?: string | null
+          user_id?: string
+          user_name?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "activity_logs_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ai_configs: {
         Row: {
           config: Json | null

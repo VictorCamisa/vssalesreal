@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { logActivity } from "@/lib/activityLogger";
 import {
   Smartphone, QrCode, Wifi, WifiOff, Loader2, Plus, Trash2,
   RefreshCw, CheckCircle2, AlertCircle
@@ -57,6 +58,7 @@ export default function WhatsAppConnection() {
       });
       if (error) throw error;
       toast({ title: "Instância criada!", description: `${newInstanceName} pronta para conexão.` });
+      logActivity({ action: "whatsapp_instancia_criada", description: `Instância "${newInstanceName}" criada` });
       if (data?.qrcode?.base64 || data?.qrcode) {
         const qr = typeof data.qrcode === "string" ? data.qrcode : data.qrcode.base64;
         if (qr) { setQrCode(qr); setQrInstanceName(newInstanceName.trim()); setConnectionStatus("waiting"); setQrDialogOpen(true); }
@@ -65,6 +67,7 @@ export default function WhatsAppConnection() {
       await fetchInstances();
     } catch (error: any) {
       toast({ title: "Erro ao criar instância", description: error.message, variant: "destructive" });
+      logActivity({ action: "whatsapp_instancia_criada", description: `Falha ao criar instância "${newInstanceName}"`, success: false, errorMessage: error.message });
     } finally { setCreatingInstance(false); }
   };
 
@@ -109,6 +112,7 @@ export default function WhatsAppConnection() {
         if (data?.state === "open") {
           setConnectionStatus("connected");
           toast({ title: "✅ WhatsApp conectado!", description: `Instância ${qrInstanceName} online.` });
+          logActivity({ action: "whatsapp_conectado", description: `WhatsApp conectado na instância "${qrInstanceName}"` });
           setTimeout(() => { setQrDialogOpen(false); fetchInstances(); }, 1500);
         }
       } catch { /* ignore */ }

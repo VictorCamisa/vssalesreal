@@ -2,6 +2,7 @@ import { useEffect, useState, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
+import { logActivity } from "@/lib/activityLogger";
 import {
   Send, Play, Pause, Clock, Users, MessageCircle, Zap, Brain, Filter,
   Plus, Settings, ChevronRight, Loader2, BarChart3, Target, CheckCircle2,
@@ -205,15 +206,16 @@ export default function Broadcasts() {
       });
       if (error) throw error;
       if (data?.remaining > 0) {
-        // Continue sending in batches
         toast({ title: `Enviando... ${data.sent} enviadas, ${data.remaining} restantes` });
         setTimeout(() => executeBroadcast(broadcastId), 2000);
       } else {
         toast({ title: "✅ Disparo concluído!", description: `${data?.sent || 0} mensagens enviadas.` });
+        logActivity({ action: "broadcast_executado", description: `Disparo concluído: ${data?.sent || 0} mensagens enviadas`, metadata: { broadcast_id: broadcastId, sent: data?.sent } });
         loadData();
       }
     } catch (error: any) {
       toast({ title: "Erro no disparo", description: error.message, variant: "destructive" });
+      logActivity({ action: "broadcast_executado", description: `Falha no disparo`, success: false, errorMessage: error.message, metadata: { broadcast_id: broadcastId } });
       loadData();
     }
   };
@@ -653,9 +655,11 @@ function CreateCampaignDialog({
 
       onCreated(data as any);
       toast({ title: "Campanha criada com sucesso!" });
+      logActivity({ action: "broadcast_criado", description: `Campanha "${name}" criada com ${totalCount} leads`, metadata: { broadcast_id: data?.id, total_leads: totalCount } });
       reset();
     } catch (e: any) {
       toast({ title: "Erro ao criar", description: e.message, variant: "destructive" });
+      logActivity({ action: "broadcast_criado", description: `Falha ao criar campanha "${name}"`, success: false, errorMessage: e.message });
     }
     setSaving(false);
   };
