@@ -238,6 +238,12 @@ Deno.serve(async (req) => {
 
       if (!response.ok) {
         const errText = await response.text();
+        // If 404, the instance no longer exists on the API — treat as success and clean up locally
+        if (response.status === 404) {
+          const userInst = getUserInstances().filter((n) => n !== instance_name);
+          await setUserInstances(userInst);
+          return json({ success: true, message: "Instância já não existia na API, removida localmente." });
+        }
         return json({ error: `Erro ao deletar: ${response.status} - ${errText}` }, 502);
       }
 
