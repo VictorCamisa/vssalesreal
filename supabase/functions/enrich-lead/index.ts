@@ -7,6 +7,48 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
+/** Detect if lead looks like a company (B2B) or a person (B2C) */
+function detectLeadType(lead: { name?: string | null; email?: string | null; phone?: string | null }): "b2b" | "b2c" {
+  const name = (lead.name || "").toLowerCase().trim();
+  const email = (lead.email || "").toLowerCase().trim();
+
+  // Company indicators in name
+  const companyKeywords = [
+    "ltda", "eireli", "me ", " me", "s/a", "s.a.", "sa ", "corp", "inc",
+    "group", "grupo", "holding", "consulting", "consultoria", "soluções",
+    "tecnologia", "tech", "digital", "marketing", "agência", "agencia",
+    "studio", "estúdio", "indústria", "industria", "comércio", "comercio",
+    "serviços", "servicos", "assessoria", "engenharia", "construtora",
+    "imobiliária", "imobiliaria", "clínica", "clinica", "laboratório",
+    "laboratorio", "farmácia", "farmacia", "academia", "escola",
+    "instituto", "associação", "associacao", "fundação", "fundacao",
+    "cooperativa", "distribuidora", "transportadora", "editora",
+    "empreendimentos", "incorporadora", "securitizadora", "seguros",
+    "corretora", "financeira", "bank", "banco", "capital",
+    "restaurante", "hotel", "pousada", "resort",
+  ];
+
+  for (const kw of companyKeywords) {
+    if (name.includes(kw)) return "b2b";
+  }
+
+  // Email with corporate domain (not personal providers)
+  const personalDomains = [
+    "gmail.com", "hotmail.com", "outlook.com", "yahoo.com", "icloud.com",
+    "live.com", "msn.com", "uol.com.br", "bol.com.br", "terra.com.br",
+    "ig.com.br", "globo.com", "protonmail.com", "aol.com",
+  ];
+  if (email && email.includes("@")) {
+    const domain = email.split("@")[1];
+    if (domain && !personalDomains.includes(domain)) return "b2b";
+  }
+
+  // Names with all caps or very short (likely acronyms / companies)
+  if (name.length > 0 && name === name.toUpperCase() && name.length <= 12 && !name.includes(" ")) return "b2b";
+
+  return "b2c";
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
@@ -75,7 +117,9 @@ serve(async (req) => {
     let enriched = 0;
 
     for (const lead of leads) {
-      const prompt = `Analise este lead e gere um perfil comercial completo para prospecção:
+      const leadType = detectLeadType(lead);
+
+      const b2bPrompt = `Analise este lead EMPRESARIAL (B2B) e gere um perfil comercial completo para prospecção:
 
 DADOS DO LEAD:
 - Nome: ${lead.name || "Desconhecido"}
@@ -98,6 +142,36 @@ ANÁLISE SOLICITADA:
 
 Responda APENAS em JSON válido.`;
 
+      const b2cPrompt = `Analise este lead de PESSOA FÍSICA (B2C / consumidor final) e gere um perfil para abordagem comercial:
+
+DADOS DO LEAD:
+- Nome: ${lead.name || "Desconhecido"}
+- Telefone: ${lead.phone || "N/A"}
+- Email: ${lead.email || "N/A"}
+${companyContext}
+
+ANÁLISE SOLICITADA:
+1. Perfil demográfico estimado (faixa etária, gênero provável)
+2. Localização (cidade/estado baseado no DDD)
+3. Classe social/poder aquisitivo estimado
+4. Interesses e estilo de vida prováveis
+5. Redes sociais prováveis (Instagram, Facebook)
+6. Necessidades e motivações de compra prováveis
+7. Melhor canal de abordagem (WhatsApp/Email/Telefone)
+8. Melhor horário e dia da semana para contato
+9. Score de conversão (0-100) com justificativa — considere o FIT com nossos produtos/serviços
+10. 2-3 gatilhos emocionais/argumentos de venda personalizados
+11. Objeções prováveis e como contorná-las
+
+Responda APENAS em JSON válido.`;
+
+      const systemPromptB2B = "Você é um analista de inteligência comercial sênior especializado em vendas B2B. Analise leads empresariais e retorne JSON com: empresa, cargo, nivel_decisao (C-level/Gerência/Operacional), segmento, porte_empresa (micro/pequena/média/grande), localizacao, redes_sociais (objeto com linkedin, instagram), dores_provaveis (array), canal_ideal, melhor_horario, score_conversao (0-100), justificativa_score, argumentos_venda (array de strings), objecoes_provaveis (array de objetos com objecao e contorno), tipo_lead ('b2b'), observacoes.";
+
+      const systemPromptB2C = "Você é um analista de inteligência comercial sênior especializado em vendas B2C para consumidores finais. Analise leads de pessoas físicas e retorne JSON com: perfil_demografico (objeto com faixa_etaria, genero_provavel), localizacao, classe_social, interesses (array), redes_sociais (objeto com instagram, facebook), necessidades_provaveis (array), canal_ideal, melhor_horario, score_conversao (0-100), justificativa_score, gatilhos_venda (array de strings), objecoes_provaveis (array de objetos com objecao e contorno), tipo_lead ('b2c'), observacoes. NÃO invente dados de empresa, cargo ou segmento B2B — este é um consumidor final.";
+
+      const prompt = leadType === "b2b" ? b2bPrompt : b2cPrompt;
+      const systemPrompt = leadType === "b2b" ? systemPromptB2B : systemPromptB2C;
+
       try {
         const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
           method: "POST",
@@ -108,7 +182,7 @@ Responda APENAS em JSON válido.`;
           body: JSON.stringify({
             model: "google/gemini-3-flash-preview",
             messages: [
-              { role: "system", content: "Você é um analista de inteligência comercial sênior. Analise leads e retorne JSON com: empresa, cargo, nivel_decisao (C-level/Gerência/Operacional), segmento, porte_empresa (micro/pequena/média/grande), localizacao, redes_sociais (objeto com linkedin, instagram), dores_provaveis (array), canal_ideal, melhor_horario, score_conversao (0-100), justificativa_score, argumentos_venda (array de strings personalizados com base nos produtos/diferenciais da empresa), objecoes_provaveis (array de objetos com objecao e contorno), observacoes. Quando tiver contexto da empresa vendedora, personalize os argumentos de venda e o score de conversão com base no fit entre o lead e os produtos/serviços oferecidos." },
+              { role: "system", content: systemPrompt },
               { role: "user", content: prompt },
             ],
           }),
@@ -129,12 +203,11 @@ Responda APENAS em JSON válido.`;
         const aiData = await aiResponse.json();
         const content = aiData.choices?.[0]?.message?.content || "";
 
-        // Try to parse JSON from the response
-        let enrichmentData: any = { raw_response: content };
+        let enrichmentData: any = { raw_response: content, tipo_lead: leadType };
         try {
           const jsonMatch = content.match(/\{[\s\S]*\}/);
           if (jsonMatch) {
-            enrichmentData = JSON.parse(jsonMatch[0]);
+            enrichmentData = { ...JSON.parse(jsonMatch[0]), tipo_lead: leadType };
           }
         } catch {
           // Keep raw response
