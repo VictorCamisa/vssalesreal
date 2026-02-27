@@ -8,9 +8,10 @@ import {
   Bot, Brain, MessageSquare, Sparkles, Save, Loader2, Plus, Trash2,
   Clock, Send, FileText, Zap, Copy, Check, RefreshCw,
   Mail, Phone, Linkedin, MessageCircle, Target, TrendingUp, Users, Lightbulb,
-  BookOpen, Download, Settings2
+  BookOpen, Download, Settings2, PlayCircle
 } from "lucide-react";
 import { ModularPromptEditor, DEFAULT_MODULAR_CONFIG, type ModularConfig } from "@/components/ai/ModularPromptEditor";
+import { AgentSimulator } from "@/components/ai/AgentSimulator";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
@@ -1514,6 +1515,9 @@ export default function AIPage() {
           <TabsTrigger value="messages" className="rounded-lg text-xs data-[state=active]:bg-primary/10 data-[state=active]:text-primary py-2 px-3">
             <Sparkles className="h-3.5 w-3.5 mr-1.5" />Mensagens
           </TabsTrigger>
+          <TabsTrigger value="simulator" className="rounded-lg text-xs data-[state=active]:bg-success/10 data-[state=active]:text-success py-2 px-3">
+            <PlayCircle className="h-3.5 w-3.5 mr-1.5" />Simulador
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="control" className="mt-4"><ControlTab orgId={orgId} /></TabsContent>
@@ -1521,6 +1525,7 @@ export default function AIPage() {
         <TabsContent value="assistant" className="mt-4"><AssistantTab orgId={orgId} /></TabsContent>
         <TabsContent value="knowledge" className="mt-4"><KnowledgeBaseTab orgId={orgId} /></TabsContent>
         <TabsContent value="messages" className="mt-4"><MessagesTab orgId={orgId} /></TabsContent>
+        <TabsContent value="simulator" className="mt-4"><AgentSimulator orgId={orgId} /></TabsContent>
       </Tabs>
     </div>
   );

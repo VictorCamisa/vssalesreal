@@ -31,81 +31,140 @@ serve(async (req) => {
     if (!profile?.org_id) throw new Error("No org");
 
     const orgId = profile.org_id;
-    const { messages } = await req.json();
+    const { messages, ai_config_id } = await req.json();
 
     // Fetch all context in parallel
-    const [companyRes, aiConfigRes, knowledgeRes, leadsCountRes, oppsRes] = await Promise.all([
+    const queries: any[] = [
       supabase.from("company_profiles").select("*").eq("org_id", orgId).maybeSingle(),
-      supabase.from("ai_configs").select("*").eq("org_id", orgId).eq("enabled", true).limit(1),
       supabase.from("ai_knowledge_docs").select("title, summary, keywords").eq("org_id", orgId),
       supabase.from("leads_raw").select("id", { count: "exact", head: true }).eq("org_id", orgId),
       supabase.from("opportunities").select("value, probability").eq("org_id", orgId),
-    ]);
+    ];
+
+    // If specific ai_config_id provided, fetch that config
+    if (ai_config_id) {
+      queries.push(
+        supabase.from("ai_configs").select("*").eq("id", ai_config_id).maybeSingle()
+      );
+    } else {
+      queries.push(
+        supabase.from("ai_configs").select("*").eq("org_id", orgId).eq("config_type", "chatbot").eq("enabled", true).limit(1)
+      );
+    }
+
+    const [companyRes, knowledgeRes, leadsCountRes, oppsRes, aiConfigRes] = await Promise.all(queries);
 
     const company = companyRes.data;
-    const aiConfig = aiConfigRes.data?.[0];
+    const aiConfig = ai_config_id ? aiConfigRes.data : aiConfigRes.data?.[0];
     const knowledgeDocs = knowledgeRes.data || [];
     const totalLeads = leadsCountRes.count || 0;
     const opps = oppsRes.data || [];
     const pipelineValue = opps.reduce((sum: number, o: any) => sum + (Number(o.value) || 0), 0);
 
-    // Build rich system prompt
-    let systemPrompt = `Você é o vendedor virtual da empresa. Responda EXATAMENTE como o vendedor real responderia, usando todas as informações abaixo.\n\n`;
+    // Build system prompt - use modular config if available
+    const modularCfg = (aiConfig?.config as any)?.modular;
+    let systemPrompt = "";
 
+    if (modularCfg && !modularCfg.use_custom_prompt) {
+      // Build from modular config (same logic as ai-whatsapp-hook)
+      const formalityLabels = ["muito informal e descontraído", "informal e amigável", "neutro e equilibrado", "formal e profissional", "muito formal e corporativo"];
+      const energyLabels = ["calmo e tranquilo", "sereno", "equilibrado", "animado e positivo", "muito energético e entusiasmado"];
+      const formalityIdx = Math.round((modularCfg.tone?.formality || 30) / 25);
+      const energyIdx = Math.round((modularCfg.tone?.energy || 60) / 25);
+      const emojiMap: Record<string, string> = {
+        none: "NÃO use emojis",
+        minimal: "Emojis com muita moderação (1 a cada 3 msgs)",
+        moderate: "Emojis com moderação (máx 1 por msg)",
+        frequent: "Emojis livremente (2+ por msg)",
+      };
+
+      const parts: string[] = [];
+      parts.push(`Você é o vendedor virtual da empresa. Responda EXATAMENTE como responderia no WhatsApp real.`);
+      parts.push(`\nEsta é uma SIMULAÇÃO para teste. Responda como se fosse uma conversa real.`);
+      if (aiConfig?.system_prompt) parts.push(`\n${aiConfig.system_prompt}`);
+
+      parts.push(`\nTOM DE VOZ:`);
+      parts.push(`- ${formalityLabels[formalityIdx]}`);
+      parts.push(`- Energia: ${energyLabels[energyIdx]}`);
+      parts.push(`- ${emojiMap[modularCfg.tone?.emoji_usage || "moderate"]}`);
+      if (modularCfg.tone?.custom_instructions) parts.push(`- ${modularCfg.tone.custom_instructions}`);
+
+      // B2B/B2C
+      const mode = modularCfg.business_mode || "hybrid";
+      if (mode === "hybrid") {
+        parts.push(`\nMODO HÍBRIDO: ${modularCfg.hybrid_detection_hint || "Detecte B2B/B2C automaticamente."}`);
+      } else if (mode === "b2b") {
+        parts.push(`\nCONTEXTO B2B: Qualificação ${modularCfg.b2b_context?.qualification_method || "BANT"}, personas ${modularCfg.b2b_context?.personas || "decisores"}`);
+      } else {
+        parts.push(`\nCONTEXTO B2C: Gatilhos ${modularCfg.b2c_context?.emotional_triggers || "urgência, prova social"}, sensibilidade a preço ${modularCfg.b2c_context?.price_sensitivity || "média"}`);
+      }
+
+      if (modularCfg.golden_rules?.length) {
+        parts.push(`\nREGRAS:`);
+        modularCfg.golden_rules.forEach((r: string, i: number) => { if (r.trim()) parts.push(`${i + 1}. ${r}`); });
+      }
+
+      if (modularCfg.objections?.length) {
+        parts.push(`\nOBJEÇÕES:`);
+        modularCfg.objections.forEach((o: any) => { if (o.trigger?.trim()) parts.push(`- "${o.trigger}" → ${o.response}`); });
+      }
+
+      if (modularCfg.ctas?.length) {
+        parts.push(`\nCTAs:`);
+        modularCfg.ctas.forEach((c: any) => { if (c.label?.trim()) parts.push(`- ${c.label}: "${c.text}"`); });
+      }
+
+      const blocks = modularCfg.blocks || { max_blocks: 4, max_chars_per_block: 200, max_emojis_per_block: 1 };
+      parts.push(`\nFORMATO:`);
+      parts.push(`- Divida em blocos de até ${blocks.max_chars_per_block} chars, separados por ---BLOCO---`);
+      parts.push(`- Máx ${blocks.max_blocks} blocos, ${blocks.max_emojis_per_block} emoji(s) por bloco`);
+
+      systemPrompt = parts.join("\n");
+    } else if (modularCfg?.use_custom_prompt && modularCfg?.custom_base_prompt) {
+      systemPrompt = `Você é o vendedor virtual. Esta é uma SIMULAÇÃO.\n\n${modularCfg.custom_base_prompt}`;
+    } else {
+      // Legacy prompt
+      systemPrompt = `Você é o vendedor virtual da empresa. Responda EXATAMENTE como o vendedor real responderia.\nEsta é uma SIMULAÇÃO para teste.\n\n`;
+      if (aiConfig?.system_prompt) systemPrompt += `## PERSONALIDADE\n${aiConfig.system_prompt}\n`;
+    }
+
+    // Add company context
     if (company) {
-      systemPrompt += `## EMPRESA\n`;
-      systemPrompt += `- Nome: ${company.company_name}\n`;
+      systemPrompt += `\n\n## EMPRESA\n`;
+      if (company.company_name) systemPrompt += `- Nome: ${company.company_name}\n`;
       if (company.segment) systemPrompt += `- Segmento: ${company.segment}\n`;
       if (company.description) systemPrompt += `- Descrição: ${company.description}\n`;
-      if (company.mission) systemPrompt += `- Missão: ${company.mission}\n`;
       if (company.differentials) systemPrompt += `- Diferenciais: ${company.differentials}\n`;
       if (company.target_audience) systemPrompt += `- Público-alvo: ${company.target_audience}\n`;
       if (company.tone_of_voice) systemPrompt += `- Tom de voz: ${company.tone_of_voice}\n`;
       if (company.avg_ticket) systemPrompt += `- Ticket médio: ${company.avg_ticket}\n`;
-      if (company.sales_process) systemPrompt += `- Processo de vendas: ${company.sales_process}\n`;
-
       const products = company.products_services as any[];
       if (products?.length) {
-        systemPrompt += `\n## PRODUTOS/SERVIÇOS\n`;
-        products.forEach((p: any) => {
-          systemPrompt += `- ${p.name}: ${p.description}${p.price ? ` (${p.price})` : ""}\n`;
-        });
+        systemPrompt += `\n## PRODUTOS\n`;
+        products.forEach((p: any) => { systemPrompt += `- ${p.name}: ${p.description}${p.price ? ` (${p.price})` : ""}\n`; });
       }
-
       const faqs = company.objections_faq as any[];
       if (faqs?.length) {
-        systemPrompt += `\n## OBJEÇÕES E RESPOSTAS\n`;
-        faqs.forEach((f: any) => {
-          systemPrompt += `- Objeção: "${f.question}" → Resposta: "${f.answer}"\n`;
-        });
+        systemPrompt += `\n## FAQ\n`;
+        faqs.forEach((f: any) => { systemPrompt += `- "${f.question}" → "${f.answer}"\n`; });
       }
-    }
-
-    if (aiConfig?.system_prompt) {
-      systemPrompt += `\n## PERSONALIDADE DO AGENTE\n${aiConfig.system_prompt}\n`;
     }
 
     if (knowledgeDocs.length > 0) {
-      systemPrompt += `\n## BASE DE CONHECIMENTO (${knowledgeDocs.length} documentos)\n`;
+      systemPrompt += `\n## BASE DE CONHECIMENTO (${knowledgeDocs.length} docs)\n`;
       knowledgeDocs.slice(0, 10).forEach((doc: any) => {
         systemPrompt += `- ${doc.title}${doc.summary ? `: ${doc.summary}` : ""}\n`;
       });
     }
 
-    systemPrompt += `\n## CONTEXTO OPERACIONAL\n`;
-    systemPrompt += `- Total de leads na base: ${totalLeads}\n`;
-    systemPrompt += `- Valor total no pipeline: R$ ${pipelineValue.toLocaleString("pt-BR")}\n`;
-    systemPrompt += `- Oportunidades ativas: ${opps.length}\n`;
-
-    systemPrompt += `\n## REGRAS\n`;
-    systemPrompt += `- Responda como se fosse uma conversa real de WhatsApp\n`;
-    systemPrompt += `- Use o tom de voz da empresa\n`;
-    systemPrompt += `- Mensagens curtas (máx 4 linhas)\n`;
-    systemPrompt += `- Use emojis com moderação\n`;
-    systemPrompt += `- NUNCA invente informações sobre produtos/preços que não estão listados acima\n`;
+    systemPrompt += `\n## CONTEXTO\n- ${totalLeads} leads, ${opps.length} oportunidades, R$ ${pipelineValue.toLocaleString("pt-BR")} no pipeline\n`;
+    systemPrompt += `- NUNCA invente informações sobre produtos/preços não listados\n`;
+    systemPrompt += `- Responda em português brasileiro\n`;
 
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY not configured");
+
+    const temperature = aiConfig?.temperature ? Number(aiConfig.temperature) : 0.7;
 
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
@@ -114,12 +173,13 @@ serve(async (req) => {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
+        model: "google/gemini-3-flash-preview",
         messages: [
           { role: "system", content: systemPrompt },
           ...messages,
         ],
         stream: true,
+        temperature,
       }),
     });
 
