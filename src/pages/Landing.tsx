@@ -420,7 +420,7 @@ export default function Landing() {
           <Reveal>
             <p className="text-[10px] uppercase tracking-[0.3em] text-[#00D4FF] font-medium mb-3 text-center">Como funciona</p>
             <h2 style={{ fontFamily: "'Bebas Neue', sans-serif" }} className="text-2xl sm:text-3xl md:text-5xl tracking-tight mb-3 text-center">
-              Um sistema. Quatro papéis.
+              Um sistema. Seis etapas.
             </h2>
             <p style={{ fontFamily: "'Bebas Neue', sans-serif" }} className="text-2xl sm:text-3xl md:text-5xl tracking-tight mb-10 sm:mb-16 text-center text-gray-500">
               Zero desperdício.
