@@ -522,6 +522,7 @@ function CreateCampaignDialog({
   const [followUpInterval, setFollowUpInterval] = useState(24);
   const [sendRate, setSendRate] = useState(5);
   const [delayBetween, setDelayBetween] = useState(10);
+  const [audienceType, setAudienceType] = useState<"b2c" | "b2b">("b2c");
   const [scheduledAt, setScheduledAt] = useState("");
 
   // When agent changes, auto-set instance
@@ -599,6 +600,7 @@ function CreateCampaignDialog({
     setFollowUpEnabled(false); setFollowUpCount(3); setFollowUpInterval(24);
     setSendRate(5); setDelayBetween(10); setScheduledAt(""); setLeadCount(null);
     setSelectionMode("segment"); setManualSelected(new Set()); setManualSearch(""); setManualLeads([]);
+    setAudienceType("b2c");
   };
 
   const handleCreate = async () => {
@@ -621,7 +623,7 @@ function CreateCampaignDialog({
         segment_tags: selectionMode === "segment" ? tags : [],
         segment_date_from: selectionMode === "segment" ? (segmentDateFrom || null) : null,
         segment_date_to: selectionMode === "segment" ? (segmentDateTo || null) : null,
-        ai_enabled: aiEnabled, ai_config_id: aiConfigId || null, instance_name: instanceName || null,
+        ai_enabled: aiEnabled, ai_config_id: aiConfigId || null, instance_name: instanceName || null, audience_type: audienceType,
         message_template: messageTemplate || null,
         follow_up_enabled: followUpEnabled, follow_up_count: followUpCount, follow_up_interval_hours: followUpInterval,
         send_rate_per_minute: sendRate, delay_between_messages: delayBetween,
@@ -718,6 +720,29 @@ function CreateCampaignDialog({
                   </SelectContent>
                 </Select>
               </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Público-alvo *</Label>
+              <Select value={audienceType} onValueChange={(v: "b2c" | "b2b") => setAudienceType(v)}>
+                <SelectTrigger className="text-sm"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="b2c">
+                    <div className="flex items-center gap-2">
+                      <Users className="h-3 w-3" />
+                      <span>Consumidor Final (B2C)</span>
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="b2b">
+                    <div className="flex items-center gap-2">
+                      <Target className="h-3 w-3" />
+                      <span>Empresa / Revenda (B2B)</span>
+                    </div>
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-[10px] text-muted-foreground">
+                {audienceType === "b2c" ? "Foco em eventos, aniversários, consumo pessoal" : "Foco em parceria comercial, reposição, volume"}
+              </p>
             </div>
             <div className="space-y-1.5">
               <Label className="text-xs">Agendamento (opcional)</Label>

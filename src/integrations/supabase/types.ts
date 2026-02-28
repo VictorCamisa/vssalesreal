@@ -299,6 +299,7 @@ export type Database = {
         Row: {
           ai_config_id: string | null
           ai_enabled: boolean
+          audience_type: string
           channel: string
           completed_at: string | null
           converted_count: number | null
@@ -337,6 +338,7 @@ export type Database = {
         Insert: {
           ai_config_id?: string | null
           ai_enabled?: boolean
+          audience_type?: string
           channel?: string
           completed_at?: string | null
           converted_count?: number | null
@@ -375,6 +377,7 @@ export type Database = {
         Update: {
           ai_config_id?: string | null
           ai_enabled?: boolean
+          audience_type?: string
           channel?: string
           completed_at?: string | null
           converted_count?: number | null

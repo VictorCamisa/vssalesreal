@@ -107,7 +107,8 @@ Deno.serve(async (req) => {
 
     // Get company profile for AI context
     let companyContext = "";
-    let businessMode = "b2c"; // default
+    // Use audience_type from broadcast (set by user in wizard)
+    let businessMode = (broadcast as any).audience_type || "b2c";
     if (broadcast.ai_enabled) {
       const { data: company } = await supabase
         .from("company_profiles")
@@ -124,13 +125,6 @@ PÚBLICO-ALVO: ${company.target_audience || ""}
 TOM DE VOZ: ${company.tone_of_voice || ""}
 DIFERENCIAIS: ${company.differentials || ""}
 PRODUTOS/SERVIÇOS: ${company.products_services ? JSON.stringify(company.products_services) : ""}`.trim();
-
-        // Detect B2B/B2C from target audience and segment
-        const audience = (company.target_audience || "").toLowerCase();
-        const segment = (company.segment || "").toLowerCase();
-        const b2bKeywords = ["empresa", "restaurante", "bar", "loja", "comércio", "distribuidor", "revenda", "atacado", "corporat", "b2b"];
-        const isB2B = b2bKeywords.some(k => audience.includes(k) || segment.includes(k));
-        businessMode = isB2B ? "b2b" : "b2c";
       }
 
       // Get AI agent system prompt + modular config if configured
@@ -143,7 +137,7 @@ PRODUTOS/SERVIÇOS: ${company.products_services ? JSON.stringify(company.product
         if (aiConfig?.system_prompt) {
           companyContext += `\n\nINSTRUÇÕES DO AGENTE:\n${aiConfig.system_prompt.substring(0, 500)}`;
         }
-        // Check modular config for explicit business mode
+        // Check modular config for explicit business mode override
         const modCfg = aiConfig?.config as any;
         if (modCfg?.modular?.business_mode) {
           businessMode = modCfg.modular.business_mode;
@@ -156,7 +150,7 @@ PRODUTOS/SERVIÇOS: ${company.products_services ? JSON.stringify(company.product
     if (businessMode === "b2b") {
       audienceInstruction = `TIPO DE LEAD: Este é um lead B2B (empresa/estabelecimento). Foque em: ROI, volume, logística, parceria comercial, reposição. Trate como um potencial parceiro de negócio.`;
     } else {
-      audienceInstruction = `TIPO DE LEAD: Este é um CLIENTE FINAL (consumidor). Foque em: experiência pessoal, sabor, praticidade, preço acessível, prazer. NÃO fale como se fosse vender para restaurante/bar. Venda o PRODUTO diretamente para CONSUMO PESSOAL.`;
+      audienceInstruction = `TIPO DE LEAD: Este é um CLIENTE FINAL (consumidor/pessoa física). Foque em: eventos, aniversários, churrascos, festas, happy hours, consumo pessoal, experiência, sabor, praticidade. NÃO fale como se fosse vender para restaurante/bar/empresa. Venda o PRODUTO diretamente para CONSUMO PESSOAL e momentos especiais.`;
     }
 
     // Get pending broadcast leads
