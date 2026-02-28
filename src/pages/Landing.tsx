@@ -351,27 +351,65 @@ export default function Landing() {
             ))}
           </div>
 
-          {/* Comparison */}
-          <Reveal>
-            <div className="grid md:grid-cols-2 gap-4">
-              <div className="rounded-xl border border-red-500/15 bg-red-500/[0.03] p-6">
-                <p className="text-xs font-semibold text-red-400 uppercase tracking-wider mb-4">❌ Time Humano</p>
-                <ul className="space-y-2.5 text-xs text-gray-400">
-                  {["Alto custo mensal fixo", "Horário limitado (8h/dia)", "Inconsistência na prospecção", "Follow-up esquecido", "Treinamento constante"].map(item => (
-                    <li key={item} className="flex items-center gap-2"><X className="h-3 w-3 text-red-400/60 shrink-0" />{item}</li>
-                  ))}
-                </ul>
-              </div>
-              <div className="rounded-xl border border-[#00D4FF]/20 bg-[#00D4FF]/[0.03] p-6">
-                <p className="text-xs font-semibold text-[#00D4FF] uppercase tracking-wider mb-4">✅ VS SALES</p>
-                <ul className="space-y-2.5 text-xs text-gray-300">
-                  {["Custo fixo previsível", "Operação 24/7 sem pausa", "100% de consistência", "Follow-up automático e inteligente", "Aprende sozinho com cada interação"].map(item => (
-                    <li key={item} className="flex items-center gap-2"><CheckCircle2 className="h-3 w-3 text-[#00FF88] shrink-0" />{item}</li>
-                  ))}
-                </ul>
-              </div>
-            </div>
-          </Reveal>
+          {/* Comparison - dynamic */}
+          {(() => {
+            const lowestPrice = dbPlans.length > 0
+              ? Math.min(...dbPlans.map(p => Number(p.price_monthly)))
+              : null;
+            const formattedPrice = lowestPrice != null
+              ? lowestPrice.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })
+              : null;
+
+            const humanItems = [
+              "SDR + BDR + Closer = ~R$ 12.000/mês",
+              "Horário limitado (8h/dia)",
+              "Inconsistência na prospecção",
+              "Follow-up esquecido",
+              "Treinamento constante",
+            ];
+            const vsItems = [
+              formattedPrice ? `A partir de ${formattedPrice}/mês` : "Custo fixo previsível",
+              "Operação 24/7 sem pausa",
+              "100% de consistência",
+              "Follow-up automático e inteligente",
+              "Aprende sozinho com cada interação",
+            ];
+
+            return (
+              <Reveal>
+                <div id="comparativo" className="grid md:grid-cols-2 gap-4">
+                  <div className="rounded-xl border border-red-500/15 bg-red-500/[0.03] p-6">
+                    <p className="text-xs font-semibold text-red-400 uppercase tracking-wider mb-4">❌ Time Humano</p>
+                    <ul className="space-y-2.5 text-xs text-gray-400">
+                      {humanItems.map(item => (
+                        <li key={item} className="flex items-center gap-2"><X className="h-3 w-3 text-red-400/60 shrink-0" />{item}</li>
+                      ))}
+                    </ul>
+                    <div className="mt-4 pt-4 border-t border-red-500/10">
+                      <p className="text-lg font-bold text-red-400" style={{ fontFamily: "'Bebas Neue', sans-serif" }}>~R$ 12.000<span className="text-xs font-normal text-gray-500">/mês</span></p>
+                      <p className="text-[10px] text-gray-500">Custo médio de um time comercial mínimo</p>
+                    </div>
+                  </div>
+                  <div className="rounded-xl border border-[#00D4FF]/20 bg-[#00D4FF]/[0.03] p-6">
+                    <p className="text-xs font-semibold text-[#00D4FF] uppercase tracking-wider mb-4">✅ VS SALES</p>
+                    <ul className="space-y-2.5 text-xs text-gray-300">
+                      {vsItems.map(item => (
+                        <li key={item} className="flex items-center gap-2"><CheckCircle2 className="h-3 w-3 text-[#00FF88] shrink-0" />{item}</li>
+                      ))}
+                    </ul>
+                    {formattedPrice && (
+                      <div className="mt-4 pt-4 border-t border-[#00D4FF]/10">
+                        <p className="text-lg font-bold text-[#00FF88]" style={{ fontFamily: "'Bebas Neue', sans-serif" }}>
+                          {formattedPrice}<span className="text-xs font-normal text-gray-500">/mês</span>
+                        </p>
+                        <p className="text-[10px] text-gray-500">Plano inicial — economia de até {lowestPrice != null ? Math.round((1 - lowestPrice / 12000) * 100) : 0}%</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </Reveal>
+            );
+          })()}
         </div>
       </section>
 
