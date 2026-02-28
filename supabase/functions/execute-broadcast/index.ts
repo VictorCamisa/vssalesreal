@@ -107,6 +107,7 @@ Deno.serve(async (req) => {
 
     // Get company profile for AI context
     let companyContext = "";
+    let businessMode = "b2c"; // default
     if (broadcast.ai_enabled) {
       const { data: company } = await supabase
         .from("company_profiles")
@@ -123,19 +124,39 @@ PÚBLICO-ALVO: ${company.target_audience || ""}
 TOM DE VOZ: ${company.tone_of_voice || ""}
 DIFERENCIAIS: ${company.differentials || ""}
 PRODUTOS/SERVIÇOS: ${company.products_services ? JSON.stringify(company.products_services) : ""}`.trim();
+
+        // Detect B2B/B2C from target audience and segment
+        const audience = (company.target_audience || "").toLowerCase();
+        const segment = (company.segment || "").toLowerCase();
+        const b2bKeywords = ["empresa", "restaurante", "bar", "loja", "comércio", "distribuidor", "revenda", "atacado", "corporat", "b2b"];
+        const isB2B = b2bKeywords.some(k => audience.includes(k) || segment.includes(k));
+        businessMode = isB2B ? "b2b" : "b2c";
       }
 
-      // Get AI agent system prompt if configured
+      // Get AI agent system prompt + modular config if configured
       if (broadcast.ai_config_id) {
         const { data: aiConfig } = await supabase
           .from("ai_configs")
-          .select("system_prompt")
+          .select("system_prompt, config")
           .eq("id", broadcast.ai_config_id)
           .maybeSingle();
         if (aiConfig?.system_prompt) {
           companyContext += `\n\nINSTRUÇÕES DO AGENTE:\n${aiConfig.system_prompt.substring(0, 500)}`;
         }
+        // Check modular config for explicit business mode
+        const modCfg = aiConfig?.config as any;
+        if (modCfg?.modular?.business_mode) {
+          businessMode = modCfg.modular.business_mode;
+        }
       }
+    }
+
+    // Build audience-specific instruction
+    let audienceInstruction = "";
+    if (businessMode === "b2b") {
+      audienceInstruction = `TIPO DE LEAD: Este é um lead B2B (empresa/estabelecimento). Foque em: ROI, volume, logística, parceria comercial, reposição. Trate como um potencial parceiro de negócio.`;
+    } else {
+      audienceInstruction = `TIPO DE LEAD: Este é um CLIENTE FINAL (consumidor). Foque em: experiência pessoal, sabor, praticidade, preço acessível, prazer. NÃO fale como se fosse vender para restaurante/bar. Venda o PRODUTO diretamente para CONSUMO PESSOAL.`;
     }
 
     // Get pending broadcast leads
@@ -144,16 +165,59 @@ PRODUTOS/SERVIÇOS: ${company.products_services ? JSON.stringify(company.product
       .select("id, lead_id, lead:leads_raw(name, phone, enrichment_data)")
       .eq("broadcast_id", broadcast_id)
       .eq("status", "pending")
-      .limit(50); // Process in batches
+      .limit(50);
 
     if (!bLeads || bLeads.length === 0) {
-      // All done
       await supabase.from("broadcasts").update({
         status: "completed",
         completed_at: new Date().toISOString(),
       }).eq("id", broadcast_id);
       return json({ success: true, message: "All messages sent. Broadcast completed.", sent: 0 });
     }
+
+    // Helper: send message in blocks with human-like delays
+    const sendInBlocks = async (phone: string, fullMessage: string): Promise<boolean> => {
+      // Split by ---BLOCO--- marker first
+      let blocks = fullMessage.split(/---BLOCO---/i).map(b => b.trim()).filter(b => b.length > 0);
+      
+      // If no blocks, split by double newlines
+      if (blocks.length <= 1) {
+        blocks = fullMessage.split(/\n\n+/).map(b => b.trim()).filter(b => b.length > 0);
+      }
+      
+      // Ensure at least one block
+      if (blocks.length === 0) blocks = [fullMessage];
+      
+      let success = false;
+      for (let i = 0; i < blocks.length; i++) {
+        // Human-like delay between blocks (1-3 seconds + length bonus)
+        if (i > 0) {
+          const baseDelay = 1000 + Math.random() * 2000;
+          const lengthBonus = Math.min(blocks[i].length * 10, 1000);
+          await new Promise(resolve => setTimeout(resolve, baseDelay + lengthBonus));
+        }
+
+        const sendResp = await fetch(`${EVOLUTION_API_URL}/message/sendText/${instanceName}`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            apikey: EVOLUTION_API_KEY,
+          },
+          body: JSON.stringify({
+            number: phone,
+            text: blocks[i],
+          }),
+        });
+
+        if (sendResp.ok) {
+          await sendResp.json();
+          success = true;
+        } else {
+          console.error("Block send error:", sendResp.status, await sendResp.text());
+        }
+      }
+      return success;
+    };
 
     let sentCount = 0;
     let failCount = 0;
@@ -190,11 +254,10 @@ PRODUTOS/SERVIÇOS: ${company.products_services ? JSON.stringify(company.product
           .replace(/\{telefone\}/gi, lead.phone || "");
       }
 
-      // If AI is enabled and no template, generate with AI using REAL company data
+      // If AI is enabled and no template, generate with AI
       if (broadcast.ai_enabled && !messageText && LOVABLE_API_KEY) {
         try {
           const leadFirstName = lead.name?.split(" ")[0] || "";
-          const enrichment = lead.enrichment_data || {};
           const leadContext = leadFirstName ? `Lead: ${leadFirstName}` : "Lead sem nome identificado";
           
           const aiResp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
@@ -206,10 +269,22 @@ PRODUTOS/SERVIÇOS: ${company.products_services ? JSON.stringify(company.product
             body: JSON.stringify({
               model: "google/gemini-3-flash-preview",
               messages: [
-                { role: "system", content: `Você é um SDR expert que trabalha na empresa descrita abaixo. Escreva mensagens curtas e naturais para WhatsApp (máximo 3 frases). Use APENAS informações reais da empresa. NUNCA invente nomes de empresas, produtos ou dados. Se não souber algo, não mencione.
+                { role: "system", content: `Você é um SDR expert que trabalha na empresa descrita abaixo.
+
+${audienceInstruction}
+
+REGRAS OBRIGATÓRIAS:
+- Use APENAS informações REAIS da empresa abaixo. NUNCA invente nomes de empresas, produtos ou dados.
+- Se não souber algo, NÃO mencione.
+- Escreva de forma NATURAL para WhatsApp.
+- Divida a mensagem em 2-3 blocos curtos (máximo 150 caracteres cada).
+- Separe cada bloco com ---BLOCO--- numa linha isolada.
+- O primeiro bloco deve ser uma saudação rápida e pessoal.
+- O segundo bloco deve apresentar o valor/produto.
+- O terceiro bloco (opcional) deve ter um CTA suave.
 
 ${companyContext || "ATENÇÃO: Não há dados da empresa configurados. Escreva uma mensagem genérica e profissional sem inventar nenhum nome de empresa ou produto."}` },
-                { role: "user", content: `Crie UMA mensagem de primeiro contato para: ${leadContext}. ${broadcast.description ? `Contexto da campanha: ${broadcast.description}` : ""}. Retorne APENAS o texto da mensagem, sem aspas ou formatação extra.` },
+                { role: "user", content: `Crie UMA mensagem de primeiro contato para: ${leadContext}. ${broadcast.description ? `Contexto da campanha: ${broadcast.description}` : ""}. Retorne APENAS os blocos da mensagem separados por ---BLOCO---, sem aspas ou formatação extra.` },
               ],
               temperature: 0.7,
             }),
@@ -238,37 +313,56 @@ ${companyContext || "ATENÇÃO: Não há dados da empresa configurados. Escreva 
         continue;
       }
 
-      // Send via Evolution API
+      // Send via Evolution API — in blocks with human-like delays
       const cleanPhone = lead.phone.replace(/\D/g, "");
       try {
-        const sendResp = await fetch(`${EVOLUTION_API_URL}/message/sendText/${instanceName}`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            apikey: EVOLUTION_API_KEY,
-          },
-          body: JSON.stringify({
-            number: cleanPhone,
-            text: messageText,
-          }),
-        });
+        const success = await sendInBlocks(cleanPhone, messageText);
 
-        if (sendResp.ok) {
-          await sendResp.json();
+        if (success) {
+          // Store the full message (all blocks joined)
+          const storedMsg = messageText.replace(/---BLOCO---/gi, "\n").trim();
           await supabase.from("broadcast_leads").update({
             status: "sent",
             sent_at: new Date().toISOString(),
-            message_sent: messageText,
+            message_sent: storedMsg,
           }).eq("id", bl.id);
+
+          // Create/update conversation_tracker so ai-whatsapp-hook can continue
+          const remoteJid = `${cleanPhone}@s.whatsapp.net`;
+          const { data: existingConv } = await supabase
+            .from("conversation_tracker")
+            .select("id")
+            .eq("org_id", org_id)
+            .eq("instance_name", instanceName!)
+            .eq("remote_jid", remoteJid)
+            .maybeSingle();
+
+          if (!existingConv) {
+            await supabase.from("conversation_tracker").insert({
+              org_id: org_id,
+              instance_name: instanceName!,
+              remote_jid: remoteJid,
+              push_name: lead.name || null,
+              last_bot_msg_at: new Date().toISOString(),
+              last_customer_msg_at: new Date().toISOString(),
+              lead_id: bl.lead_id,
+              ai_config_id: broadcast.ai_config_id || null,
+            });
+          } else {
+            await supabase.from("conversation_tracker").update({
+              last_bot_msg_at: new Date().toISOString(),
+              lead_id: bl.lead_id,
+              ai_config_id: broadcast.ai_config_id || null,
+            }).eq("id", existingConv.id);
+          }
+
           sentCount++;
         } else {
-          const errText = await sendResp.text();
           await supabase.from("broadcast_leads").update({
             status: "failed",
-            error_message: `API error: ${sendResp.status}`,
+            error_message: "API error: all blocks failed",
           }).eq("id", bl.id);
           failCount++;
-          console.error("Send error:", sendResp.status, errText);
         }
       } catch (e) {
         await supabase.from("broadcast_leads").update({
@@ -278,7 +372,7 @@ ${companyContext || "ATENÇÃO: Não há dados da empresa configurados. Escreva 
         failCount++;
       }
 
-      // Delay between messages
+      // Delay between leads
       if (delayMs > 0) {
         await new Promise(resolve => setTimeout(resolve, delayMs));
       }
@@ -300,7 +394,6 @@ ${companyContext || "ATENÇÃO: Não há dados da empresa configurados. Escreva 
 
     const pending = stats?.filter(s => s.status === "pending").length || 0;
     if (pending === 0) {
-      counts.sent_count = counts.sent_count; // no-op just for clarity
       await supabase.from("broadcasts").update({
         ...counts,
         status: "completed",
@@ -314,7 +407,6 @@ ${companyContext || "ATENÇÃO: Não há dados da empresa configurados. Escreva 
     if (pending > 0) {
       const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
       const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-      // Fire and forget: trigger next batch
       fetch(`${supabaseUrl}/functions/v1/execute-broadcast`, {
         method: "POST",
         headers: {
