@@ -8,8 +8,16 @@ import {
   Bot, Brain, MessageSquare, Sparkles, Save, Loader2, Plus, Trash2,
   Clock, Send, FileText, Zap, Copy, Check, RefreshCw,
   Mail, Phone, Linkedin, MessageCircle, Target, TrendingUp, Users, Lightbulb,
-  BookOpen, Download, Settings2, PlayCircle
+  BookOpen, Download, Settings2, PlayCircle, Wand2, ChevronDown, ChevronUp,
+  Radio, Cpu, Info
 } from "lucide-react";
+import {
+  Accordion, AccordionContent, AccordionItem, AccordionTrigger,
+} from "@/components/ui/accordion";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { ModularPromptEditor, DEFAULT_MODULAR_CONFIG, type ModularConfig } from "@/components/ai/ModularPromptEditor";
 import { AgentSimulator } from "@/components/ai/AgentSimulator";
 import { Input } from "@/components/ui/input";
@@ -552,11 +560,21 @@ function FollowUpSection({ orgId, aiConfigId, instanceName }: { orgId: string; a
 }
 
 // ========== CHATBOT TAB ==========
+type RoutingMode = "simple" | "smart";
+
+const SIMPLE_DESCRIPTIONS: Record<string, string> = {
+  SDR: "Qualifica leads e agenda reuniões automaticamente",
+  Closer: "Conduz negociações e fecha vendas com leads interessados",
+  "Customer Success": "Cuida de clientes ativos e identifica oportunidades de upsell",
+  BDR: "Prospecta ativamente e gera interesse em novos contatos",
+};
+
 function ChatbotTab({ orgId }: { orgId: string }) {
   const { toast } = useToast();
   const { user } = useAuth();
   const [instances, setInstances] = useState<string[]>([]);
   const [configs, setConfigs] = useState<Record<string, AiConfig>>({});
+  const [allConfigs, setAllConfigs] = useState<AiConfig[]>([]);
   const [selectedInstance, setSelectedInstance] = useState<string>("");
   const [saving, setSaving] = useState(false);
   const [loadingInstances, setLoadingInstances] = useState(true);
@@ -564,6 +582,10 @@ function ChatbotTab({ orgId }: { orgId: string }) {
   const [selectedTemplate, setSelectedTemplate] = useState<typeof CHATBOT_TEMPLATES[0] | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [existingAgents, setExistingAgents] = useState<{ template: typeof CHATBOT_TEMPLATES[0]; config: AiConfig }[]>([]);
+  const [routingMode, setRoutingMode] = useState<RoutingMode>("simple");
+  const [smartInstance, setSmartInstance] = useState<string>("");
+  const [savingMode, setSavingMode] = useState(false);
+  const [confirmReplace, setConfirmReplace] = useState<{ agent: string; instance: string; existingRole: string } | null>(null);
 
   useEffect(() => {
     setWebhookUrl(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-whatsapp-hook`);
@@ -589,33 +611,33 @@ function ChatbotTab({ orgId }: { orgId: string }) {
     })();
   }, [orgId, user]);
 
-  useEffect(() => {
+  const loadConfigs = useCallback(async () => {
     if (!orgId) return;
-    supabase.from("ai_configs").select("*").eq("org_id", orgId).eq("config_type", "chatbot")
-      .then(({ data }) => {
-        const map: Record<string, AiConfig> = {};
-        const agents: { template: typeof CHATBOT_TEMPLATES[0]; config: AiConfig }[] = [];
-        data?.forEach((row: any) => {
-          const cfg: AiConfig = {
-            ...row, schedule_days: row.schedule_days || [1, 2, 3, 4, 5],
-            temperature: Number(row.temperature) || 0.7, config: row.config || {},
-          };
-          if (row.instance_name) {
-            map[row.instance_name] = cfg;
-          }
-          // Match to template by checking if prompt starts with template prompt prefix
-          const matchedTemplate = CHATBOT_TEMPLATES.find(t => {
-            const roleTag = cfg.config?.agent_role;
-            return roleTag && roleTag === t.role;
-          });
-          if (matchedTemplate) {
-            agents.push({ template: matchedTemplate, config: cfg });
-          }
-        });
-        setConfigs(map);
-        setExistingAgents(agents);
-      });
+    const { data } = await supabase.from("ai_configs").select("*").eq("org_id", orgId).eq("config_type", "chatbot");
+    const map: Record<string, AiConfig> = {};
+    const agents: { template: typeof CHATBOT_TEMPLATES[0]; config: AiConfig }[] = [];
+    const all: AiConfig[] = [];
+    data?.forEach((row: any) => {
+      const cfg: AiConfig = {
+        ...row, schedule_days: row.schedule_days || [1, 2, 3, 4, 5],
+        temperature: Number(row.temperature) || 0.7, config: row.config || {},
+      };
+      all.push(cfg);
+      if (row.instance_name) map[row.instance_name] = cfg;
+      const matchedTemplate = CHATBOT_TEMPLATES.find(t => cfg.config?.agent_role === t.role);
+      if (matchedTemplate) agents.push({ template: matchedTemplate, config: cfg });
+      // Detect routing mode from any config
+      if (cfg.config?.routing_mode === "smart") {
+        setRoutingMode("smart");
+        if (cfg.instance_name) setSmartInstance(cfg.instance_name);
+      }
+    });
+    setConfigs(map);
+    setExistingAgents(agents);
+    setAllConfigs(all);
   }, [orgId]);
+
+  useEffect(() => { loadConfigs(); }, [loadConfigs]);
 
   const currentConfig = configs[selectedInstance] || {
     org_id: orgId, config_type: "chatbot", instance_name: selectedInstance,
@@ -638,7 +660,11 @@ function ChatbotTab({ orgId }: { orgId: string }) {
         temperature: currentConfig.temperature, schedule_start: currentConfig.schedule_start,
         schedule_end: currentConfig.schedule_end, schedule_days: currentConfig.schedule_days,
         only_outside_hours: currentConfig.only_outside_hours,
-        config: { ...currentConfig.config, agent_role: selectedTemplate?.role || currentConfig.config?.agent_role },
+        config: {
+          ...currentConfig.config,
+          agent_role: selectedTemplate?.role || currentConfig.config?.agent_role,
+          routing_mode: routingMode,
+        },
       };
       if (currentConfig.id) {
         await supabase.from("ai_configs").update(payload).eq("id", currentConfig.id);
@@ -648,11 +674,89 @@ function ChatbotTab({ orgId }: { orgId: string }) {
       }
       toast({ title: "Salvo!", description: "Configuração do chatbot atualizada." });
       logActivity({ action: "ia_config_salva", description: `Configuração do chatbot salva` });
+      await loadConfigs();
     } catch (e: any) {
       toast({ title: "Erro", description: e.message, variant: "destructive" });
       logActivity({ action: "ia_config_salva", description: "Falha ao salvar configuração do chatbot", success: false, errorMessage: e.message });
     }
     setSaving(false);
+  };
+
+  // Save smart mode config
+  const saveSmartMode = async () => {
+    if (!smartInstance) { toast({ title: "Selecione um número WhatsApp", variant: "destructive" }); return; }
+    setSavingMode(true);
+    try {
+      const activeProfiles = existingAgents
+        .filter(a => a.config.enabled)
+        .map(a => ({
+          role: a.template.role,
+          emoji: a.template.emoji,
+          description: SIMPLE_DESCRIPTIONS[a.template.role] || a.template.description,
+          prompt_summary: a.config.system_prompt?.substring(0, 300) || a.template.prompt.substring(0, 300),
+        }));
+
+      // Build smart routing system prompt
+      const profilesText = activeProfiles.map((p, i) =>
+        `${i + 1}. ${p.emoji} ${p.role} — Use quando: ${p.description}`
+      ).join("\n");
+
+      const smartPrompt = `Você é um assistente multi-função via WhatsApp. Analise a conversa e ESCOLHA qual personalidade usar:
+
+PERFIS DISPONÍVEIS:
+${profilesText}
+
+REGRA: No início da sua resposta, inclua [PERFIL:${activeProfiles[0]?.role || "SDR"}] (invisível ao lead).
+Depois responda normalmente com o tom e estratégia daquele perfil.
+
+CRITÉRIOS DE DETECÇÃO:
+- Lead novo, primeira interação, perguntas iniciais → SDR
+- Lead demonstrou interesse, pediu preço, quer proposta → Closer
+- Já é cliente, dúvida de uso, quer suporte → Customer Success
+- Prospecção fria, lead sem histórico → BDR`;
+
+      // Check if smart config already exists
+      const existingSmartConfig = allConfigs.find(c => c.config?.routing_mode === "smart");
+      const payload = {
+        org_id: orgId, config_type: "chatbot", instance_name: smartInstance,
+        enabled: true, system_prompt: smartPrompt, temperature: 0.7,
+        config: { routing_mode: "smart", agent_profiles: activeProfiles },
+      };
+
+      if (existingSmartConfig?.id) {
+        await supabase.from("ai_configs").update(payload).eq("id", existingSmartConfig.id);
+      } else {
+        await supabase.from("ai_configs").insert(payload);
+      }
+
+      toast({ title: "Modo Inteligente ativado! 🧠", description: `Todos os agentes ativos responderão automaticamente no número ${smartInstance}` });
+      await loadConfigs();
+    } catch (e: any) {
+      toast({ title: "Erro", description: e.message, variant: "destructive" });
+    }
+    setSavingMode(false);
+  };
+
+  const handleToggleAgent = async (template: typeof CHATBOT_TEMPLATES[0], existing: { template: typeof CHATBOT_TEMPLATES[0]; config: AiConfig } | undefined) => {
+    if (!existing) return;
+    const newEnabled = !existing.config.enabled;
+    setExistingAgents(prev => prev.map(a =>
+      a.template.role === template.role ? { ...a, config: { ...a.config, enabled: newEnabled } } : a
+    ));
+    const { error } = await supabase.from("ai_configs").update({ enabled: newEnabled }).eq("id", existing.config.id!);
+    if (error) {
+      toast({ title: "Erro", description: error.message, variant: "destructive" });
+      setExistingAgents(prev => prev.map(a =>
+        a.template.role === template.role ? { ...a, config: { ...a.config, enabled: !newEnabled } } : a
+      ));
+    } else {
+      toast({ title: newEnabled ? `${template.role} ativado!` : `${template.role} desativado` });
+    }
+  };
+
+  // Check which agent is on which instance
+  const getInstanceAgent = (instanceName: string) => {
+    return existingAgents.find(a => a.config.instance_name === instanceName && a.config.enabled);
   };
 
   const [copied, setCopied] = useState(false);
@@ -674,11 +778,122 @@ function ChatbotTab({ orgId }: { orgId: string }) {
     );
   }
 
-  // Show all 4 agents as pre-created cards (inactive by default)
+  // ---- AGENT CARDS VIEW ----
   if (!showForm) {
     const activeCount = existingAgents.filter(a => a.config.enabled).length;
     return (
       <div className="space-y-5">
+        {/* Explanatory Banner */}
+        <div className="glass rounded-2xl p-5 border border-primary/20 bg-primary/5">
+          <div className="flex items-start gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/15 shrink-0">
+              <Info className="h-5 w-5 text-primary" />
+            </div>
+            <div className="space-y-1">
+              <h3 className="font-semibold text-sm">Como funcionam os agentes?</h3>
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                Seus agentes são <strong>personalidades de IA</strong> que respondem automaticamente no WhatsApp.
+                Cada um tem um estilo, tom e estratégia diferentes — como ter uma equipe completa de vendas 24h.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* Routing Mode Selector */}
+        <div className="glass rounded-2xl p-5 space-y-4">
+          <div className="flex items-center gap-2 mb-1">
+            <Cpu className="h-4 w-4 text-primary" />
+            <h3 className="text-sm font-semibold">Modo de Operação</h3>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <button
+              onClick={() => setRoutingMode("simple")}
+              className={`rounded-xl border-2 p-4 text-left transition-all ${
+                routingMode === "simple"
+                  ? "border-primary bg-primary/5"
+                  : "border-border hover:border-primary/30"
+              }`}
+            >
+              <div className="flex items-center gap-2 mb-2">
+                <Radio className={`h-4 w-4 ${routingMode === "simple" ? "text-primary" : "text-muted-foreground"}`} />
+                <span className="text-sm font-semibold">Modo Simples</span>
+                <Badge variant="secondary" className="text-[9px]">Padrão</Badge>
+              </div>
+              <p className="text-[11px] text-muted-foreground leading-relaxed">
+                1 agente fixo por número WhatsApp. Ex: SDR no número de prospecção, CS no número de suporte.
+              </p>
+            </button>
+            <button
+              onClick={() => setRoutingMode("smart")}
+              className={`rounded-xl border-2 p-4 text-left transition-all ${
+                routingMode === "smart"
+                  ? "border-primary bg-primary/5"
+                  : "border-border hover:border-primary/30"
+              }`}
+            >
+              <div className="flex items-center gap-2 mb-2">
+                <Wand2 className={`h-4 w-4 ${routingMode === "smart" ? "text-primary" : "text-muted-foreground"}`} />
+                <span className="text-sm font-semibold">Modo Inteligente</span>
+                <Badge className="text-[9px] bg-primary/20 text-primary border-0">Novo</Badge>
+              </div>
+              <p className="text-[11px] text-muted-foreground leading-relaxed">
+                Todos os agentes no mesmo número. A IA detecta automaticamente qual personalidade usar baseado no contexto.
+              </p>
+            </button>
+          </div>
+        </div>
+
+        {/* Smart mode: select instance + toggles */}
+        {routingMode === "smart" && (
+          <div className="glass rounded-2xl p-5 space-y-4 border border-primary/20">
+            <div className="flex items-center gap-2">
+              <Wand2 className="h-4 w-4 text-primary" />
+              <h3 className="text-sm font-semibold">Configuração do Modo Inteligente</h3>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Escolha o número WhatsApp. A IA analisará cada conversa e decidirá automaticamente qual agente responder (SDR para leads novos, Closer quando há interesse, CS para clientes ativos).
+            </p>
+            <div className="space-y-2">
+              <Label className="text-xs">Número WhatsApp para roteamento</Label>
+              <Select value={smartInstance} onValueChange={setSmartInstance}>
+                <SelectTrigger className="rounded-xl bg-secondary/30"><SelectValue placeholder="Selecione o número..." /></SelectTrigger>
+                <SelectContent>
+                  {instances.map((name) => <SelectItem key={name} value={name}>{name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label className="text-xs">Agentes ativos no roteamento</Label>
+              <div className="space-y-2">
+                {CHATBOT_TEMPLATES.map((t) => {
+                  const existing = existingAgents.find(a => a.template.role === t.role);
+                  const isActive = existing?.config.enabled ?? false;
+                  return (
+                    <div key={t.role} className="flex items-center justify-between rounded-xl border p-3">
+                      <div className="flex items-center gap-2">
+                        <span className="text-lg">{t.emoji}</span>
+                        <div>
+                          <p className="text-xs font-semibold">{t.role}</p>
+                          <p className="text-[10px] text-muted-foreground">{SIMPLE_DESCRIPTIONS[t.role]}</p>
+                        </div>
+                      </div>
+                      <Switch
+                        checked={isActive}
+                        disabled={!existing}
+                        onCheckedChange={() => existing && handleToggleAgent(t, existing)}
+                      />
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+            <Button onClick={saveSmartMode} disabled={savingMode || !smartInstance} className="w-full rounded-xl gradient-primary h-10">
+              {savingMode ? <><Loader2 className="h-4 w-4 animate-spin mr-2" />Salvando...</> : <><Wand2 className="h-4 w-4 mr-2" />Ativar Modo Inteligente</>}
+            </Button>
+          </div>
+        )}
+
+        {/* Agent Cards */}
         <div className="space-y-3">
           <div className="flex items-center gap-2">
             <Bot className="h-4 w-4 text-primary" />
@@ -687,64 +902,52 @@ function ChatbotTab({ orgId }: { orgId: string }) {
               {activeCount} de {CHATBOT_TEMPLATES.length} ativos
             </Badge>
           </div>
-          <p className="text-xs text-muted-foreground">Cada agente é um especialista treinado para sua função no funil. Ative os que deseja usar.</p>
+          {routingMode === "simple" && (
+            <p className="text-xs text-muted-foreground">Escolha um agente e ative-o no número WhatsApp desejado. Cada número pode ter apenas 1 agente.</p>
+          )}
+          {routingMode === "smart" && (
+            <p className="text-xs text-muted-foreground">Configure cada agente abaixo. No modo inteligente, a IA alterna entre eles automaticamente.</p>
+          )}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {CHATBOT_TEMPLATES.map((t) => {
               const existing = existingAgents.find(a => a.template.role === t.role);
               const isActive = existing?.config.enabled ?? false;
               const isConfigured = !!existing;
 
-              const handleToggle = async (e: React.MouseEvent) => {
-                e.stopPropagation();
-                if (!existing) return;
-                const newEnabled = !existing.config.enabled;
-                // Optimistic update
-                setExistingAgents(prev => prev.map(a => 
-                  a.template.role === t.role ? { ...a, config: { ...a.config, enabled: newEnabled } } : a
-                ));
-                if (existing.config.instance_name) {
-                  setConfigs(prev => ({
-                    ...prev,
-                    [existing.config.instance_name!]: { ...existing.config, enabled: newEnabled },
-                  }));
-                }
-                const { error } = await supabase.from("ai_configs").update({ enabled: newEnabled }).eq("id", existing.config.id!);
-                if (error) {
-                  toast({ title: "Erro", description: error.message, variant: "destructive" });
-                  // Rollback
-                  setExistingAgents(prev => prev.map(a => 
-                    a.template.role === t.role ? { ...a, config: { ...a.config, enabled: !newEnabled } } : a
-                  ));
-                } else {
-                  toast({ title: newEnabled ? `${t.role} ativado!` : `${t.role} desativado` });
-                }
-              };
-
               return (
                 <div
                   key={t.role}
-                  className={`glass rounded-xl p-4 text-left hover:border-primary/30 hover:shadow-md transition-all group ${isActive ? "border-success/30 bg-success/5" : ""}`}
+                  className={`glass rounded-xl p-4 text-left hover:border-primary/30 hover:shadow-md transition-all group ${
+                    isActive ? "border-success/30 bg-success/5" : ""
+                  }`}
                 >
                   <div className="flex items-center gap-3 mb-2">
                     <span className="text-2xl">{t.emoji}</span>
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-semibold group-hover:text-primary transition-colors">{t.role}</p>
-                      <p className="text-[10px] text-muted-foreground truncate">
-                        {existing?.config.instance_name || "Não configurado"}
-                      </p>
+                      {routingMode === "simple" ? (
+                        <p className="text-[10px] text-muted-foreground truncate">
+                          {existing?.config.instance_name ? `📱 ${existing.config.instance_name}` : "Não configurado"}
+                        </p>
+                      ) : (
+                        <p className="text-[10px] text-muted-foreground truncate">
+                          {isActive ? "✨ Ativo (modo inteligente)" : "Inativo"}
+                        </p>
+                      )}
                     </div>
                     <div className="flex items-center gap-2" onClick={e => e.stopPropagation()}>
-                      {isConfigured ? (
+                      {isConfigured && routingMode === "simple" && (
                         <Switch
                           checked={isActive}
-                          onCheckedChange={() => handleToggle({ stopPropagation: () => {} } as React.MouseEvent)}
+                          onCheckedChange={() => handleToggleAgent(t, existing)}
                         />
-                      ) : (
+                      )}
+                      {!isConfigured && (
                         <Badge variant="secondary" className="text-[10px]">Não config.</Badge>
                       )}
                     </div>
                   </div>
-                  <p className="text-[11px] text-muted-foreground mb-3">{t.description}</p>
+                  <p className="text-[11px] text-muted-foreground mb-3">{SIMPLE_DESCRIPTIONS[t.role] || t.description}</p>
                   <Button
                     variant="outline"
                     size="sm"
@@ -763,7 +966,7 @@ function ChatbotTab({ orgId }: { orgId: string }) {
                       setShowForm(true);
                     }}
                   >
-                    {isConfigured ? "Editar configuração" : "Configurar"}
+                    {isConfigured ? "✏️ Editar" : "⚡ Configurar"}
                   </Button>
                 </div>
               );
@@ -774,23 +977,26 @@ function ChatbotTab({ orgId }: { orgId: string }) {
     );
   }
 
+  // ---- AGENT CONFIG FORM ----
   return (
     <div className="space-y-5">
-      {/* Back button */}
       <button onClick={() => setShowForm(false)} className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors">
         <span>←</span> Voltar para agentes
       </button>
-      {/* Selected template badge */}
       {selectedTemplate && (
         <div className="glass rounded-xl p-3 flex items-center gap-3">
           <span className="text-xl">{selectedTemplate.emoji}</span>
           <div className="flex-1">
             <p className="text-sm font-semibold">{selectedTemplate.role}</p>
-            <p className="text-[10px] text-muted-foreground">{selectedTemplate.description}</p>
+            <p className="text-[10px] text-muted-foreground">{SIMPLE_DESCRIPTIONS[selectedTemplate.role] || selectedTemplate.description}</p>
           </div>
+          {currentConfig.enabled && (
+            <Badge className="bg-success/10 text-success border-success/30 text-[10px]">Ativo</Badge>
+          )}
         </div>
       )}
 
+      {/* Instance + Enable */}
       <div className="glass rounded-2xl p-5 space-y-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -798,8 +1004,8 @@ function ChatbotTab({ orgId }: { orgId: string }) {
               <MessageSquare className="h-5 w-5 text-success" />
             </div>
             <div>
-              <h3 className="font-semibold">Instância WhatsApp</h3>
-              <p className="text-xs text-muted-foreground">Selecione a instância para configurar</p>
+              <h3 className="font-semibold">Seu número WhatsApp</h3>
+              <p className="text-xs text-muted-foreground">Em qual número este agente vai responder?</p>
             </div>
           </div>
           <div className="flex items-center gap-3">
@@ -809,95 +1015,124 @@ function ChatbotTab({ orgId }: { orgId: string }) {
             </Badge>
           </div>
         </div>
-        <Select value={selectedInstance} onValueChange={setSelectedInstance}>
-          <SelectTrigger className="rounded-xl bg-secondary/30"><SelectValue placeholder="Selecione..." /></SelectTrigger>
+        <Select value={selectedInstance} onValueChange={(val) => {
+          // Check if another agent is already on this instance (simple mode)
+          if (routingMode === "simple") {
+            const existing = getInstanceAgent(val);
+            if (existing && existing.template.role !== selectedTemplate?.role) {
+              setConfirmReplace({ agent: selectedTemplate?.role || "", instance: val, existingRole: existing.template.role });
+              return;
+            }
+          }
+          setSelectedInstance(val);
+        }}>
+          <SelectTrigger className="rounded-xl bg-secondary/30"><SelectValue placeholder="Selecione o número..." /></SelectTrigger>
           <SelectContent>
-            {instances.map((name) => <SelectItem key={name} value={name}>{name}</SelectItem>)}
+            {instances.map((name) => {
+              const onInstance = getInstanceAgent(name);
+              return (
+                <SelectItem key={name} value={name}>
+                  {name} {onInstance ? `(${onInstance.template.emoji} ${onInstance.template.role})` : ""}
+                </SelectItem>
+              );
+            })}
           </SelectContent>
         </Select>
       </div>
 
-      {/* Webhook URL */}
-      <div className="glass rounded-2xl p-5 space-y-3">
-        <div className="flex items-center gap-2">
-          <Zap className="h-4 w-4 text-warning" />
-          <Label className="font-semibold text-sm">Webhook URL</Label>
-        </div>
-        <p className="text-xs text-muted-foreground">Configure este URL como webhook da instância na Evolution API.</p>
-        <div className="flex gap-2">
-          <Input readOnly value={webhookUrl} className="rounded-xl bg-secondary/30 font-mono text-xs" />
-          <Button variant="outline" size="icon" className="rounded-xl shrink-0" onClick={copyWebhook}>
-            {copied ? <Check className="h-4 w-4 text-success" /> : <Copy className="h-4 w-4" />}
-          </Button>
-        </div>
-      </div>
-
-
-      {/* Modular Prompt Editor */}
-      <div className="glass rounded-2xl p-5 space-y-3">
-        <div className="flex items-center gap-2">
-          <Settings2 className="h-4 w-4 text-primary" />
-          <Label className="font-semibold text-sm">Personalização do Agente</Label>
-        </div>
-        <p className="text-xs text-muted-foreground">Configure tom de voz, regras, objeções, blocos de mensagem e contexto B2B/B2C.</p>
-        <ModularPromptEditor
-          config={(currentConfig.config?.modular as ModularConfig) || DEFAULT_MODULAR_CONFIG}
-          onChange={(modular) => updateConfig({ config: { ...currentConfig.config, modular } })}
-        />
-      </div>
-
-      {/* Temperature */}
-      <div className="glass rounded-2xl p-5 space-y-3">
-        <div className="flex items-center justify-between">
-          <Label className="font-semibold text-sm">Criatividade (Temperature)</Label>
-          <Badge variant="outline" className="font-mono text-xs">{currentConfig.temperature.toFixed(1)}</Badge>
-        </div>
-        <Slider value={[currentConfig.temperature]} min={0} max={1} step={0.1} onValueChange={([v]) => updateConfig({ temperature: v })} className="py-2" />
-        <div className="flex justify-between text-[10px] text-muted-foreground"><span>Preciso</span><span>Criativo</span></div>
-      </div>
-
-      {/* Schedule */}
-      <div className="glass rounded-2xl p-5 space-y-4">
-        <div className="flex items-center gap-2">
-          <Clock className="h-4 w-4 text-primary" />
-          <Label className="font-semibold text-sm">Horário de Atendimento</Label>
-        </div>
-        <div className="flex items-center gap-3">
-          <Switch checked={currentConfig.only_outside_hours} onCheckedChange={(v) => updateConfig({ only_outside_hours: v })} />
-          <span className="text-sm">Só responder fora do horário comercial</span>
-        </div>
-        {currentConfig.only_outside_hours && (
-          <>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label className="text-xs">Início</Label>
-                <Input type="time" value={currentConfig.schedule_start || "08:00"} onChange={(e) => updateConfig({ schedule_start: e.target.value })} className="rounded-xl bg-secondary/30" />
+      {/* Advanced Settings in Accordion */}
+      <Accordion type="single" collapsible>
+        <AccordionItem value="advanced" className="glass rounded-2xl border-0">
+          <AccordionTrigger className="px-5 py-4 hover:no-underline">
+            <div className="flex items-center gap-2">
+              <Settings2 className="h-4 w-4 text-primary" />
+              <span className="text-sm font-semibold">Configurações Avançadas</span>
+            </div>
+          </AccordionTrigger>
+          <AccordionContent className="px-5 pb-5 space-y-5">
+            {/* Webhook URL */}
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <Zap className="h-4 w-4 text-warning" />
+                <Label className="font-semibold text-sm">Webhook URL</Label>
               </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs">Fim</Label>
-                <Input type="time" value={currentConfig.schedule_end || "18:00"} onChange={(e) => updateConfig({ schedule_end: e.target.value })} className="rounded-xl bg-secondary/30" />
+              <p className="text-xs text-muted-foreground">Configurado automaticamente. Copie se precisar configurar manualmente.</p>
+              <div className="flex gap-2">
+                <Input readOnly value={webhookUrl} className="rounded-xl bg-secondary/30 font-mono text-xs" />
+                <Button variant="outline" size="icon" className="rounded-xl shrink-0" onClick={copyWebhook}>
+                  {copied ? <Check className="h-4 w-4 text-success" /> : <Copy className="h-4 w-4" />}
+                </Button>
               </div>
             </div>
-            <div className="space-y-2">
-              <Label className="text-xs">Dias úteis</Label>
-              <div className="flex gap-2 flex-wrap">
-                {[1, 2, 3, 4, 5, 6, 7].map((d) => (
-                  <label key={d} className="flex items-center gap-1.5 text-xs cursor-pointer">
-                    <Checkbox
-                      checked={currentConfig.schedule_days.includes(d)}
-                      onCheckedChange={(checked) => {
-                        const days = checked ? [...currentConfig.schedule_days, d] : currentConfig.schedule_days.filter((x) => x !== d);
-                        updateConfig({ schedule_days: days });
-                      }}
-                    />
-                    {DAY_LABELS[d]}
-                  </label>
-                ))}
+
+            {/* Modular Prompt Editor */}
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <Settings2 className="h-4 w-4 text-primary" />
+                <Label className="font-semibold text-sm">Personalidade do Agente</Label>
               </div>
+              <p className="text-xs text-muted-foreground">Configure tom de voz, regras, objeções e formato das mensagens.</p>
+              <ModularPromptEditor
+                config={(currentConfig.config?.modular as ModularConfig) || DEFAULT_MODULAR_CONFIG}
+                onChange={(modular) => updateConfig({ config: { ...currentConfig.config, modular } })}
+              />
             </div>
-          </>
-        )}
-      </div>
+
+            {/* Temperature */}
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <Label className="font-semibold text-sm">Criatividade</Label>
+                <Badge variant="outline" className="font-mono text-xs">{currentConfig.temperature.toFixed(1)}</Badge>
+              </div>
+              <Slider value={[currentConfig.temperature]} min={0} max={1} step={0.1} onValueChange={([v]) => updateConfig({ temperature: v })} className="py-2" />
+              <div className="flex justify-between text-[10px] text-muted-foreground"><span>Preciso</span><span>Criativo</span></div>
+            </div>
+
+            {/* Schedule */}
+            <div className="space-y-4">
+              <div className="flex items-center gap-2">
+                <Clock className="h-4 w-4 text-primary" />
+                <Label className="font-semibold text-sm">Horário de Atendimento</Label>
+              </div>
+              <div className="flex items-center gap-3">
+                <Switch checked={currentConfig.only_outside_hours} onCheckedChange={(v) => updateConfig({ only_outside_hours: v })} />
+                <span className="text-sm">Só responder fora do horário comercial</span>
+              </div>
+              {currentConfig.only_outside_hours && (
+                <>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">Início</Label>
+                      <Input type="time" value={currentConfig.schedule_start || "08:00"} onChange={(e) => updateConfig({ schedule_start: e.target.value })} className="rounded-xl bg-secondary/30" />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">Fim</Label>
+                      <Input type="time" value={currentConfig.schedule_end || "18:00"} onChange={(e) => updateConfig({ schedule_end: e.target.value })} className="rounded-xl bg-secondary/30" />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-xs">Dias úteis</Label>
+                    <div className="flex gap-2 flex-wrap">
+                      {[1, 2, 3, 4, 5, 6, 7].map((d) => (
+                        <label key={d} className="flex items-center gap-1.5 text-xs cursor-pointer">
+                          <Checkbox
+                            checked={currentConfig.schedule_days.includes(d)}
+                            onCheckedChange={(checked) => {
+                              const days = checked ? [...currentConfig.schedule_days, d] : currentConfig.schedule_days.filter((x) => x !== d);
+                              updateConfig({ schedule_days: days });
+                            }}
+                          />
+                          {DAY_LABELS[d]}
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+          </AccordionContent>
+        </AccordionItem>
+      </Accordion>
 
       {/* Follow-up Rules */}
       {currentConfig.id && selectedInstance ? (
@@ -910,7 +1145,7 @@ function ChatbotTab({ orgId }: { orgId: string }) {
             </div>
             <div>
               <h3 className="font-semibold">Cadência de Follow-up</h3>
-              <p className="text-xs text-muted-foreground">Salve a configuração do chatbot primeiro para habilitar o follow-up automático.</p>
+              <p className="text-xs text-muted-foreground">Salve a configuração primeiro para habilitar o follow-up automático.</p>
             </div>
           </div>
         </div>
@@ -919,6 +1154,26 @@ function ChatbotTab({ orgId }: { orgId: string }) {
       <Button onClick={handleSave} disabled={saving} className="w-full rounded-xl gradient-primary hover:opacity-90 h-11">
         {saving ? <><Loader2 className="h-4 w-4 animate-spin mr-2" />Salvando...</> : <><Save className="h-4 w-4 mr-2" />Salvar Configuração</>}
       </Button>
+
+      {/* Replace confirmation dialog */}
+      <AlertDialog open={!!confirmReplace} onOpenChange={() => setConfirmReplace(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Substituir agente?</AlertDialogTitle>
+            <AlertDialogDescription>
+              O número <strong>{confirmReplace?.instance}</strong> já tem o agente <strong>{confirmReplace?.existingRole}</strong> ativo.
+              Deseja substituí-lo pelo <strong>{confirmReplace?.agent}</strong>?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={() => {
+              if (confirmReplace) setSelectedInstance(confirmReplace.instance);
+              setConfirmReplace(null);
+            }}>Substituir</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
