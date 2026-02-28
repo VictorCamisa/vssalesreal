@@ -387,6 +387,66 @@ Regras:
 
     const temperature = aiConfig.temperature ? Number(aiConfig.temperature) : 0.7;
 
+    // Build conversation history: check if this lead was contacted via broadcast
+    const conversationMessages: { role: string; content: string }[] = [
+      { role: "system", content: systemPrompt },
+    ];
+
+    // Check for previous broadcast message sent to this lead
+    const phone = remoteJid.replace("@s.whatsapp.net", "");
+    const { data: broadcastHistory } = await supabaseAdmin
+      .from("broadcast_leads")
+      .select("message_sent, broadcast:broadcasts(name, description, ai_config_id)")
+      .eq("status", "sent")
+      .order("sent_at", { ascending: false })
+      .limit(10);
+
+    // Find matching broadcast lead by phone
+    let broadcastContext = "";
+    if (broadcastHistory?.length) {
+      // We need to find the lead that matches this phone
+      const { data: matchedLead } = await supabaseAdmin
+        .from("leads_raw")
+        .select("id, name")
+        .eq("org_id", orgId)
+        .or(`phone.ilike.%${phone}%,phone.ilike.%${phone.slice(-8)}%`)
+        .maybeSingle();
+
+      if (matchedLead) {
+        const { data: leadBroadcast } = await supabaseAdmin
+          .from("broadcast_leads")
+          .select("message_sent, sent_at, broadcast:broadcasts(name, description)")
+          .eq("lead_id", matchedLead.id)
+          .eq("status", "sent")
+          .order("sent_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (leadBroadcast?.message_sent) {
+          // Add the broadcast message as assistant context so AI knows what was said
+          conversationMessages.push({
+            role: "assistant",
+            content: leadBroadcast.message_sent,
+          });
+          const bcast = leadBroadcast.broadcast as any;
+          if (bcast?.description) {
+            broadcastContext = `\n\nCONTEXTO: Esta conversa começou a partir de um disparo da campanha "${bcast.name || ""}". Objetivo: ${bcast.description}. O lead está respondendo à mensagem acima. Continue a conversa naturalmente, avançando para o próximo passo do funil.`;
+          }
+        }
+      }
+    }
+
+    // Add broadcast context to system prompt if found
+    if (broadcastContext) {
+      conversationMessages[0].content += broadcastContext;
+    }
+
+    // Add the current user message
+    conversationMessages.push({
+      role: "user",
+      content: `[${pushName}]: ${messageText}`,
+    });
+
     const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -395,10 +455,7 @@ Regras:
       },
       body: JSON.stringify({
         model: "google/gemini-3-flash-preview",
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: `[${pushName}]: ${messageText}` },
-        ],
+        messages: conversationMessages,
         temperature,
       }),
     });
