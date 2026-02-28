@@ -741,25 +741,49 @@ CRITÉRIOS DE DETECÇÃO:
     if (!existing) {
       // Auto-create the agent config when it doesn't exist yet
       try {
-        const instanceToUse = routingMode === "smart" ? (smartInstance || instances[0]) : selectedInstance;
-        const payload = {
-          org_id: orgId,
-          config_type: "chatbot",
-          instance_name: instanceToUse || null,
-          enabled: true,
-          system_prompt: template.prompt,
-          temperature: 0.7,
-          schedule_start: "08:00",
-          schedule_end: "18:00",
-          schedule_days: [1, 2, 3, 4, 5],
-          only_outside_hours: false,
-          config: {
-            agent_role: template.role,
-            routing_mode: routingMode,
-          },
-        };
-        const { data, error } = await supabase.from("ai_configs").insert(payload).select().single();
-        if (error) throw error;
+        // In smart mode, use a unique instance_name per agent role to avoid unique constraint violation
+        const baseInstance = routingMode === "smart" ? (smartInstance || instances[0]) : selectedInstance;
+        const instanceToUse = routingMode === "smart" && baseInstance
+          ? `${baseInstance}__${template.role.toLowerCase().replace(/\s+/g, '_')}`
+          : baseInstance || null;
+
+        // Check if a config with this instance_name already exists (to handle constraint)
+        const { data: existingConfig } = await supabase
+          .from("ai_configs")
+          .select("*")
+          .eq("org_id", orgId)
+          .eq("config_type", "chatbot")
+          .eq("instance_name", instanceToUse)
+          .maybeSingle();
+
+        if (existingConfig) {
+          // Update existing config instead of inserting
+          const { error } = await supabase.from("ai_configs").update({
+            enabled: true,
+            system_prompt: template.prompt,
+            config: { ...((existingConfig.config as any) || {}), agent_role: template.role, routing_mode: routingMode },
+          }).eq("id", existingConfig.id);
+          if (error) throw error;
+        } else {
+          const payload = {
+            org_id: orgId,
+            config_type: "chatbot",
+            instance_name: instanceToUse,
+            enabled: true,
+            system_prompt: template.prompt,
+            temperature: 0.7,
+            schedule_start: "08:00",
+            schedule_end: "18:00",
+            schedule_days: [1, 2, 3, 4, 5],
+            only_outside_hours: false,
+            config: {
+              agent_role: template.role,
+              routing_mode: routingMode,
+            },
+          };
+          const { error } = await supabase.from("ai_configs").insert(payload).select().single();
+          if (error) throw error;
+        }
         toast({ title: `${template.role} criado e ativado! ✅` });
         await loadConfigs();
       } catch (e: any) {
