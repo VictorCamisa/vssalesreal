@@ -94,13 +94,18 @@ serve(async (req) => {
     // When customer sends a message, reset follow-up state (they responded)
     const { data: existingConv } = await supabaseAdmin
       .from("conversation_tracker")
-      .select("id")
+      .select("id, customer_msg_count, detected_audience")
       .eq("org_id", orgId)
       .eq("instance_name", instanceName)
       .eq("remote_jid", remoteJid)
       .maybeSingle();
 
+    let customerMsgCount = 0;
+    let detectedAudience: string | null = null;
+
     if (existingConv) {
+      customerMsgCount = (existingConv.customer_msg_count || 0) + 1; // +1 because we're about to increment
+      detectedAudience = (existingConv as any).detected_audience || null;
       // Increment customer message count for pipeline automation
       await supabaseAdmin.rpc("increment_customer_msg_count", { p_conv_id: existingConv.id });
       await supabaseAdmin
@@ -114,6 +119,7 @@ serve(async (req) => {
         })
         .eq("id", existingConv.id);
     } else {
+      customerMsgCount = 1; // First message ever
       // Try to find matching lead by phone
       const phone = remoteJid.replace("@s.whatsapp.net", "");
       const { data: matchedLead } = await supabaseAdmin
@@ -460,6 +466,75 @@ O lead está respondendo à mensagem acima. Continue naturalmente. NÃO repita a
           }
         }
       }
+    }
+
+    // --- AUDIENCE QUALIFICATION for organic leads (not from broadcasts) ---
+    // If the lead came from a broadcast, the ai_config already has audience baked in.
+    // For organic leads, we need to qualify them.
+    const isFromBroadcast = !!(matchedLead && (await supabaseAdmin
+      .from("broadcast_leads")
+      .select("id")
+      .eq("lead_id", matchedLead.id)
+      .eq("status", "sent")
+      .limit(1)
+      .maybeSingle())?.data);
+
+    if (!isFromBroadcast && !detectedAudience) {
+      if (customerMsgCount <= 1) {
+        // FIRST CONTACT: Force a qualification question
+        // Inject instruction into system prompt to ask the qualification question
+        conversationMessages[0].content += `\n\nINSTRUÇÃO OBRIGATÓRIA PARA PRIMEIRO CONTATO:
+Após cumprimentar o lead, você DEVE fazer esta pergunta de qualificação de forma natural:
+"Você está buscando para consumo pessoal (festa, churrasco, evento) ou para o seu estabelecimento/empresa?"
+NÃO pule esta pergunta. Ela é essencial para personalizar o atendimento.
+Inclua a pergunta de forma natural na sua resposta de boas-vindas.`;
+        console.log("First organic contact — injecting qualification question");
+      } else if (customerMsgCount === 2) {
+        // SECOND MESSAGE: Detect audience from their answer and save
+        const msgLower = messageText.toLowerCase();
+        const b2cKeywords = ["pessoal", "festa", "churrasco", "aniversário", "evento", "casa", "amigos", "família", "confraternização", "happy hour", "casamento", "formatura"];
+        const b2bKeywords = ["empresa", "estabelecimento", "bar", "restaurante", "loja", "negócio", "revenda", "distribui", "comércio", "pdv", "cnpj", "comercial"];
+
+        const b2cScore = b2cKeywords.filter(kw => msgLower.includes(kw)).length;
+        const b2bScore = b2bKeywords.filter(kw => msgLower.includes(kw)).length;
+
+        let audience = "b2c"; // default to B2C if unclear
+        if (b2bScore > b2cScore) audience = "b2b";
+        if (b2bScore > 0 || b2cScore > 0) {
+          console.log(`Audience detected from answer: ${audience} (b2c=${b2cScore}, b2b=${b2bScore})`);
+        } else {
+          console.log("Could not detect audience from answer, defaulting to b2c");
+        }
+
+        // Save to conversation_tracker
+        detectedAudience = audience;
+        await supabaseAdmin
+          .from("conversation_tracker")
+          .update({ detected_audience: audience })
+          .eq("org_id", orgId)
+          .eq("instance_name", instanceName)
+          .eq("remote_jid", remoteJid);
+      }
+    }
+
+    // If we have a detected audience (from qualification or saved), inject audience context
+    if (detectedAudience && !isFromBroadcast) {
+      let audienceOverride = "";
+      if (detectedAudience === "b2b") {
+        audienceOverride = `\n\nCONTEXTO DE AUDIÊNCIA (DETECTADO):
+Este lead é um PARCEIRO DE NEGÓCIO (B2B). Adapte sua comunicação:
+- Foque em: ROI, volume, logística, parceria comercial, reposição, margem
+- Use linguagem profissional e dados concretos
+- Ofereça condições comerciais, volumes e prazos`;
+      } else {
+        audienceOverride = `\n\nCONTEXTO DE AUDIÊNCIA (DETECTADO):
+Este lead é um CONSUMIDOR FINAL (B2C). Adapte sua comunicação:
+- Foque em: eventos pessoais, festas, churrascos, experiência, sabor, praticidade
+- PROIBIDO usar termos B2B: "PDV", "parceiros", "reposição", "volume comercial"
+- Linguagem leve, amigável e focada na experiência pessoal`;
+      }
+      conversationMessages[0].content += audienceOverride;
+      console.log(`Injecting audience context: ${detectedAudience}`);
     }
 
     // Add the current user message

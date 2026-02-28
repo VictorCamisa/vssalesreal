@@ -536,6 +536,7 @@ export type Database = {
           ai_config_id: string | null
           created_at: string
           customer_msg_count: number
+          detected_audience: string | null
           follow_up_paused: boolean
           id: string
           instance_name: string
@@ -553,6 +554,7 @@ export type Database = {
           ai_config_id?: string | null
           created_at?: string
           customer_msg_count?: number
+          detected_audience?: string | null
           follow_up_paused?: boolean
           id?: string
           instance_name: string
@@ -570,6 +572,7 @@ export type Database = {
           ai_config_id?: string | null
           created_at?: string
           customer_msg_count?: number
+          detected_audience?: string | null
           follow_up_paused?: boolean
           id?: string
           instance_name?: string
