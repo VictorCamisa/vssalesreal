@@ -469,8 +469,9 @@ O lead está respondendo à mensagem acima. Continue naturalmente. NÃO repita a
     }
 
     // --- AUDIENCE QUALIFICATION for organic leads (not from broadcasts) ---
-    // If the lead came from a broadcast, the ai_config already has audience baked in.
-    // For organic leads, we need to qualify them.
+    // Driven by business_mode in the modular config:
+    // - "b2b" or "b2c": no question needed, audience is fixed
+    // - "hybrid": ask qualification question on first contact, detect from answer
     const isFromBroadcast = !!(matchedLead && (await supabaseAdmin
       .from("broadcast_leads")
       .select("id")
@@ -479,45 +480,77 @@ O lead está respondendo à mensagem acima. Continue naturalmente. NÃO repita a
       .limit(1)
       .maybeSingle())?.data);
 
-    if (!isFromBroadcast && !detectedAudience) {
-      if (customerMsgCount <= 1) {
-        // FIRST CONTACT: Force a qualification question
-        // Inject instruction into system prompt to ask the qualification question
-        conversationMessages[0].content += `\n\nINSTRUÇÃO OBRIGATÓRIA PARA PRIMEIRO CONTATO:
+    const businessMode = modularCfg?.business_mode || "hybrid";
+
+    if (!isFromBroadcast) {
+      if (businessMode === "b2b" || businessMode === "b2c") {
+        // Fixed mode: no question needed, just inject context
+        if (!detectedAudience) {
+          detectedAudience = businessMode;
+          // Save it so we don't re-check
+          if (existingConv) {
+            await supabaseAdmin
+              .from("conversation_tracker")
+              .update({ detected_audience: businessMode })
+              .eq("id", existingConv.id);
+          }
+          console.log(`Fixed business_mode=${businessMode}, no qualification needed`);
+        }
+      } else if (businessMode === "hybrid" && !detectedAudience) {
+        // Hybrid mode: ask qualification question on first contact
+        const qualificationQuestion = modularCfg?.hybrid_qualification_question || 
+          "Você está buscando para consumo pessoal ou para o seu estabelecimento/empresa?";
+
+        if (customerMsgCount <= 1) {
+          // FIRST CONTACT: Inject the qualification question
+          conversationMessages[0].content += `\n\nINSTRUÇÃO OBRIGATÓRIA PARA PRIMEIRO CONTATO:
 Após cumprimentar o lead, você DEVE fazer esta pergunta de qualificação de forma natural:
-"Você está buscando para consumo pessoal (festa, churrasco, evento) ou para o seu estabelecimento/empresa?"
+"${qualificationQuestion}"
 NÃO pule esta pergunta. Ela é essencial para personalizar o atendimento.
 Inclua a pergunta de forma natural na sua resposta de boas-vindas.`;
-        console.log("First organic contact — injecting qualification question");
-      } else if (customerMsgCount === 2) {
-        // SECOND MESSAGE: Detect audience from their answer and save
-        const msgLower = messageText.toLowerCase();
-        const b2cKeywords = ["pessoal", "festa", "churrasco", "aniversário", "evento", "casa", "amigos", "família", "confraternização", "happy hour", "casamento", "formatura"];
-        const b2bKeywords = ["empresa", "estabelecimento", "bar", "restaurante", "loja", "negócio", "revenda", "distribui", "comércio", "pdv", "cnpj", "comercial"];
+          console.log("Hybrid mode: first contact — injecting qualification question");
+        } else if (customerMsgCount === 2) {
+          // SECOND MESSAGE: Use AI to classify the answer
+          const classifyResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${LOVABLE_API_KEY}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              model: "google/gemini-2.5-flash-lite",
+              messages: [
+                { role: "system", content: `Classify the user's response as either "b2b" or "b2c". Respond with ONLY "b2b" or "b2c", nothing else.
+B2B indicators: company, business, store, restaurant, bar, reseller, commerce, wholesale, CNPJ, commercial, partnership.
+B2C indicators: personal, party, barbecue, birthday, event, home, friends, family, wedding, celebration.
+If unclear, respond "b2c".` },
+                { role: "user", content: messageText }
+              ],
+              temperature: 0,
+              max_tokens: 5,
+            }),
+          });
 
-        const b2cScore = b2cKeywords.filter(kw => msgLower.includes(kw)).length;
-        const b2bScore = b2bKeywords.filter(kw => msgLower.includes(kw)).length;
-
-        let audience = "b2c"; // default to B2C if unclear
-        if (b2bScore > b2cScore) audience = "b2b";
-        if (b2bScore > 0 || b2cScore > 0) {
-          console.log(`Audience detected from answer: ${audience} (b2c=${b2cScore}, b2b=${b2bScore})`);
-        } else {
-          console.log("Could not detect audience from answer, defaulting to b2c");
+          let audience = "b2c";
+          if (classifyResponse.ok) {
+            const classifyData = await classifyResponse.json();
+            const answer = (classifyData.choices?.[0]?.message?.content || "").trim().toLowerCase();
+            if (answer.includes("b2b")) audience = "b2b";
+          }
+          
+          detectedAudience = audience;
+          await supabaseAdmin
+            .from("conversation_tracker")
+            .update({ detected_audience: audience })
+            .eq("org_id", orgId)
+            .eq("instance_name", instanceName)
+            .eq("remote_jid", remoteJid);
+          console.log(`Hybrid mode: AI classified audience as ${audience}`);
         }
-
-        // Save to conversation_tracker
-        detectedAudience = audience;
-        await supabaseAdmin
-          .from("conversation_tracker")
-          .update({ detected_audience: audience })
-          .eq("org_id", orgId)
-          .eq("instance_name", instanceName)
-          .eq("remote_jid", remoteJid);
       }
     }
 
-    // If we have a detected audience (from qualification or saved), inject audience context
+    // If we have a detected audience (from any source), inject audience context
     if (detectedAudience && !isFromBroadcast) {
       let audienceOverride = "";
       if (detectedAudience === "b2b") {

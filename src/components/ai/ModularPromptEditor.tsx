@@ -35,6 +35,7 @@ export type ModularConfig = {
     purchase_journey: string;
   };
   hybrid_detection_hint: string;
+  hybrid_qualification_question: string;
 
   // Tone of voice
   tone: {
@@ -82,6 +83,7 @@ export const DEFAULT_MODULAR_CONFIG: ModularConfig = {
     purchase_journey: "curta (1-3 interações)",
   },
   hybrid_detection_hint: "Detecte automaticamente se o lead é B2B ou B2C pela linguagem, cargo mencionado, nome de empresa ou tipo de pergunta. Adapte tom e estratégia conforme o perfil detectado.",
+  hybrid_qualification_question: "Você está buscando para consumo pessoal (festa, churrasco, evento) ou para o seu estabelecimento/empresa?",
   tone: {
     formality: 30,
     energy: 60,
@@ -193,18 +195,36 @@ export function ModularPromptEditor({ config, onChange }: Props) {
           </div>
 
           {config.business_mode === "hybrid" && (
-            <div className="space-y-1.5 p-3 bg-primary/5 rounded-lg border border-primary/10">
-              <Label className="text-xs font-medium flex items-center gap-1.5">
-                <Sparkles className="h-3 w-3 text-primary" />
-                Instrução de detecção
-              </Label>
-              <Textarea
-                value={config.hybrid_detection_hint}
-                onChange={(e) => update("hybrid_detection_hint", e.target.value)}
-                rows={3}
-                className="rounded-lg bg-background text-xs resize-none"
-                placeholder="Como a IA deve detectar se é B2B ou B2C..."
-              />
+            <div className="space-y-3 p-3 bg-primary/5 rounded-lg border border-primary/10">
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium flex items-center gap-1.5">
+                  <Sparkles className="h-3 w-3 text-primary" />
+                  Pergunta de qualificação
+                </Label>
+                <p className="text-[10px] text-muted-foreground">
+                  No primeiro contato orgânico, a IA fará esta pergunta para identificar o perfil do lead.
+                </p>
+                <Textarea
+                  value={config.hybrid_qualification_question || ""}
+                  onChange={(e) => update("hybrid_qualification_question", e.target.value)}
+                  rows={2}
+                  className="rounded-lg bg-background text-xs resize-none"
+                  placeholder="ex: Você está buscando para consumo pessoal ou para o seu estabelecimento?"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium flex items-center gap-1.5">
+                  <Settings2 className="h-3 w-3 text-primary" />
+                  Instrução de detecção (avançado)
+                </Label>
+                <Textarea
+                  value={config.hybrid_detection_hint}
+                  onChange={(e) => update("hybrid_detection_hint", e.target.value)}
+                  rows={2}
+                  className="rounded-lg bg-background text-xs resize-none"
+                  placeholder="Como a IA deve detectar se é B2B ou B2C..."
+                />
+              </div>
             </div>
           )}
 
