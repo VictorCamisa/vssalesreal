@@ -105,10 +105,43 @@ Deno.serve(async (req) => {
     }
     console.log(`Using instance: ${instanceName}`);
 
+    // Get company profile for AI context
+    let companyContext = "";
+    if (broadcast.ai_enabled) {
+      const { data: company } = await supabase
+        .from("company_profiles")
+        .select("company_name, description, segment, products_services, target_audience, tone_of_voice, differentials")
+        .eq("org_id", org_id)
+        .maybeSingle();
+      
+      if (company) {
+        companyContext = `
+EMPRESA: ${company.company_name || ""}
+SEGMENTO: ${company.segment || ""}
+DESCRIÇÃO: ${company.description || ""}
+PÚBLICO-ALVO: ${company.target_audience || ""}
+TOM DE VOZ: ${company.tone_of_voice || ""}
+DIFERENCIAIS: ${company.differentials || ""}
+PRODUTOS/SERVIÇOS: ${company.products_services ? JSON.stringify(company.products_services) : ""}`.trim();
+      }
+
+      // Get AI agent system prompt if configured
+      if (broadcast.ai_config_id) {
+        const { data: aiConfig } = await supabase
+          .from("ai_configs")
+          .select("system_prompt")
+          .eq("id", broadcast.ai_config_id)
+          .maybeSingle();
+        if (aiConfig?.system_prompt) {
+          companyContext += `\n\nINSTRUÇÕES DO AGENTE:\n${aiConfig.system_prompt.substring(0, 500)}`;
+        }
+      }
+    }
+
     // Get pending broadcast leads
     const { data: bLeads } = await supabase
       .from("broadcast_leads")
-      .select("id, lead_id, lead:leads_raw(name, phone)")
+      .select("id, lead_id, lead:leads_raw(name, phone, enrichment_data)")
       .eq("broadcast_id", broadcast_id)
       .eq("status", "pending")
       .limit(50); // Process in batches
@@ -157,9 +190,13 @@ Deno.serve(async (req) => {
           .replace(/\{telefone\}/gi, lead.phone || "");
       }
 
-      // If AI is enabled and no template, generate with AI
+      // If AI is enabled and no template, generate with AI using REAL company data
       if (broadcast.ai_enabled && !messageText && LOVABLE_API_KEY) {
         try {
+          const leadFirstName = lead.name?.split(" ")[0] || "";
+          const enrichment = lead.enrichment_data || {};
+          const leadContext = leadFirstName ? `Lead: ${leadFirstName}` : "Lead sem nome identificado";
+          
           const aiResp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
             method: "POST",
             headers: {
@@ -169,15 +206,21 @@ Deno.serve(async (req) => {
             body: JSON.stringify({
               model: "google/gemini-3-flash-preview",
               messages: [
-                { role: "system", content: "Você é um SDR expert. Escreva mensagens curtas e naturais para WhatsApp. Máx 3 frases." },
-                { role: "user", content: `Crie uma mensagem de prospecção para ${lead.name || "o lead"}. ${broadcast.description || ""}. Retorne APENAS o texto da mensagem.` },
+                { role: "system", content: `Você é um SDR expert que trabalha na empresa descrita abaixo. Escreva mensagens curtas e naturais para WhatsApp (máximo 3 frases). Use APENAS informações reais da empresa. NUNCA invente nomes de empresas, produtos ou dados. Se não souber algo, não mencione.
+
+${companyContext || "ATENÇÃO: Não há dados da empresa configurados. Escreva uma mensagem genérica e profissional sem inventar nenhum nome de empresa ou produto."}` },
+                { role: "user", content: `Crie UMA mensagem de primeiro contato para: ${leadContext}. ${broadcast.description ? `Contexto da campanha: ${broadcast.description}` : ""}. Retorne APENAS o texto da mensagem, sem aspas ou formatação extra.` },
               ],
-              temperature: 0.8,
+              temperature: 0.7,
             }),
           });
           if (aiResp.ok) {
             const aiData = await aiResp.json();
             messageText = (aiData.choices?.[0]?.message?.content || "").trim();
+            // Remove quotes if AI wraps in quotes
+            if (messageText.startsWith('"') && messageText.endsWith('"')) {
+              messageText = messageText.slice(1, -1);
+            }
           } else {
             await aiResp.text();
           }
