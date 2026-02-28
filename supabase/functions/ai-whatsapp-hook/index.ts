@@ -68,19 +68,22 @@ serve(async (req) => {
     }
 
     // Check if chatbot is enabled for this instance — support smart routing
+    // Smart agents use instance_name like "INSTANCE__role", so we match both exact and prefixed names
     const { data: aiConfigs } = await supabaseAdmin
       .from("ai_configs")
       .select("*")
       .eq("org_id", orgId)
       .eq("config_type", "chatbot")
-      .eq("instance_name", instanceName)
-      .eq("enabled", true);
+      .eq("enabled", true)
+      .or(`instance_name.eq.${instanceName},instance_name.ilike.${instanceName}__%`);
 
     if (!aiConfigs || aiConfigs.length === 0) {
+      console.log(`No active chatbot found for instance "${instanceName}" in org "${orgId}"`);
       return new Response(JSON.stringify({ ignored: true, reason: "chatbot disabled" }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+    console.log(`Found ${aiConfigs.length} active chatbot config(s) for instance "${instanceName}"`);
 
     // Determine if smart routing is active
     const smartConfig = aiConfigs.find((c: any) => (c.config as any)?.routing_mode === "smart");
