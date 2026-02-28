@@ -287,6 +287,13 @@ serve(async (req) => {
       parts.push(`Você é um assistente virtual via WhatsApp para uma empresa.`);
       parts.push(`${aiConfig.system_prompt || "Seja educado, prestativo e profissional."}`);
 
+      // Anti-hallucination rules
+      parts.push(`\nREGRAS ANTI-ALUCINAÇÃO (MÁXIMA PRIORIDADE):`);
+      parts.push(`- NUNCA invente informações sobre o lead (negócio, Instagram, localização, nome de empresa, etc.)`);
+      parts.push(`- Se você NÃO tem dados sobre o lead, NÃO mencione nada específico sobre ele`);
+      parts.push(`- Quando o lead manda apenas "oi" ou "olá", responda com uma saudação simples e se apresente`);
+      parts.push(`- Use APENAS informações que foram EXPLICITAMENTE fornecidas no contexto abaixo`);
+      parts.push(`- É melhor ser genérico do que inventar qualquer dado`);
       // Tone
       parts.push(`\nTOM DE VOZ:`);
       parts.push(`- Seja ${formalityLabels[formalityIdx]} no tom`);
@@ -363,6 +370,13 @@ serve(async (req) => {
       systemPrompt = `Você é um assistente virtual via WhatsApp para uma empresa.
 ${aiConfig.system_prompt || "Seja educado, prestativo e profissional."}
 
+REGRAS ANTI-ALUCINAÇÃO (MÁXIMA PRIORIDADE):
+- NUNCA invente informações sobre o lead (negócio, Instagram, localização, nome de empresa, etc.)
+- Se você NÃO tem dados sobre o lead, NÃO mencione nada específico sobre ele
+- Quando o lead manda apenas "oi" ou "olá", responda com uma saudação simples e se apresente
+- Use APENAS informações que foram EXPLICITAMENTE fornecidas no contexto
+- É melhor ser genérico do que inventar qualquer dado
+
 CAPACIDADE DE AGENDAMENTO:
 Você pode agendar, verificar e cancelar reuniões. Quando o lead quiser agendar:
 1. Pergunte data e horário preferido
@@ -388,7 +402,9 @@ Regras:
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY not configured");
 
-    const temperature = aiConfig.temperature ? Number(aiConfig.temperature) : 0.7;
+    const baseTemp = aiConfig.temperature ? Number(aiConfig.temperature) : 0.7;
+    // Use lower temperature to prevent hallucinations
+    const temperature = Math.min(baseTemp, 0.5);
 
     // Build conversation history: check if this lead was contacted via broadcast
     const conversationMessages: { role: string; content: string }[] = [
