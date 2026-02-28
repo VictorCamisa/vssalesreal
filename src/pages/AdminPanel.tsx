@@ -15,7 +15,7 @@ import {
 } from "lucide-react";
 import { OrgDetailView } from "@/components/admin/OrgDetailView";
 
-type Tab = "metrics" | "pending" | "users" | "leads" | "content" | "companies" | "logs";
+type Tab = "metrics" | "pending" | "users" | "leads" | "content" | "companies" | "logs" | "plans";
 
 interface Organization {
   id: string;
@@ -153,6 +153,10 @@ export default function AdminPanel() {
   const [logsLoading, setLogsLoading] = useState(false);
   const [logUserFilter, setLogUserFilter] = useState<string>("all");
   const [logSearchQuery, setLogSearchQuery] = useState("");
+  const [plans, setPlans] = useState<any[]>([]);
+  const [plansLoading, setPlansLoading] = useState(false);
+  const [editingPlan, setEditingPlan] = useState<any | null>(null);
+  const [savingPlan, setSavingPlan] = useState(false);
   const { toast } = useToast();
   const navigate = useNavigate();
 
@@ -326,8 +330,48 @@ export default function AdminPanel() {
     { key: "users", label: "Usuários", icon: Users },
     { key: "leads", label: "Formulários", icon: FileText },
     { key: "content", label: "Conteúdo", icon: Settings },
+    { key: "plans", label: "Planos", icon: DollarSign },
     { key: "logs", label: "Logs", icon: Activity },
   ];
+
+  // Plans management
+  const loadPlans = async () => {
+    setPlansLoading(true);
+    const { data } = await supabase.from("plans").select("*").order("sort_order");
+    if (data) setPlans(data);
+    setPlansLoading(false);
+  };
+
+  useEffect(() => {
+    if (tab === "plans") loadPlans();
+  }, [tab]);
+
+  const savePlan = async () => {
+    if (!editingPlan) return;
+    setSavingPlan(true);
+    const { id, created_at, updated_at, ...payload } = editingPlan;
+    // Parse features from string to array if needed
+    if (typeof payload.features === "string") {
+      try { payload.features = JSON.parse(payload.features); } catch { payload.features = []; }
+    }
+    if (id) {
+      const { error } = await supabase.from("plans").update(payload).eq("id", id);
+      if (error) toast({ title: "Erro", description: error.message, variant: "destructive" });
+      else { toast({ title: "Plano salvo!" }); setEditingPlan(null); loadPlans(); }
+    } else {
+      const { error } = await supabase.from("plans").insert(payload);
+      if (error) toast({ title: "Erro", description: error.message, variant: "destructive" });
+      else { toast({ title: "Plano criado!" }); setEditingPlan(null); loadPlans(); }
+    }
+    setSavingPlan(false);
+  };
+
+  const deletePlan = async (id: string) => {
+    if (!confirm("Excluir este plano?")) return;
+    const { error } = await supabase.from("plans").delete().eq("id", id);
+    if (error) toast({ title: "Erro", description: error.message, variant: "destructive" });
+    else { toast({ title: "Plano excluído." }); loadPlans(); }
+  };
 
   // Company profile management
   const loadCompanyProfile = async (orgId: string) => {
@@ -1173,6 +1217,153 @@ export default function AdminPanel() {
                 </div>
               )}
             </>
+          )}
+
+          {/* === PLANS TAB === */}
+          {tab === "plans" && (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <h2 className="text-lg font-bold text-white">Planos & Preços</h2>
+                <div className="flex gap-2">
+                  <button onClick={loadPlans} className="flex items-center gap-1 text-[10px] text-gray-500 hover:text-[#00D4FF] px-3 py-2 rounded-lg border border-[#1a1a2e] hover:border-[#00D4FF]/30 transition-colors">
+                    <RefreshCw className="h-3 w-3" /> Atualizar
+                  </button>
+                  <button
+                    onClick={() => setEditingPlan({ name: "", slug: "", description: "", price_monthly: 0, price_yearly: null, features: [], is_popular: false, is_active: true, sort_order: plans.length + 1, currency: "BRL" })}
+                    className="flex items-center gap-1 text-[10px] text-white px-3 py-2 rounded-lg bg-[#0057FF] hover:bg-[#0057FF]/80 transition-colors"
+                  >
+                    <Plus className="h-3 w-3" /> Novo Plano
+                  </button>
+                </div>
+              </div>
+
+              {/* Editing form */}
+              {editingPlan && (
+                <div className="rounded-xl border border-[#00D4FF]/20 bg-[#0d0d18] p-5 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-sm font-semibold text-white">{editingPlan.id ? "Editar Plano" : "Novo Plano"}</h3>
+                    <button onClick={() => setEditingPlan(null)} className="text-gray-500 hover:text-white"><X className="h-4 w-4" /></button>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-[10px] text-gray-500 uppercase tracking-wider mb-1 block">Nome</label>
+                      <input value={editingPlan.name} onChange={e => setEditingPlan({ ...editingPlan, name: e.target.value })}
+                        className="w-full px-3 py-2 rounded-lg bg-[#0A0A0F] border border-[#1a1a2e] text-sm text-white" />
+                    </div>
+                    <div>
+                      <label className="text-[10px] text-gray-500 uppercase tracking-wider mb-1 block">Slug</label>
+                      <input value={editingPlan.slug} onChange={e => setEditingPlan({ ...editingPlan, slug: e.target.value })}
+                        className="w-full px-3 py-2 rounded-lg bg-[#0A0A0F] border border-[#1a1a2e] text-sm text-white" />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-gray-500 uppercase tracking-wider mb-1 block">Subtítulo / Descrição</label>
+                    <input value={editingPlan.description || ""} onChange={e => setEditingPlan({ ...editingPlan, description: e.target.value })}
+                      className="w-full px-3 py-2 rounded-lg bg-[#0A0A0F] border border-[#1a1a2e] text-sm text-white" />
+                  </div>
+                  <div className="grid grid-cols-3 gap-3">
+                    <div>
+                      <label className="text-[10px] text-gray-500 uppercase tracking-wider mb-1 block">Preço Mensal (R$)</label>
+                      <input type="number" value={editingPlan.price_monthly} onChange={e => setEditingPlan({ ...editingPlan, price_monthly: Number(e.target.value) })}
+                        className="w-full px-3 py-2 rounded-lg bg-[#0A0A0F] border border-[#1a1a2e] text-sm text-white" />
+                    </div>
+                    <div>
+                      <label className="text-[10px] text-gray-500 uppercase tracking-wider mb-1 block">Preço Anual (R$)</label>
+                      <input type="number" value={editingPlan.price_yearly || ""} onChange={e => setEditingPlan({ ...editingPlan, price_yearly: e.target.value ? Number(e.target.value) : null })}
+                        placeholder="Opcional" className="w-full px-3 py-2 rounded-lg bg-[#0A0A0F] border border-[#1a1a2e] text-sm text-white placeholder:text-gray-600" />
+                    </div>
+                    <div>
+                      <label className="text-[10px] text-gray-500 uppercase tracking-wider mb-1 block">Ordem</label>
+                      <input type="number" value={editingPlan.sort_order} onChange={e => setEditingPlan({ ...editingPlan, sort_order: Number(e.target.value) })}
+                        className="w-full px-3 py-2 rounded-lg bg-[#0A0A0F] border border-[#1a1a2e] text-sm text-white" />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-gray-500 uppercase tracking-wider mb-1 block">Features (uma por linha)</label>
+                    <textarea
+                      value={Array.isArray(editingPlan.features) ? editingPlan.features.join("\n") : editingPlan.features}
+                      onChange={e => setEditingPlan({ ...editingPlan, features: e.target.value.split("\n") })}
+                      rows={5}
+                      className="w-full px-3 py-2 rounded-lg bg-[#0A0A0F] border border-[#1a1a2e] text-sm text-white resize-none"
+                    />
+                  </div>
+                  <div className="flex items-center gap-6">
+                    <label className="flex items-center gap-2 text-xs text-gray-400 cursor-pointer">
+                      <input type="checkbox" checked={editingPlan.is_popular} onChange={e => setEditingPlan({ ...editingPlan, is_popular: e.target.checked })}
+                        className="rounded" /> Destaque (Recomendado)
+                    </label>
+                    <label className="flex items-center gap-2 text-xs text-gray-400 cursor-pointer">
+                      <input type="checkbox" checked={editingPlan.is_active} onChange={e => setEditingPlan({ ...editingPlan, is_active: e.target.checked })}
+                        className="rounded" /> Ativo
+                    </label>
+                  </div>
+                  <div className="flex justify-end gap-2">
+                    <button onClick={() => setEditingPlan(null)} className="px-4 py-2 rounded-lg text-xs text-gray-400 hover:text-white border border-[#1a1a2e] transition-colors">Cancelar</button>
+                    <button onClick={savePlan} disabled={savingPlan} className="flex items-center gap-1 px-4 py-2 rounded-lg text-xs text-white bg-[#0057FF] hover:bg-[#0057FF]/80 transition-colors disabled:opacity-50">
+                      {savingPlan ? <Loader2 className="h-3 w-3 animate-spin" /> : <Save className="h-3 w-3" />} Salvar
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Plans list */}
+              {plansLoading ? (
+                <div className="flex items-center justify-center h-48"><Loader2 className="h-5 w-5 animate-spin text-[#00D4FF]" /></div>
+              ) : (
+                <div className="space-y-3">
+                  {plans.map(plan => {
+                    const features = Array.isArray(plan.features) ? plan.features : [];
+                    return (
+                      <div key={plan.id} className={`rounded-xl border p-5 transition-all ${plan.is_popular ? "border-[#0057FF]/40 bg-[#0057FF]/[0.04]" : "border-[#1a1a2e] bg-[#0d0d18]/60"}`}>
+                        <div className="flex items-center justify-between mb-3">
+                          <div className="flex items-center gap-3">
+                            <div className="flex items-center gap-2">
+                              <h3 className="text-base font-bold text-white">{plan.name}</h3>
+                              {plan.is_popular && (
+                                <span className="text-[9px] px-2 py-0.5 rounded-full bg-[#0057FF] text-white font-semibold uppercase tracking-wider">Recomendado</span>
+                              )}
+                              {!plan.is_active && (
+                                <span className="text-[9px] px-2 py-0.5 rounded-full bg-red-500/20 text-red-400 font-semibold">Inativo</span>
+                              )}
+                            </div>
+                            <span className="text-xs text-gray-500">{plan.description}</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <button onClick={() => setEditingPlan({ ...plan })} className="flex items-center gap-1 text-[10px] text-gray-400 hover:text-[#00D4FF] px-2 py-1.5 rounded-lg border border-[#1a1a2e] hover:border-[#00D4FF]/30 transition-colors">
+                              <Edit3 className="h-3 w-3" /> Editar
+                            </button>
+                            <button onClick={() => deletePlan(plan.id)} className="flex items-center gap-1 text-[10px] text-gray-400 hover:text-red-400 px-2 py-1.5 rounded-lg border border-[#1a1a2e] hover:border-red-400/30 transition-colors">
+                              <Trash2 className="h-3 w-3" />
+                            </button>
+                          </div>
+                        </div>
+                        <div className="flex items-baseline gap-1 mb-3">
+                          <span className="text-xs text-gray-500">R$</span>
+                          <span className="text-2xl font-black text-white" style={{ fontFamily: "'Bebas Neue', sans-serif" }}>
+                            {Number(plan.price_monthly).toLocaleString("pt-BR")}
+                          </span>
+                          <span className="text-xs text-gray-500">/mês</span>
+                          {plan.price_yearly && (
+                            <span className="text-xs text-gray-500 ml-3">ou R$ {Number(plan.price_yearly).toLocaleString("pt-BR")}/ano</span>
+                          )}
+                        </div>
+                        <div className="flex flex-wrap gap-1.5">
+                          {features.map((f: string, i: number) => (
+                            <span key={i} className="text-[10px] px-2 py-1 rounded-lg bg-white/[0.04] text-gray-400 border border-[#1a1a2e]">{f}</span>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })}
+                  {plans.length === 0 && (
+                    <div className="text-center py-16 text-gray-600">
+                      <DollarSign className="h-10 w-10 mx-auto mb-3 opacity-30" />
+                      <p className="text-sm">Nenhum plano cadastrado.</p>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
           )}
 
           {/* === LOGS TAB === */}

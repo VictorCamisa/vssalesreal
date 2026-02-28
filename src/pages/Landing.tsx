@@ -175,6 +175,13 @@ export default function Landing() {
   const [earlySubmitted, setEarlySubmitted] = useState(false);
   const [partnerForm, setPartnerForm] = useState({ name: "", email: "", company: "", type: "", message: "" });
   const [partnerSubmitted, setPartnerSubmitted] = useState(false);
+  const [dbPlans, setDbPlans] = useState<any[]>([]);
+
+  useEffect(() => {
+    supabase.from("plans").select("*").eq("is_active", true).order("sort_order").then(({ data }) => {
+      if (data && data.length > 0) setDbPlans(data);
+    });
+  }, []);
 
   const handleEarlySubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -475,7 +482,17 @@ export default function Landing() {
 
           {/* Pricing Cards */}
           <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-4 sm:gap-5 mb-12 sm:mb-20">
-            {[
+            {(dbPlans.length > 0 ? dbPlans.map((p, i) => ({
+              name: p.name,
+              subtitle: p.description || "",
+              price: Number(p.price_monthly).toLocaleString("pt-BR"),
+              color: ["#00D4FF", "#0057FF", "#00FF88"][i % 3],
+              popular: p.is_popular,
+              features: Array.isArray(p.features) ? p.features : [],
+              cta: p.is_popular ? `Escolher ${p.name}` : i === 0 ? `Começar com ${p.name}` : "Falar com comercial",
+              hook: "",
+              slug: p.slug,
+            })) : [
               {
                 name: "Starter",
                 subtitle: "O SDR Digital",
@@ -491,7 +508,8 @@ export default function Landing() {
                   "Dashboard de métricas",
                 ],
                 cta: "Começar com Starter",
-                hook: "Custa menos que um estagiário de pré-vendas, mas trabalha 24h por dia.",
+                hook: "",
+                slug: "starter",
               },
               {
                 name: "Pro",
@@ -509,7 +527,8 @@ export default function Landing() {
                   "Suporte prioritário",
                 ],
                 cta: "Escolher Pro",
-                hook: "Um departamento comercial inteiro que não tira férias e custa metade de um único funcionário.",
+                hook: "",
+                slug: "pro",
               },
               {
                 name: "Agency",
@@ -527,9 +546,10 @@ export default function Landing() {
                   "Onboarding dedicado",
                 ],
                 cta: "Falar com comercial",
-                hook: "Entregue leads qualificados e agendados para seus clientes. Prove ROI e ganhe comissão recorrente.",
+                hook: "",
+                slug: "agency",
               },
-            ].map((plan) => (
+            ]).map((plan) => (
               <Reveal key={plan.name}>
                 <div
                   className={`relative rounded-2xl border p-6 flex flex-col h-full transition-all duration-300 hover:translate-y-[-4px] ${
@@ -560,7 +580,7 @@ export default function Landing() {
                   </div>
 
                   <ul className="space-y-2.5 mb-6 flex-1">
-                    {plan.features.map(f => (
+                    {plan.features.map((f: string) => (
                       <li key={f} className="flex items-start gap-2 text-xs text-gray-300">
                         <CheckCircle2 className="h-3.5 w-3.5 shrink-0 mt-0.5" style={{ color: plan.color }} />
                         <span>{f}</span>
@@ -568,10 +588,8 @@ export default function Landing() {
                     ))}
                   </ul>
 
-                  <p className="text-[10px] text-gray-500 italic mb-4 leading-relaxed">"{plan.hook}"</p>
-
                   <a
-                    href={`/checkout?plan=${plan.name.toLowerCase()}`}
+                    href={`/checkout?plan=${plan.slug || plan.name.toLowerCase()}`}
                     className={`w-full text-center py-3 rounded-xl text-sm font-semibold transition-all duration-300 block ${
                       plan.popular
                         ? "bg-gradient-to-r from-[#0057FF] to-[#00D4FF] text-white hover:shadow-[0_0_30px_rgba(0,87,255,0.3)]"
