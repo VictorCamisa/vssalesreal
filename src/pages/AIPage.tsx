@@ -741,30 +741,29 @@ CRITÉRIOS DE DETECÇÃO:
     if (!existing) {
       // Auto-create the agent config when it doesn't exist yet
       try {
-        // In smart mode, use a unique instance_name per agent role to avoid unique constraint violation
-        const baseInstance = routingMode === "smart" ? (smartInstance || instances[0]) : selectedInstance;
-        const instanceToUse = routingMode === "smart" && baseInstance
-          ? `${baseInstance}__${template.role.toLowerCase().replace(/\s+/g, '_')}`
-          : baseInstance || null;
-
-        // Check if a config with this instance_name already exists (to handle constraint)
-        const { data: existingConfig } = await supabase
+        // First, check if there's already a config for this agent_role (regardless of instance_name)
+        const { data: existingByRole } = await supabase
           .from("ai_configs")
           .select("*")
           .eq("org_id", orgId)
           .eq("config_type", "chatbot")
-          .eq("instance_name", instanceToUse)
+          .contains("config", { agent_role: template.role })
           .maybeSingle();
 
-        if (existingConfig) {
-          // Update existing config instead of inserting
+        if (existingByRole) {
+          // Just enable it
           const { error } = await supabase.from("ai_configs").update({
             enabled: true,
-            system_prompt: template.prompt,
-            config: { ...((existingConfig.config as any) || {}), agent_role: template.role, routing_mode: routingMode },
-          }).eq("id", existingConfig.id);
+            config: { ...((existingByRole.config as any) || {}), agent_role: template.role, routing_mode: routingMode },
+          }).eq("id", existingByRole.id);
           if (error) throw error;
         } else {
+          // Create with a unique instance_name using role suffix
+          const baseInstance = routingMode === "smart" ? (smartInstance || instances[0]) : selectedInstance;
+          const instanceToUse = baseInstance
+            ? `${baseInstance}__${template.role.toLowerCase().replace(/\s+/g, '_')}`
+            : `agent__${template.role.toLowerCase().replace(/\s+/g, '_')}`;
+
           const payload = {
             org_id: orgId,
             config_type: "chatbot",
@@ -781,7 +780,7 @@ CRITÉRIOS DE DETECÇÃO:
               routing_mode: routingMode,
             },
           };
-          const { error } = await supabase.from("ai_configs").insert(payload).select().single();
+          const { error } = await supabase.from("ai_configs").insert(payload);
           if (error) throw error;
         }
         toast({ title: `${template.role} criado e ativado! ✅` });
