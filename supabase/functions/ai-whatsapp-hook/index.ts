@@ -490,7 +490,50 @@ FORMATO DE RESPOSTA:
     // If broadcast context was found, REPLACE the entire system prompt (don't append)
     if (broadcastContext) {
       console.log("REPLACING system prompt with broadcast-specific prompt");
-      conversationMessages[0].content = broadcastContext + companyContext + knowledgeContext;
+      
+      // Build a FILTERED company context that matches the audience type
+      // The full companyContext contains B2B terms (PDV, giro, etc.) that confuse B2C conversations
+      let filteredCompanyContext = "";
+      if (companyProfile) {
+        const cp = companyProfile as any;
+        const bcast = (await supabaseAdmin.from("broadcast_leads").select("broadcast:broadcasts(audience_type)").eq("lead_id", matchedLead?.id || "").order("sent_at", { ascending: false }).limit(1).maybeSingle())?.data?.broadcast as any;
+        const isB2C = (bcast?.audience_type || "b2c") !== "b2b";
+        
+        const parts: string[] = [];
+        if (cp.company_name) parts.push(`Empresa: ${cp.company_name}`);
+        if (cp.segment) parts.push(`Segmento: Distribuição de Bebidas`);
+        if (cp.description) {
+          // For B2C, strip B2B-specific language from description
+          if (isB2C) {
+            parts.push(`Sobre: Distribuidora de chopp e cervejas artesanais, atendendo também consumidores finais para eventos e momentos especiais.`);
+          } else {
+            parts.push(`Sobre: ${cp.description}`);
+          }
+        }
+        if (isB2C) {
+          parts.push(`Público: Consumidores finais para eventos pessoais, churrascos, festas e confraternizações`);
+        } else {
+          if (cp.target_audience) parts.push(`Público-alvo: ${cp.target_audience}`);
+        }
+        if (cp.differentials) parts.push(`Diferenciais: ${cp.differentials}`);
+        if (cp.tone_of_voice) parts.push(`Tom de voz: ${cp.tone_of_voice}`);
+        // For B2C, DON'T include sales_process (it's B2B-oriented)
+        if (!isB2C && cp.sales_process) parts.push(`Processo: ${cp.sales_process}`);
+        
+        // Products are relevant for both B2B and B2C
+        const products = cp.products_services || [];
+        if (products.length > 0) {
+          parts.push("Produtos:\n" + products.map((p: any) => `- ${p.name}${p.price ? ` (${p.price})` : ""}: ${p.description}`).join("\n"));
+        }
+        // FAQs are relevant for both
+        const faqs = cp.objections_faq || [];
+        if (faqs.length > 0) {
+          parts.push("Objeções:\n" + faqs.map((f: any) => `Q: ${f.question}\nR: ${f.answer}`).join("\n"));
+        }
+        filteredCompanyContext = `\n\n--- EMPRESA ---\n${parts.join("\n")}\n--- FIM ---`;
+      }
+      
+      conversationMessages[0].content = broadcastContext + filteredCompanyContext + knowledgeContext;
     }
 
     // Add the current user message
