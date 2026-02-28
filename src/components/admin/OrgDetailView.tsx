@@ -183,7 +183,7 @@ export function OrgDetailView({ orgId, orgName, onBack }: Props) {
           const session = (await supabase.auth.getSession()).data.session;
           const { data } = await supabase.functions.invoke("manage-evolution", {
             headers: { Authorization: `Bearer ${session?.access_token}` },
-            body: { action: "status", instance_name: inst.name },
+            body: { action: "status", instance_name: inst.name, org_id: orgId },
           });
           statuses[inst.name] = data?.state || "unknown";
         } catch {
