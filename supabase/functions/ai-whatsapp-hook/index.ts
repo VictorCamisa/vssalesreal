@@ -413,51 +413,50 @@ Regras:
 
     // Check for previous broadcast message sent to this lead
     const phone = remoteJid.replace("@s.whatsapp.net", "");
-    const { data: broadcastHistory } = await supabaseAdmin
-      .from("broadcast_leads")
-      .select("message_sent, broadcast:broadcasts(name, description, ai_config_id)")
-      .eq("status", "sent")
-      .order("sent_at", { ascending: false })
-      .limit(10);
 
     // Find matching broadcast lead by phone
     let broadcastContext = "";
-    if (broadcastHistory?.length) {
-      // We need to find the lead that matches this phone
-      const { data: matchedLead } = await supabaseAdmin
-        .from("leads_raw")
-        .select("id, name")
-        .eq("org_id", orgId)
-        .or(`phone.ilike.%${phone}%,phone.ilike.%${phone.slice(-8)}%`)
+    const { data: matchedLead } = await supabaseAdmin
+      .from("leads_raw")
+      .select("id, name")
+      .eq("org_id", orgId)
+      .or(`phone.ilike.%${phone}%,phone.ilike.%${phone.slice(-8)}%`)
+      .maybeSingle();
+
+    if (matchedLead) {
+      const { data: leadBroadcast } = await supabaseAdmin
+        .from("broadcast_leads")
+        .select("message_sent, sent_at, broadcast:broadcasts(name, description, audience_type)")
+        .eq("lead_id", matchedLead.id)
+        .eq("status", "sent")
+        .order("sent_at", { ascending: false })
+        .limit(1)
         .maybeSingle();
 
-      if (matchedLead) {
-        const { data: leadBroadcast } = await supabaseAdmin
-          .from("broadcast_leads")
-          .select("message_sent, sent_at, broadcast:broadcasts(name, description)")
-          .eq("lead_id", matchedLead.id)
-          .eq("status", "sent")
-          .order("sent_at", { ascending: false })
-          .limit(1)
-          .maybeSingle();
-
-        if (leadBroadcast?.message_sent) {
-          // Add the broadcast message as assistant context so AI knows what was said
-          conversationMessages.push({
-            role: "assistant",
-            content: leadBroadcast.message_sent,
-          });
-          const bcast = leadBroadcast.broadcast as any;
-          if (bcast?.description) {
-            broadcastContext = `\n\nCONTEXTO: Esta conversa começou a partir de um disparo da campanha "${bcast.name || ""}". Objetivo: ${bcast.description}. O lead está respondendo à mensagem acima. Continue a conversa naturalmente, avançando para o próximo passo do funil.`;
-          }
+      if (leadBroadcast?.message_sent) {
+        // Add the broadcast message as assistant context so AI knows what was said
+        conversationMessages.push({
+          role: "assistant",
+          content: leadBroadcast.message_sent,
+        });
+        const bcast = leadBroadcast.broadcast as any;
+        const audienceType = bcast?.audience_type || "b2c";
+        
+        // Build audience-specific override from broadcast config
+        let audienceOverride = "";
+        if (audienceType === "b2b") {
+          audienceOverride = `\nTIPO DE LEAD (DEFINIDO PELA CAMPANHA - RESPEITE!): Este é um lead B2B (empresa/estabelecimento). Foque em: ROI, volume, logística, parceria comercial, reposição. Trate como parceiro de negócio.`;
+        } else {
+          audienceOverride = `\nTIPO DE LEAD (DEFINIDO PELA CAMPANHA - RESPEITE!): Este é um CLIENTE FINAL (pessoa física). Foque EXCLUSIVAMENTE em: eventos pessoais, aniversários, churrascos, festas, happy hours, consumo pessoal, experiência, sabor, praticidade. NUNCA pergunte sobre negócio, estabelecimento, bar, restaurante ou empresa. Venda o PRODUTO diretamente para CONSUMO PESSOAL e momentos especiais.`;
         }
+        
+        broadcastContext = `${audienceOverride}\n\nCONTEXTO DA CAMPANHA: Esta conversa começou a partir de um disparo da campanha "${bcast?.name || ""}". ${bcast?.description ? `Objetivo: ${bcast.description}.` : ""} O lead está respondendo à mensagem acima. Continue a conversa naturalmente, avançando para o próximo passo do funil. NÃO repita a mesma mensagem que já foi enviada.`;
       }
     }
 
-    // Add broadcast context to system prompt if found
+    // Add broadcast context to system prompt if found — PREPEND to override agent's business mode
     if (broadcastContext) {
-      conversationMessages[0].content += broadcastContext;
+      conversationMessages[0].content = broadcastContext + "\n\n" + conversationMessages[0].content;
     }
 
     // Add the current user message
