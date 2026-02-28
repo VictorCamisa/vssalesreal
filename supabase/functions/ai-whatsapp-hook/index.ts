@@ -479,7 +479,7 @@ Regras:
     }
 
     // Process scheduling commands embedded in AI response
-    const phone = remoteJid.replace("@s.whatsapp.net", "");
+    // phone already declared above (line 396)
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
