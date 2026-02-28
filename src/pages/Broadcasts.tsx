@@ -8,7 +8,7 @@ import {
   Plus, Settings, ChevronRight, Loader2, BarChart3, Target, CheckCircle2,
   Trash2, Copy, Eye, Calendar, ArrowUpDown, Search, X, ChevronDown,
   Bot, RefreshCw, AlertCircle, Hash, Tag, Layers, Gauge, Timer,
-  TrendingUp, Percent, MailOpen, MessageSquare, Radio, Archive
+  TrendingUp, Percent, MailOpen, MessageSquare, Radio, Archive, Sparkles
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -77,6 +77,7 @@ type AiAgent = {
   instance_name: string | null;
   enabled: boolean;
   system_prompt: string;
+  config: Record<string, any> | null;
 };
 
 type LeadRaw = {
@@ -144,7 +145,7 @@ export default function Broadcasts() {
     try {
       const [bRes, aRes, iRes] = await Promise.all([
         supabase.from("broadcasts").select("*").eq("org_id", orgId).order("created_at", { ascending: false }),
-        supabase.from("ai_configs").select("id, config_type, instance_name, enabled, system_prompt").eq("org_id", orgId),
+        supabase.from("ai_configs").select("id, config_type, instance_name, enabled, system_prompt, config").eq("org_id", orgId),
         supabase.from("integrations").select("config").eq("org_id", orgId).eq("service_name", "evolution").maybeSingle(),
       ]);
       setBroadcasts((bRes.data as any[]) || []);
@@ -899,30 +900,66 @@ function CreateCampaignDialog({
               </div>
             </div>
 
-            {aiEnabled && (
-              <div className="space-y-1.5">
-                <Label className="text-xs">Selecionar Agente</Label>
-                <Select value={aiConfigId} onValueChange={setAiConfigId}>
-                  <SelectTrigger className="text-sm"><SelectValue placeholder="Escolha um agente..." /></SelectTrigger>
-                  <SelectContent>
-                    {agents.filter(a => a.config_type === "chatbot").map(a => (
-                      <SelectItem key={a.id} value={a.id}>
-                        <div className="flex items-center gap-2">
-                          <Bot className="h-3 w-3" />
-                          <span>{a.instance_name || "Agente sem nome"}</span>
-                          {a.enabled && <Badge variant="secondary" className="text-[9px] bg-success/10 text-success">Ativo</Badge>}
-                        </div>
-                      </SelectItem>
-                    ))}
-                    {agents.filter(a => a.config_type === "chatbot").length === 0 && (
-                      <div className="px-2 py-3 text-xs text-muted-foreground text-center">
-                        Nenhum agente configurado. Crie um na aba de IA.
+            {aiEnabled && (() => {
+              const chatbotAgents = agents.filter(a => a.config_type === "chatbot" && a.enabled);
+              const smartAgent = chatbotAgents.find(a => (a.config as any)?.routing_mode === "smart");
+              const activeRoles = chatbotAgents
+                .map(a => (a.config as any)?.agent_role)
+                .filter(Boolean);
+
+              // Auto-select smart agent config if available
+              if (smartAgent && !aiConfigId) {
+                setTimeout(() => setAiConfigId(smartAgent.id), 0);
+              } else if (!smartAgent && chatbotAgents.length > 0 && !aiConfigId) {
+                setTimeout(() => setAiConfigId(chatbotAgents[0].id), 0);
+              }
+
+              return (
+                <div className="border rounded-lg p-4 bg-primary/5 space-y-2">
+                  <div className="flex items-center gap-2">
+                    <Sparkles className="h-4 w-4 text-primary" />
+                    <p className="text-sm font-medium">
+                      {smartAgent ? "Modo Inteligente Ativo" : "Agente de IA"}
+                    </p>
+                  </div>
+                  {smartAgent ? (
+                    <div className="space-y-2">
+                      <p className="text-[11px] text-muted-foreground leading-relaxed">
+                        A IA alternará automaticamente entre os agentes conforme o contexto da conversa, seguindo o fluxo: SDR → Closer → CS.
+                      </p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {activeRoles.map((role: string) => (
+                          <Badge key={role} variant="secondary" className="text-[10px] gap-1 bg-primary/10 text-primary border-primary/20">
+                            {role === "SDR" && "🎯"}{role === "Closer" && "🤝"}{role === "Customer Success" && "🔄"}{role === "BDR" && "🔍"} {role}
+                          </Badge>
+                        ))}
                       </div>
-                    )}
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
+                    </div>
+                  ) : chatbotAgents.length > 0 ? (
+                    <div className="space-y-1.5">
+                      <Label className="text-[10px] text-muted-foreground">Agente selecionado</Label>
+                      <Select value={aiConfigId} onValueChange={setAiConfigId}>
+                        <SelectTrigger className="text-sm"><SelectValue placeholder="Escolha um agente..." /></SelectTrigger>
+                        <SelectContent>
+                          {chatbotAgents.map(a => (
+                            <SelectItem key={a.id} value={a.id}>
+                              <div className="flex items-center gap-2">
+                                <Bot className="h-3 w-3" />
+                                <span>{(a.config as any)?.agent_role || a.instance_name || "Agente"}</span>
+                              </div>
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  ) : (
+                    <p className="text-[11px] text-muted-foreground">
+                      Nenhum agente ativo. Configure seus agentes na aba Agente IA.
+                    </p>
+                  )}
+                </div>
+              );
+            })()}
 
             <div className="space-y-1.5">
               <Label className="text-xs">Instância WhatsApp</Label>
