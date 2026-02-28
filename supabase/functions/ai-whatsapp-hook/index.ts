@@ -415,7 +415,6 @@ Regras:
     const phone = remoteJid.replace("@s.whatsapp.net", "");
 
     // Find matching broadcast lead by phone
-    let broadcastContext = "";
     const { data: matchedLead } = await supabaseAdmin
       .from("leads_raw")
       .select("id, name")
@@ -426,7 +425,7 @@ Regras:
     if (matchedLead) {
       const { data: leadBroadcast } = await supabaseAdmin
         .from("broadcast_leads")
-        .select("message_sent, sent_at, broadcast:broadcasts(name, description, audience_type)")
+        .select("message_sent, sent_at, broadcast:broadcasts(id, name, description, audience_type, ai_config_id)")
         .eq("lead_id", matchedLead.id)
         .eq("status", "sent")
         .order("sent_at", { ascending: false })
@@ -440,100 +439,27 @@ Regras:
           content: leadBroadcast.message_sent,
         });
         const bcast = leadBroadcast.broadcast as any;
-        const audienceType = bcast?.audience_type || "b2c";
-        console.log(`Broadcast context found: audience_type=${audienceType}, campaign="${bcast?.name}"`);
-        
-        // CRITICAL: When lead came from a broadcast, COMPLETELY REPLACE the agent's system prompt
-        // to prevent B2B agent instructions from overriding the broadcast's audience type
-        let audiencePrompt = "";
-        if (audienceType === "b2b") {
-          audiencePrompt = `Você é um consultor comercial via WhatsApp. Este lead é um PARCEIRO DE NEGÓCIO (B2B - empresa, bar, restaurante, distribuidora).
+        console.log(`Broadcast context found: audience_type=${bcast?.audience_type}, campaign="${bcast?.name}", ai_config_id=${bcast?.ai_config_id}`);
 
-ABORDAGEM B2B:
-- Foque em: ROI, volume, logística de entrega, parceria comercial, reposição, margem de lucro
-- Trate como um potencial parceiro de negócio
-- Use linguagem profissional e dados concretos
-- Ofereça condições comerciais, volumes e prazos`;
-        } else {
-          audiencePrompt = `Você é um consultor via WhatsApp. Este lead é um CLIENTE FINAL (pessoa física, consumidor).
+        // Use the broadcast's dedicated AI config if available
+        // This config has audience-specific instructions (B2B or B2C) baked in
+        if (bcast?.ai_config_id) {
+          const { data: broadcastAiConfig } = await supabaseAdmin
+            .from("ai_configs")
+            .select("system_prompt")
+            .eq("id", bcast.ai_config_id)
+            .maybeSingle();
 
-ABORDAGEM B2C (OBRIGATÓRIA - NUNCA DESVIE):
-- Foque EXCLUSIVAMENTE em: eventos pessoais, aniversários, churrascos, festas, happy hours, confraternizações, consumo pessoal
-- PROIBIDO: perguntar sobre negócio, estabelecimento, bar, restaurante, empresa, PDV, giro de bebidas, parceiros, setor de eventos
-- PROIBIDO: usar termos como "PDV", "parceiros", "reposição", "volume comercial", "ponto de venda"
-- Venda o PRODUTO diretamente para CONSUMO PESSOAL e momentos especiais
-- Linguagem leve, amigável e focada na experiência pessoal do cliente
-- Sugira sabores, quantidades para festas, harmonizações`;
-        }
+          if (broadcastAiConfig?.system_prompt) {
+            const campaignCtx = `\n\nCONTEXTO DA CAMPANHA: Conversa iniciada pelo disparo "${bcast.name || ""}". ${bcast.description ? `Objetivo: ${bcast.description}.` : ""}
+O lead está respondendo à mensagem acima. Continue naturalmente. NÃO repita a mensagem já enviada.`;
 
-        // Build the replacement system prompt with company context but WITHOUT the agent's B2B instructions
-        broadcastContext = `${audiencePrompt}
-
-CONTEXTO DA CAMPANHA: Esta conversa começou a partir de um disparo da campanha "${bcast?.name || ""}". ${bcast?.description ? `Objetivo: ${bcast.description}.` : ""}
-O lead está respondendo à mensagem que você enviou acima. Continue a conversa naturalmente.
-NÃO repita a mesma mensagem que já foi enviada.
-
-REGRAS ANTI-ALUCINAÇÃO:
-- NUNCA invente informações sobre o lead
-- Use APENAS informações fornecidas no contexto
-- É melhor ser genérico do que inventar qualquer dado
-
-FORMATO DE RESPOSTA:
-- Divida sua resposta em blocos CURTOS de no máximo 200 caracteres cada
-- Separe cada bloco com ---BLOCO---
-- Máximo 4 blocos por resposta
-- Use emojis com moderação (1 por bloco no máximo)
-- Responda em português brasileiro`;
-      }
-    }
-
-    // If broadcast context was found, REPLACE the entire system prompt (don't append)
-    if (broadcastContext) {
-      console.log("REPLACING system prompt with broadcast-specific prompt");
-      
-      // Build a FILTERED company context that matches the audience type
-      // The full companyContext contains B2B terms (PDV, giro, etc.) that confuse B2C conversations
-      let filteredCompanyContext = "";
-      if (companyProfile) {
-        const cp = companyProfile as any;
-        const bcast = (await supabaseAdmin.from("broadcast_leads").select("broadcast:broadcasts(audience_type)").eq("lead_id", matchedLead?.id || "").order("sent_at", { ascending: false }).limit(1).maybeSingle())?.data?.broadcast as any;
-        const isB2C = (bcast?.audience_type || "b2c") !== "b2b";
-        
-        const parts: string[] = [];
-        if (cp.company_name) parts.push(`Empresa: ${cp.company_name}`);
-        if (cp.segment) parts.push(`Segmento: Distribuição de Bebidas`);
-        if (cp.description) {
-          // For B2C, strip B2B-specific language from description
-          if (isB2C) {
-            parts.push(`Sobre: Distribuidora de chopp e cervejas artesanais, atendendo também consumidores finais para eventos e momentos especiais.`);
-          } else {
-            parts.push(`Sobre: ${cp.description}`);
+            // Replace system prompt entirely with the dedicated config's prompt + company + knowledge
+            conversationMessages[0].content = broadcastAiConfig.system_prompt + campaignCtx + companyContext + knowledgeContext;
+            console.log("Using dedicated broadcast AI config prompt — no filtering needed");
           }
         }
-        if (isB2C) {
-          parts.push(`Público: Consumidores finais para eventos pessoais, churrascos, festas e confraternizações`);
-        } else {
-          if (cp.target_audience) parts.push(`Público-alvo: ${cp.target_audience}`);
-        }
-        if (cp.differentials) parts.push(`Diferenciais: ${cp.differentials}`);
-        if (cp.tone_of_voice) parts.push(`Tom de voz: ${cp.tone_of_voice}`);
-        // For B2C, DON'T include sales_process (it's B2B-oriented)
-        if (!isB2C && cp.sales_process) parts.push(`Processo: ${cp.sales_process}`);
-        
-        // Products are relevant for both B2B and B2C
-        const products = cp.products_services || [];
-        if (products.length > 0) {
-          parts.push("Produtos:\n" + products.map((p: any) => `- ${p.name}${p.price ? ` (${p.price})` : ""}: ${p.description}`).join("\n"));
-        }
-        // FAQs are relevant for both
-        const faqs = cp.objections_faq || [];
-        if (faqs.length > 0) {
-          parts.push("Objeções:\n" + faqs.map((f: any) => `Q: ${f.question}\nR: ${f.answer}`).join("\n"));
-        }
-        filteredCompanyContext = `\n\n--- EMPRESA ---\n${parts.join("\n")}\n--- FIM ---`;
       }
-      
-      conversationMessages[0].content = broadcastContext + filteredCompanyContext + knowledgeContext;
     }
 
     // Add the current user message
