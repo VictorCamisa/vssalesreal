@@ -738,7 +738,35 @@ CRITÉRIOS DE DETECÇÃO:
   };
 
   const handleToggleAgent = async (template: typeof CHATBOT_TEMPLATES[0], existing: { template: typeof CHATBOT_TEMPLATES[0]; config: AiConfig } | undefined) => {
-    if (!existing) return;
+    if (!existing) {
+      // Auto-create the agent config when it doesn't exist yet
+      try {
+        const instanceToUse = routingMode === "smart" ? (smartInstance || instances[0]) : selectedInstance;
+        const payload = {
+          org_id: orgId,
+          config_type: "chatbot",
+          instance_name: instanceToUse || null,
+          enabled: true,
+          system_prompt: template.prompt,
+          temperature: 0.7,
+          schedule_start: "08:00",
+          schedule_end: "18:00",
+          schedule_days: [1, 2, 3, 4, 5],
+          only_outside_hours: false,
+          config: {
+            agent_role: template.role,
+            routing_mode: routingMode,
+          },
+        };
+        const { data, error } = await supabase.from("ai_configs").insert(payload).select().single();
+        if (error) throw error;
+        toast({ title: `${template.role} criado e ativado! ✅` });
+        await loadConfigs();
+      } catch (e: any) {
+        toast({ title: "Erro ao criar agente", description: e.message, variant: "destructive" });
+      }
+      return;
+    }
     const newEnabled = !existing.config.enabled;
     setExistingAgents(prev => prev.map(a =>
       a.template.role === template.role ? { ...a, config: { ...a.config, enabled: newEnabled } } : a
@@ -879,8 +907,7 @@ CRITÉRIOS DE DETECÇÃO:
                       </div>
                       <Switch
                         checked={isActive}
-                        disabled={!existing}
-                        onCheckedChange={() => existing && handleToggleAgent(t, existing)}
+                        onCheckedChange={() => handleToggleAgent(t, existing)}
                       />
                     </div>
                   );
