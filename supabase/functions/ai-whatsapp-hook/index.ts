@@ -67,20 +67,25 @@ serve(async (req) => {
       });
     }
 
-    // Check if chatbot is enabled for this instance
-    const { data: aiConfig } = await supabaseAdmin
+    // Check if chatbot is enabled for this instance — support smart routing
+    const { data: aiConfigs } = await supabaseAdmin
       .from("ai_configs")
       .select("*")
       .eq("org_id", orgId)
       .eq("config_type", "chatbot")
       .eq("instance_name", instanceName)
-      .maybeSingle();
+      .eq("enabled", true);
 
-    if (!aiConfig?.enabled) {
+    if (!aiConfigs || aiConfigs.length === 0) {
       return new Response(JSON.stringify({ ignored: true, reason: "chatbot disabled" }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+
+    // Determine if smart routing is active
+    const smartConfig = aiConfigs.find((c: any) => (c.config as any)?.routing_mode === "smart");
+    const aiConfig = smartConfig || aiConfigs[0];
+    const isSmartRouting = !!(smartConfig && (smartConfig.config as any)?.routing_mode === "smart");
 
     // Track conversation for follow-up system
     // When customer sends a message, reset follow-up state (they responded)
@@ -236,8 +241,31 @@ serve(async (req) => {
     }
 
     // Build system prompt from modular config or fallback to legacy prompt
-    const modularCfg = (aiConfig.config as any)?.modular;
+    const configData = aiConfig.config as any;
+    const modularCfg = configData?.modular;
     let systemPrompt = "";
+
+    // Smart routing: enrich prompt with conversation history for context detection
+    let smartRoutingContext = "";
+    if (isSmartRouting) {
+      // Fetch recent conversation history for better persona detection
+      const { data: convTracker } = await supabaseAdmin
+        .from("conversation_tracker")
+        .select("customer_msg_count, pipeline_stage_key, push_name, last_customer_msg_at")
+        .eq("org_id", orgId)
+        .eq("instance_name", instanceName)
+        .eq("remote_jid", remoteJid)
+        .maybeSingle();
+
+      if (convTracker) {
+        const parts: string[] = [];
+        parts.push(`\n\nCONTEXTO DA CONVERSA (use para escolher o perfil):`);
+        parts.push(`- Mensagens do cliente: ${convTracker.customer_msg_count || 0}`);
+        if (convTracker.pipeline_stage_key) parts.push(`- Estágio no pipeline: ${convTracker.pipeline_stage_key}`);
+        if (convTracker.customer_msg_count === 0) parts.push(`- PRIMEIRO CONTATO — use perfil SDR/BDR`);
+        smartRoutingContext = parts.join("\n");
+      }
+    }
 
     if (modularCfg && !modularCfg.use_custom_prompt) {
       // --- Build prompt from modular sections ---
@@ -323,10 +351,10 @@ serve(async (req) => {
 
       parts.push(`\nResponda SEMPRE em português brasileiro.`);
 
-      systemPrompt = parts.join("\n") + companyContext + knowledgeContext;
+      systemPrompt = parts.join("\n") + companyContext + knowledgeContext + smartRoutingContext;
     } else if (modularCfg?.use_custom_prompt && modularCfg?.custom_base_prompt) {
       // Custom manual prompt
-      systemPrompt = modularCfg.custom_base_prompt + companyContext + knowledgeContext;
+      systemPrompt = modularCfg.custom_base_prompt + companyContext + knowledgeContext + smartRoutingContext;
     } else {
       // Legacy fallback
       systemPrompt = `Você é um assistente virtual via WhatsApp para uma empresa.
@@ -351,7 +379,7 @@ Regras:
 - Use emojis com moderação (1 por bloco no máximo)
 - Se não souber a resposta, diga que vai encaminhar para um atendente humano
 - Nunca invente informações
-- Responda em português brasileiro${companyContext}${knowledgeContext}`;
+- Responda em português brasileiro${companyContext}${knowledgeContext}${smartRoutingContext}`;
     }
 
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
@@ -403,7 +431,7 @@ Regras:
     const verificarMatch = reply.match(/\[VERIFICAR:(\d{4}-\d{2}-\d{2})\]/);
 
     // Remove commands from visible reply
-    reply = reply.replace(/\[AGENDAR:[^\]]+\]/g, "").replace(/\[CANCELAR:[^\]]+\]/g, "").replace(/\[VERIFICAR:[^\]]+\]/g, "").trim();
+    reply = reply.replace(/\[AGENDAR:[^\]]+\]/g, "").replace(/\[CANCELAR:[^\]]+\]/g, "").replace(/\[VERIFICAR:[^\]]+\]/g, "").replace(/\[PERFIL:[^\]]+\]/g, "").trim();
 
     if (agendarMatch) {
       try {
