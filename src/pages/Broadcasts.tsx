@@ -603,6 +603,60 @@ function CreateCampaignDialog({
     setAudienceType("b2c");
   };
 
+  // Dedicated prompt templates for broadcast audience types
+  const B2C_PROMPT = `Você é um atendente virtual via WhatsApp. Seu papel é atender CONSUMIDORES FINAIS (pessoas físicas).
+
+PÚBLICO: Exclusivamente consumidores finais para eventos pessoais, festas, churrascos, aniversários, confraternizações, happy hours e consumo pessoal.
+
+PROIBIDO (NUNCA faça isso):
+- Perguntar sobre negócio, estabelecimento, bar, restaurante, empresa do lead
+- Usar termos: "PDV", "parceiros", "reposição", "volume comercial", "ponto de venda", "giro"
+- Tratar o lead como empresa ou revendedor
+- Mencionar processo de vendas B2B
+
+COMO AGIR:
+- Linguagem leve, amigável e focada na experiência pessoal
+- Sugira produtos para a ocasião do cliente
+- Fale sobre sabores, quantidades para festas, harmonizações
+- Foque em benefícios pessoais, praticidade e experiência
+
+IMPORTANTE: Os dados da empresa abaixo podem conter termos B2B. IGNORE termos como "PDV", "reposição", "parceiros". Use APENAS nomes de produtos, preços e descrições.
+
+REGRAS ANTI-ALUCINAÇÃO:
+- NUNCA invente informações sobre o lead
+- Use APENAS informações fornecidas no contexto
+- É melhor ser genérico do que inventar dados
+
+FORMATO DE RESPOSTA:
+- Divida em blocos CURTOS (máx 200 chars cada)
+- Separe com ---BLOCO---
+- Máximo 4 blocos por resposta
+- Use emojis com moderação (1 por bloco)
+- Responda em português brasileiro`;
+
+  const B2B_PROMPT = `Você é um consultor comercial via WhatsApp. Seu papel é atender EMPRESAS e PARCEIROS DE NEGÓCIO (B2B).
+
+PÚBLICO: Exclusivamente empresas, bares, restaurantes, distribuidoras, revendedores e parceiros comerciais.
+
+COMO AGIR:
+- Foque em: ROI, volume, logística de entrega, parceria comercial, reposição, margem de lucro
+- Trate como um potencial parceiro de negócio
+- Use linguagem profissional e dados concretos
+- Ofereça condições comerciais, volumes e prazos
+- Pergunte sobre o estabelecimento para personalizar a proposta
+
+REGRAS ANTI-ALUCINAÇÃO:
+- NUNCA invente informações sobre o lead
+- Use APENAS informações fornecidas no contexto
+- É melhor ser genérico do que inventar dados
+
+FORMATO DE RESPOSTA:
+- Divida em blocos CURTOS (máx 200 chars cada)
+- Separe com ---BLOCO---
+- Máximo 4 blocos por resposta
+- Use emojis com moderação (1 por bloco)
+- Responda em português brasileiro`;
+
   const handleCreate = async () => {
     if (!name.trim()) { toast({ title: "Informe o nome", variant: "destructive" }); return; }
     if (selectionMode === "manual" && manualSelected.size === 0) {
@@ -615,6 +669,39 @@ function CreateCampaignDialog({
     try {
       const tags = segmentTags.split(",").map(t => t.trim()).filter(Boolean);
       const totalCount = selectionMode === "manual" ? manualSelected.size : (leadCount || 0);
+
+      // Auto-create dedicated AI config for the audience type
+      let finalAiConfigId = aiConfigId || null;
+      if (aiEnabled) {
+        const configType = `broadcast_${audienceType}`;
+        // Check if a dedicated config already exists for this audience type
+        const { data: existingConfig } = await supabase
+          .from("ai_configs")
+          .select("id")
+          .eq("org_id", orgId)
+          .eq("config_type", configType)
+          .maybeSingle();
+
+        if (existingConfig) {
+          finalAiConfigId = existingConfig.id;
+        } else {
+          // Create a new dedicated config
+          const prompt = audienceType === "b2c" ? B2C_PROMPT : B2B_PROMPT;
+          const { data: newConfig } = await supabase
+            .from("ai_configs")
+            .insert({
+              org_id: orgId,
+              config_type: configType,
+              system_prompt: prompt,
+              enabled: true,
+              temperature: 0.4,
+            })
+            .select("id")
+            .single();
+          if (newConfig) finalAiConfigId = newConfig.id;
+        }
+      }
+
       const payload = {
         org_id: orgId, name, description: description || null,
         status: scheduledAt ? "scheduled" : "draft", type, channel,
@@ -623,7 +710,7 @@ function CreateCampaignDialog({
         segment_tags: selectionMode === "segment" ? tags : [],
         segment_date_from: selectionMode === "segment" ? (segmentDateFrom || null) : null,
         segment_date_to: selectionMode === "segment" ? (segmentDateTo || null) : null,
-        ai_enabled: aiEnabled, ai_config_id: aiConfigId || null, instance_name: instanceName || null, audience_type: audienceType,
+        ai_enabled: aiEnabled, ai_config_id: finalAiConfigId, instance_name: instanceName || null, audience_type: audienceType,
         message_template: messageTemplate || null,
         follow_up_enabled: followUpEnabled, follow_up_count: followUpCount, follow_up_interval_hours: followUpInterval,
         send_rate_per_minute: sendRate, delay_between_messages: delayBetween,
