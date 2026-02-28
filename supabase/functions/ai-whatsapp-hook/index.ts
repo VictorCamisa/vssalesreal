@@ -441,22 +441,56 @@ Regras:
         });
         const bcast = leadBroadcast.broadcast as any;
         const audienceType = bcast?.audience_type || "b2c";
+        console.log(`Broadcast context found: audience_type=${audienceType}, campaign="${bcast?.name}"`);
         
-        // Build audience-specific override from broadcast config
-        let audienceOverride = "";
+        // CRITICAL: When lead came from a broadcast, COMPLETELY REPLACE the agent's system prompt
+        // to prevent B2B agent instructions from overriding the broadcast's audience type
+        let audiencePrompt = "";
         if (audienceType === "b2b") {
-          audienceOverride = `\nTIPO DE LEAD (DEFINIDO PELA CAMPANHA - RESPEITE!): Este é um lead B2B (empresa/estabelecimento). Foque em: ROI, volume, logística, parceria comercial, reposição. Trate como parceiro de negócio.`;
+          audiencePrompt = `Você é um consultor comercial via WhatsApp. Este lead é um PARCEIRO DE NEGÓCIO (B2B - empresa, bar, restaurante, distribuidora).
+
+ABORDAGEM B2B:
+- Foque em: ROI, volume, logística de entrega, parceria comercial, reposição, margem de lucro
+- Trate como um potencial parceiro de negócio
+- Use linguagem profissional e dados concretos
+- Ofereça condições comerciais, volumes e prazos`;
         } else {
-          audienceOverride = `\nTIPO DE LEAD (DEFINIDO PELA CAMPANHA - RESPEITE!): Este é um CLIENTE FINAL (pessoa física). Foque EXCLUSIVAMENTE em: eventos pessoais, aniversários, churrascos, festas, happy hours, consumo pessoal, experiência, sabor, praticidade. NUNCA pergunte sobre negócio, estabelecimento, bar, restaurante ou empresa. Venda o PRODUTO diretamente para CONSUMO PESSOAL e momentos especiais.`;
+          audiencePrompt = `Você é um consultor via WhatsApp. Este lead é um CLIENTE FINAL (pessoa física, consumidor).
+
+ABORDAGEM B2C (OBRIGATÓRIA - NUNCA DESVIE):
+- Foque EXCLUSIVAMENTE em: eventos pessoais, aniversários, churrascos, festas, happy hours, confraternizações, consumo pessoal
+- PROIBIDO: perguntar sobre negócio, estabelecimento, bar, restaurante, empresa, PDV, giro de bebidas, parceiros, setor de eventos
+- PROIBIDO: usar termos como "PDV", "parceiros", "reposição", "volume comercial", "ponto de venda"
+- Venda o PRODUTO diretamente para CONSUMO PESSOAL e momentos especiais
+- Linguagem leve, amigável e focada na experiência pessoal do cliente
+- Sugira sabores, quantidades para festas, harmonizações`;
         }
-        
-        broadcastContext = `${audienceOverride}\n\nCONTEXTO DA CAMPANHA: Esta conversa começou a partir de um disparo da campanha "${bcast?.name || ""}". ${bcast?.description ? `Objetivo: ${bcast.description}.` : ""} O lead está respondendo à mensagem acima. Continue a conversa naturalmente, avançando para o próximo passo do funil. NÃO repita a mesma mensagem que já foi enviada.`;
+
+        // Build the replacement system prompt with company context but WITHOUT the agent's B2B instructions
+        broadcastContext = `${audiencePrompt}
+
+CONTEXTO DA CAMPANHA: Esta conversa começou a partir de um disparo da campanha "${bcast?.name || ""}". ${bcast?.description ? `Objetivo: ${bcast.description}.` : ""}
+O lead está respondendo à mensagem que você enviou acima. Continue a conversa naturalmente.
+NÃO repita a mesma mensagem que já foi enviada.
+
+REGRAS ANTI-ALUCINAÇÃO:
+- NUNCA invente informações sobre o lead
+- Use APENAS informações fornecidas no contexto
+- É melhor ser genérico do que inventar qualquer dado
+
+FORMATO DE RESPOSTA:
+- Divida sua resposta em blocos CURTOS de no máximo 200 caracteres cada
+- Separe cada bloco com ---BLOCO---
+- Máximo 4 blocos por resposta
+- Use emojis com moderação (1 por bloco no máximo)
+- Responda em português brasileiro`;
       }
     }
 
-    // Add broadcast context to system prompt if found — PREPEND to override agent's business mode
+    // If broadcast context was found, REPLACE the entire system prompt (don't append)
     if (broadcastContext) {
-      conversationMessages[0].content = broadcastContext + "\n\n" + conversationMessages[0].content;
+      console.log("REPLACING system prompt with broadcast-specific prompt");
+      conversationMessages[0].content = broadcastContext + companyContext + knowledgeContext;
     }
 
     // Add the current user message
