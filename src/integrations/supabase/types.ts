@@ -960,6 +960,7 @@ export type Database = {
           created_at: string
           external_mapping: Json | null
           form_token: string
+          handoff_number: string | null
           id: string
           name: string
           owner_id: string
@@ -969,6 +970,7 @@ export type Database = {
           created_at?: string
           external_mapping?: Json | null
           form_token?: string
+          handoff_number?: string | null
           id?: string
           name: string
           owner_id: string
@@ -978,6 +980,7 @@ export type Database = {
           created_at?: string
           external_mapping?: Json | null
           form_token?: string
+          handoff_number?: string | null
           id?: string
           name?: string
           owner_id?: string

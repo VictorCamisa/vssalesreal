@@ -4,7 +4,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import {
   Kanban, Loader2, GripVertical, Trash2, Edit,
-  Phone, Mail, Sparkles, Target,
+  Phone, Mail, Sparkles, Target, Settings,
   DollarSign, Percent, X, Users, Bot, Zap,
   UserCheck, Headphones, Briefcase, Eye,
   ArrowRight, CheckCircle2, XCircle, Calendar,
@@ -186,6 +186,25 @@ export default function CRM() {
   const [oppValue, setOppValue] = useState("");
   const [oppProbability, setOppProbability] = useState("");
   const [oppNotes, setOppNotes] = useState("");
+  const [handoffNumber, setHandoffNumber] = useState("");
+  const [handoffSaving, setHandoffSaving] = useState(false);
+  const [showHandoffConfig, setShowHandoffConfig] = useState(false);
+
+  const fetchHandoffNumber = useCallback(async () => {
+    if (!profile?.org_id) return;
+    const { data } = await supabase.from("organizations").select("handoff_number").eq("id", profile.org_id).single();
+    if (data?.handoff_number) setHandoffNumber(data.handoff_number);
+  }, [profile?.org_id]);
+
+  const saveHandoffNumber = async () => {
+    if (!profile?.org_id) return;
+    setHandoffSaving(true);
+    const { error } = await supabase.from("organizations").update({ handoff_number: handoffNumber || null }).eq("id", profile.org_id);
+    setHandoffSaving(false);
+    if (error) { toast({ title: "Erro", description: error.message, variant: "destructive" }); return; }
+    toast({ title: "Número de handoff salvo!" });
+    setShowHandoffConfig(false);
+  };
 
   const fetchData = useCallback(async () => {
     if (!profile?.org_id) return;
@@ -214,7 +233,7 @@ export default function CRM() {
     setLoading(false);
   }, [profile?.org_id]);
 
-  useEffect(() => { fetchData(); }, [fetchData]);
+  useEffect(() => { fetchData(); fetchHandoffNumber(); }, [fetchData, fetchHandoffNumber]);
 
   const stageMap = useMemo(() => {
     const map = new Map<string, typeof PIPELINE_STAGES[0]>();
@@ -326,8 +345,64 @@ export default function CRM() {
             <StatPill icon={DollarSign} label="Valor" value={formatCurrency(totalValue)} color="text-emerald-400" />
             <StatPill icon={Percent} label="Prob" value={`${avgProbability}%`} color="text-violet-400" />
             <StatPill icon={TrendingUp} label="Conv" value={`${conversionRate}%`} color="text-amber-400" />
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  onClick={() => setShowHandoffConfig(true)}
+                  className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all border ${
+                    handoffNumber
+                      ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-400"
+                      : "border-amber-500/30 bg-amber-500/10 text-amber-400"
+                  }`}
+                >
+                  <Headphones className="h-3.5 w-3.5" />
+                  Handoff
+                </button>
+              </TooltipTrigger>
+              <TooltipContent>
+                {handoffNumber ? `Handoff: ${handoffNumber}` : "Configurar número de handoff"}
+              </TooltipContent>
+            </Tooltip>
           </div>
         </div>
+
+        {/* ─── Handoff Config Dialog ─── */}
+        <Dialog open={showHandoffConfig} onOpenChange={setShowHandoffConfig}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Headphones className="h-5 w-5 text-primary" />
+                Número de Handoff
+              </DialogTitle>
+              <DialogDescription>
+                Quando a IA qualificar um lead e decidir transferir para um humano, a ficha de qualificação será enviada para este número no WhatsApp.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 pt-2">
+              <div className="space-y-2">
+                <Label htmlFor="handoff-number">Número do WhatsApp</Label>
+                <Input
+                  id="handoff-number"
+                  placeholder="5511999999999"
+                  value={handoffNumber}
+                  onChange={(e) => setHandoffNumber(e.target.value)}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Formato: código do país + DDD + número (ex: 5511999999999)
+                </p>
+              </div>
+              <div className="flex justify-end gap-2">
+                <Button variant="outline" size="sm" onClick={() => setShowHandoffConfig(false)}>
+                  Cancelar
+                </Button>
+                <Button size="sm" onClick={saveHandoffNumber} disabled={handoffSaving}>
+                  {handoffSaving ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
+                  Salvar
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
 
         {/* ─── View Tabs ─── */}
         <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5">
