@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -9,6 +9,7 @@ import {
   CheckCircle2, XCircle, TrendingUp, Users, Zap, MessageCircle, RefreshCw,
   Bot, Lightbulb, HelpCircle, Save, Plus, X, Trash2,
   ArrowDown, Radio, Clock, Workflow, Briefcase, ShoppingBag, FileText,
+  Eye, Settings2, SmilePlus, Timer, MessageSquare, Hash,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -20,6 +21,7 @@ import { Slider } from "@/components/ui/slider";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Progress } from "@/components/ui/progress";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 // ---- Types ----
 type ProductItem = { name: string; description: string; price?: string };
@@ -80,6 +82,23 @@ type KnowledgeDoc = {
 };
 
 type ChatMsg = { role: "user" | "assistant"; content: string };
+
+// ---- Behavior settings type ----
+type BehaviorSettings = {
+  max_messages_per_conversation: number; // max messages the bot sends before stopping
+  response_delay_seconds: number; // delay before responding
+  client_wait_timeout_minutes: number; // how long to wait for client before follow-up
+  emoji_usage: "none" | "minimal" | "moderate" | "frequent";
+  context_window: number; // number of previous messages to include
+};
+
+const DEFAULT_BEHAVIOR: BehaviorSettings = {
+  max_messages_per_conversation: 15,
+  response_delay_seconds: 3,
+  client_wait_timeout_minutes: 30,
+  emoji_usage: "moderate",
+  context_window: 10,
+};
 
 // ---- Scorecard Logic ----
 type ScoreCategory = {
@@ -244,6 +263,108 @@ function EditField({ label, value, onChange, multiline, placeholder }: {
   );
 }
 
+// ---- Final Prompt Builder (mirrors ai-whatsapp-hook logic) ----
+function buildFinalPromptPreview(
+  aiConfig: AiConfig | null,
+  company: CompanyData | null,
+  docs: KnowledgeDoc[],
+  audience: "b2b" | "b2c" | null,
+): string {
+  if (!aiConfig) return "Nenhum agente ativo configurado.";
+
+  const configData = aiConfig.config || {};
+  const modularCfg = configData.modular;
+  const behavior: BehaviorSettings = configData.behavior || DEFAULT_BEHAVIOR;
+
+  // Build company context
+  const buildCtx = (cp: CompanyData | null, aud: string | null): string => {
+    if (!cp) return "";
+    const parts: string[] = [];
+    if (cp.company_name) parts.push(`Empresa: ${cp.company_name}`);
+    if (cp.segment) parts.push(`Segmento: ${cp.segment}`);
+    if (cp.description) parts.push(`Sobre: ${cp.description}`);
+
+    const prefix = aud === "b2b" || aud === "b2c" ? aud : null;
+    const ta = prefix ? (cp as any)[`${prefix}_target_audience`] || cp.target_audience : cp.target_audience;
+    const df = prefix ? (cp as any)[`${prefix}_differentials`] || cp.differentials : cp.differentials;
+    const tv = prefix ? (cp as any)[`${prefix}_tone_of_voice`] || cp.tone_of_voice : cp.tone_of_voice;
+    const sp = prefix ? (cp as any)[`${prefix}_sales_process`] || cp.sales_process : cp.sales_process;
+    const pd = prefix ? ((cp as any)[`${prefix}_products_services`]?.length ? (cp as any)[`${prefix}_products_services`] : cp.products_services) : cp.products_services;
+    const fq = prefix ? ((cp as any)[`${prefix}_objections_faq`]?.length ? (cp as any)[`${prefix}_objections_faq`] : cp.objections_faq) : cp.objections_faq;
+
+    if (ta) parts.push(`Público-alvo: ${ta}`);
+    if (df) parts.push(`Diferenciais: ${df}`);
+    if (tv) parts.push(`Tom de voz: ${tv}`);
+    if (sp) parts.push(`Processo: ${sp}`);
+    if (pd?.length > 0) {
+      parts.push("Produtos:\n" + pd.map((p: any) => `- ${p.name}${p.price ? ` (${p.price})` : ""}: ${p.description}`).join("\n"));
+    }
+    if (fq?.length > 0) {
+      parts.push("Objeções:\n" + fq.map((f: any) => `Q: ${f.question}\nR: ${f.answer}`).join("\n"));
+    }
+    return `\n\n--- EMPRESA ---\n${parts.join("\n")}\n--- FIM ---`;
+  };
+
+  const companyCtx = buildCtx(company, audience);
+  const knowledgeCtx = docs.length > 0 ? `\n\n--- BASE DE CONHECIMENTO ---\n${docs.slice(0, 3).map(d => `## ${d.title}\n${d.summary || d.content.substring(0, 400)}`).join("\n\n")}\n--- FIM ---` : "";
+
+  let systemPrompt = "";
+
+  // Behavior rules injection
+  const emojiMap: Record<string, string> = {
+    none: "NÃO use emojis em nenhuma mensagem",
+    minimal: "Use emojis com muita moderação (1 a cada 3 mensagens no máximo)",
+    moderate: "Use emojis com moderação (máximo 1 por mensagem/bloco)",
+    frequent: "Use emojis livremente (2+ por mensagem quando natural)",
+  };
+  const behaviorRules = `\nCONFIGURAÇÕES DE COMPORTAMENTO:
+- Máximo de mensagens por conversa: ${behavior.max_messages_per_conversation} (após isso, encaminhe para humano)
+- Delay antes de responder: ${behavior.response_delay_seconds}s
+- Espera do cliente antes de follow-up: ${behavior.client_wait_timeout_minutes} minutos
+- Emojis: ${emojiMap[behavior.emoji_usage] || emojiMap.moderate}
+- Janela de contexto: últimas ${behavior.context_window} mensagens`;
+
+  if (modularCfg && !modularCfg.use_custom_prompt) {
+    const formalityLabels = ["muito informal", "informal", "neutro", "formal", "muito formal"];
+    const energyLabels = ["calmo", "sereno", "equilibrado", "animado", "muito energético"];
+    const formalityIdx = Math.round((modularCfg.tone?.formality || 30) / 25);
+    const energyIdx = Math.round((modularCfg.tone?.energy || 60) / 25);
+
+    const parts: string[] = [];
+    parts.push(`Você é um assistente virtual via WhatsApp para uma empresa.`);
+    parts.push(`${aiConfig.system_prompt || "Seja educado, prestativo e profissional."}`);
+    parts.push(behaviorRules);
+    parts.push(`\nTOM DE VOZ: ${formalityLabels[formalityIdx]}, energia ${energyLabels[energyIdx]}`);
+    parts.push(`- ${emojiMap[modularCfg.tone?.emoji_usage || behavior.emoji_usage]}`);
+
+    const blocks = modularCfg.blocks || { max_blocks: 4, max_chars_per_block: 200 };
+    parts.push(`\nFORMATO: Máximo ${blocks.max_blocks} blocos de ${blocks.max_chars_per_block} chars, separados por ---BLOCO---`);
+    parts.push(`\nAgendamento: [AGENDAR:DATA:HORA:NOME], [CANCELAR:TEL], [VERIFICAR:DATA]`);
+
+    systemPrompt = parts.join("\n") + companyCtx + knowledgeCtx;
+  } else if (modularCfg?.use_custom_prompt && modularCfg?.custom_base_prompt) {
+    systemPrompt = modularCfg.custom_base_prompt + behaviorRules + companyCtx + knowledgeCtx;
+  } else {
+    systemPrompt = `Você é um assistente virtual via WhatsApp para uma empresa.
+${aiConfig.system_prompt || "Seja educado, prestativo e profissional."}
+${behaviorRules}
+
+FORMATO: Blocos curtos separados por ---BLOCO---. Máximo 4 blocos.
+Agendamento: [AGENDAR:DATA:HORA:NOME], [CANCELAR:TEL], [VERIFICAR:DATA]
+Responda em português brasileiro.${companyCtx}${knowledgeCtx}`;
+  }
+
+  // Custom prompt overrides
+  const cfgPrompts = configData || {};
+  if (audience === "b2b" && cfgPrompts.prompt_b2b) {
+    systemPrompt = cfgPrompts.prompt_b2b + behaviorRules + buildCtx(company, "b2b") + knowledgeCtx;
+  } else if (audience === "b2c" && cfgPrompts.prompt_b2c_organic) {
+    systemPrompt = cfgPrompts.prompt_b2c_organic + behaviorRules + buildCtx(company, "b2c") + knowledgeCtx;
+  }
+
+  return systemPrompt;
+}
+
 // ====== COMPONENT ======
 export default function MySeller() {
   const { profile } = useAuth();
@@ -270,6 +391,7 @@ export default function MySeller() {
   const toggleSection = (key: string) => setOpenSections((prev) => ({ ...prev, [key]: !prev[key] }));
   const [viewMode, setViewMode] = useState<"general" | "b2b" | "b2c">("general");
   const [promptTab, setPromptTab] = useState<"b2b" | "b2c_broadcast" | "b2c_organic">("b2b");
+  const [previewAudience, setPreviewAudience] = useState<"b2b" | "b2c" | null>(null);
 
   // ---- Company updater ----
   const updateCompany = (field: keyof CompanyData, value: any) => {
@@ -306,9 +428,38 @@ export default function MySeller() {
       system_prompt: cfg.system_prompt,
       temperature: cfg.temperature,
       enabled: cfg.enabled,
+      config: cfg.config,
     }).eq("id", configId);
     if (error) toast({ title: "Erro", description: error.message, variant: "destructive" });
     else toast({ title: "Agente IA salvo!" });
+    setSaving(null);
+  };
+
+  // ---- Behavior settings helpers ----
+  const getMainConfig = () => aiConfigs.find(c => c.enabled) || aiConfigs[0] || null;
+  
+  const getBehavior = (): BehaviorSettings => {
+    const cfg = getMainConfig();
+    return { ...DEFAULT_BEHAVIOR, ...(cfg?.config?.behavior || {}) };
+  };
+
+  const updateBehavior = (field: keyof BehaviorSettings, value: any) => {
+    const cfg = getMainConfig();
+    if (!cfg) return;
+    const currentBehavior = { ...DEFAULT_BEHAVIOR, ...(cfg.config?.behavior || {}) };
+    const newBehavior = { ...currentBehavior, [field]: value };
+    updateAiConfig(cfg.id, "config", { ...cfg.config, behavior: newBehavior });
+  };
+
+  const saveBehavior = async () => {
+    const cfg = getMainConfig();
+    if (!cfg) return;
+    setSaving("behavior");
+    const { error } = await supabase.from("ai_configs").update({
+      config: cfg.config,
+    }).eq("id", cfg.id);
+    if (error) toast({ title: "Erro", description: error.message, variant: "destructive" });
+    else toast({ title: "Configurações salvas!" });
     setSaving(null);
   };
 
@@ -449,6 +600,12 @@ export default function MySeller() {
     [chatInput, chatMessages, chatLoading],
   );
 
+  // ---- Final prompt preview (memoized) ----
+  const finalPromptPreview = useMemo(() => {
+    const mainCfg = aiConfigs.find(c => c.enabled) || aiConfigs[0] || null;
+    return buildFinalPromptPreview(mainCfg, company, docs, previewAudience);
+  }, [aiConfigs, company, docs, previewAudience]);
+
   if (loading) {
     return <div className="flex min-h-[60vh] items-center justify-center"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div>;
   }
@@ -459,6 +616,7 @@ export default function MySeller() {
   const overallPct = Math.round((totalScore / totalMax) * 100);
   const activeAgent = aiConfigs.find((c) => c.enabled);
   const agentRole = activeAgent?.config_type || "Nenhum";
+  const behavior = getBehavior();
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -605,7 +763,6 @@ export default function MySeller() {
               </>
             ) : (
               <>
-                {/* B2B or B2C specific fields */}
                 <div className="p-3 rounded-lg bg-primary/5 border border-primary/20 text-sm">
                   <p className="font-medium flex items-center gap-1.5">
                     {viewMode === "b2b" ? <Briefcase className="h-4 w-4" /> : <ShoppingBag className="h-4 w-4" />}
@@ -647,7 +804,6 @@ export default function MySeller() {
             </button>
           </CollapsibleTrigger>
           <CollapsibleContent className="glass-card border-t-0 rounded-t-none p-4 space-y-4 animate-fade-in">
-            {/* Products */}
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <Label className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Produtos / Serviços</Label>
@@ -666,7 +822,6 @@ export default function MySeller() {
               {!company?.products_services?.length && <p className="text-sm text-muted-foreground italic text-center py-3">Nenhum produto cadastrado</p>}
             </div>
 
-            {/* Objections FAQ */}
             <div className="space-y-3 pt-3 border-t">
               <div className="flex items-center justify-between">
                 <Label className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium flex items-center gap-1"><HelpCircle className="h-3 w-3" /> Objeções & Respostas</Label>
@@ -756,6 +911,133 @@ export default function MySeller() {
               ))
             ) : (
               <p className="text-sm text-muted-foreground italic text-center py-4">Nenhum agente configurado. Configure em Agente IA.</p>
+            )}
+          </CollapsibleContent>
+        </Collapsible>
+
+        {/* ---- BEHAVIOR SETTINGS ---- */}
+        <Collapsible open={openSections["behavior"]} onOpenChange={() => toggleSection("behavior")}>
+          <CollapsibleTrigger asChild>
+            <button className="w-full glass-card p-4 flex items-center justify-between hover:border-primary/30 transition-colors">
+              <div className="flex items-center gap-3">
+                <div className="h-9 w-9 rounded-lg bg-chart-2/15 flex items-center justify-center"><Settings2 className="h-4 w-4 text-chart-2" /></div>
+                <div className="text-left">
+                  <p className="text-sm font-semibold">Configurações de Comportamento</p>
+                  <p className="text-[11px] text-muted-foreground">Mensagens, delays, emojis e janela de contexto</p>
+                </div>
+              </div>
+              {openSections["behavior"] ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
+            </button>
+          </CollapsibleTrigger>
+          <CollapsibleContent className="glass-card border-t-0 rounded-t-none p-4 space-y-5 animate-fade-in">
+            {getMainConfig() ? (
+              <>
+                {/* Max messages */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-xs font-medium flex items-center gap-1.5">
+                      <Hash className="h-3.5 w-3.5 text-chart-2" /> Máx. mensagens por conversa
+                    </Label>
+                    <span className="text-sm font-bold text-chart-2">{behavior.max_messages_per_conversation}</span>
+                  </div>
+                  <p className="text-[10px] text-muted-foreground">Após esse número de mensagens, o agente encaminha para atendente humano.</p>
+                  <Slider
+                    value={[behavior.max_messages_per_conversation]}
+                    onValueChange={([v]) => updateBehavior("max_messages_per_conversation", v)}
+                    min={3} max={50} step={1}
+                    className="py-1"
+                  />
+                  <div className="flex justify-between text-[9px] text-muted-foreground">
+                    <span>3 (mínimo)</span><span>25 (padrão)</span><span>50 (máximo)</span>
+                  </div>
+                </div>
+
+                {/* Response delay */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-xs font-medium flex items-center gap-1.5">
+                      <Timer className="h-3.5 w-3.5 text-chart-2" /> Tempo de resposta (delay)
+                    </Label>
+                    <span className="text-sm font-bold text-chart-2">{behavior.response_delay_seconds}s</span>
+                  </div>
+                  <p className="text-[10px] text-muted-foreground">Segundos que o agente espera antes de enviar a resposta (simula digitação).</p>
+                  <Slider
+                    value={[behavior.response_delay_seconds]}
+                    onValueChange={([v]) => updateBehavior("response_delay_seconds", v)}
+                    min={0} max={30} step={1}
+                    className="py-1"
+                  />
+                  <div className="flex justify-between text-[9px] text-muted-foreground">
+                    <span>0s (imediato)</span><span>3s (natural)</span><span>30s (lento)</span>
+                  </div>
+                </div>
+
+                {/* Client wait timeout */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-xs font-medium flex items-center gap-1.5">
+                      <Clock className="h-3.5 w-3.5 text-chart-2" /> Espera do cliente (follow-up)
+                    </Label>
+                    <span className="text-sm font-bold text-chart-2">{behavior.client_wait_timeout_minutes} min</span>
+                  </div>
+                  <p className="text-[10px] text-muted-foreground">Tempo de espera antes de enviar follow-up se o cliente não responder.</p>
+                  <Slider
+                    value={[behavior.client_wait_timeout_minutes]}
+                    onValueChange={([v]) => updateBehavior("client_wait_timeout_minutes", v)}
+                    min={5} max={1440} step={5}
+                    className="py-1"
+                  />
+                  <div className="flex justify-between text-[9px] text-muted-foreground">
+                    <span>5 min</span><span>30 min</span><span>24h</span>
+                  </div>
+                </div>
+
+                {/* Emoji usage */}
+                <div className="space-y-2">
+                  <Label className="text-xs font-medium flex items-center gap-1.5">
+                    <SmilePlus className="h-3.5 w-3.5 text-chart-2" /> Uso de Emojis
+                  </Label>
+                  <Select value={behavior.emoji_usage} onValueChange={(v) => updateBehavior("emoji_usage", v)}>
+                    <SelectTrigger className="h-9 text-sm">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">🚫 Sem emojis</SelectItem>
+                      <SelectItem value="minimal">😊 Mínimo (1 a cada 3 msgs)</SelectItem>
+                      <SelectItem value="moderate">👍 Moderado (1 por msg)</SelectItem>
+                      <SelectItem value="frequent">🎉 Frequente (2+ por msg)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Context window */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-xs font-medium flex items-center gap-1.5">
+                      <MessageSquare className="h-3.5 w-3.5 text-chart-2" /> Janela de Contexto
+                    </Label>
+                    <span className="text-sm font-bold text-chart-2">{behavior.context_window} msgs</span>
+                  </div>
+                  <p className="text-[10px] text-muted-foreground">Quantas mensagens anteriores a IA considera para gerar a resposta.</p>
+                  <Slider
+                    value={[behavior.context_window]}
+                    onValueChange={([v]) => updateBehavior("context_window", v)}
+                    min={2} max={30} step={1}
+                    className="py-1"
+                  />
+                  <div className="flex justify-between text-[9px] text-muted-foreground">
+                    <span>2 (econômico)</span><span>10 (padrão)</span><span>30 (máximo)</span>
+                  </div>
+                </div>
+
+                <div className="flex justify-end">
+                  <Button onClick={saveBehavior} disabled={saving === "behavior"} size="sm" className="gap-1.5">
+                    {saving === "behavior" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />} Salvar Configurações
+                  </Button>
+                </div>
+              </>
+            ) : (
+              <p className="text-sm text-muted-foreground italic text-center py-4">Configure um agente IA primeiro.</p>
             )}
           </CollapsibleContent>
         </Collapsible>
@@ -853,70 +1135,51 @@ export default function MySeller() {
           </CollapsibleTrigger>
           <CollapsibleContent className="glass-card border-t-0 rounded-t-none p-5 space-y-0 animate-fade-in">
             {(() => {
-              const hasEvolution = true; // assumed configured
               const hasAiConfig = aiConfigs.length > 0;
               const hasActiveAgent = aiConfigs.some((c) => c.enabled);
-              const hasKnowledge = docs.length > 0;
-              const hasProducts = (company?.products_services?.length || 0) > 0;
 
               const steps = [
                 {
-                  icon: Radio,
-                  title: "1. Disparo de Campanha",
-                  desc: "Você cria um broadcast e seleciona os leads. O sistema envia as mensagens via WhatsApp em lotes de 50, com delay humanizado entre cada envio.",
-                  agent: "Motor de Disparos",
-                  status: "always" as const,
-                  detail: "Variáveis como {nome} são substituídas automaticamente. Se IA estiver ativa, gera mensagens personalizadas.",
+                  icon: Radio, title: "1. Disparo de Campanha",
+                  desc: "Você cria um broadcast e seleciona os leads. O sistema envia as mensagens via WhatsApp.",
+                  agent: "Motor de Disparos", status: "always" as const,
+                  detail: "Variáveis como {nome} são substituídas automaticamente.",
                 },
                 {
-                  icon: MessageCircle,
-                  title: "2. Lead Responde no WhatsApp",
-                  desc: "A mensagem do lead chega via webhook da Evolution API e é processada automaticamente.",
-                  agent: "Webhook Receptor",
-                  status: hasEvolution ? "active" as const : "inactive" as const,
-                  detail: "O sistema identifica qual organização e instância recebeu a mensagem, cria/atualiza o tracker de conversa e incrementa o contador de mensagens.",
+                  icon: MessageCircle, title: "2. Lead Responde no WhatsApp",
+                  desc: "A mensagem do lead chega via webhook e é processada automaticamente.",
+                  agent: "Webhook Receptor", status: "active" as const,
+                  detail: `Delay de resposta: ${behavior.response_delay_seconds}s · Máx mensagens: ${behavior.max_messages_per_conversation}`,
                 },
                 {
-                  icon: Brain,
-                  title: "3. IA Gera a Resposta",
-                  desc: "O agente de IA monta o contexto completo (empresa + produtos + objeções + base de conhecimento) e gera uma resposta natural.",
-                  agent: "Agente de Vendas IA",
-                  status: hasActiveAgent ? "active" as const : "inactive" as const,
-                  detail: hasKnowledge
-                    ? `Usando ${docs.length} docs da base + ${company?.products_services?.length || 0} produtos + ${company?.objections_faq?.length || 0} objeções como contexto.`
-                    : "⚠️ Sem base de conhecimento. A IA responde só com dados da empresa.",
+                  icon: Brain, title: "3. IA Gera a Resposta",
+                  desc: "O agente monta contexto completo e gera resposta natural.",
+                  agent: "Agente de Vendas IA", status: hasActiveAgent ? "active" as const : "inactive" as const,
+                  detail: `Contexto: ${behavior.context_window} msgs · Emojis: ${behavior.emoji_usage} · ${docs.length} docs + ${company?.products_services?.length || 0} produtos`,
                 },
                 {
-                  icon: Zap,
-                  title: "4. Resposta Enviada em Blocos",
-                  desc: "A resposta é fragmentada em blocos curtos e enviada com delays variáveis, simulando digitação humana real.",
-                  agent: "Motor de Envio Humanizado",
-                  status: "always" as const,
-                  detail: "Cada bloco de 1-2 linhas é enviado com 1-3s de intervalo, calculado pelo tamanho do texto.",
+                  icon: Zap, title: "4. Resposta em Blocos",
+                  desc: "Resposta fragmentada com delays humanizados.",
+                  agent: "Motor de Envio", status: "always" as const,
+                  detail: "Blocos curtos enviados com intervalo variável.",
                 },
                 {
-                  icon: Clock,
-                  title: "5. Follow-up Automático",
-                  desc: "Se o lead não responder, o sistema de follow-up envia mensagens de reativação baseadas nas regras configuradas.",
-                  agent: "Motor de Follow-up",
-                  status: hasAiConfig ? "active" as const : "inactive" as const,
-                  detail: "Cada etapa tem um delay configurável (ex: 30min, 2h, 24h). A IA varia a abordagem a cada step. Quando o lead responde, o follow-up reseta.",
+                  icon: Clock, title: "5. Follow-up Automático",
+                  desc: `Se o lead não responder em ${behavior.client_wait_timeout_minutes} min, o sistema reenvia.`,
+                  agent: "Motor de Follow-up", status: hasAiConfig ? "active" as const : "inactive" as const,
+                  detail: "Cada etapa tem delay configurável. Quando o lead responde, o follow-up reseta.",
                 },
                 {
-                  icon: TrendingUp,
-                  title: "6. Pipeline Atualiza Automaticamente",
-                  desc: "O CRM move o lead pelo pipeline baseado no engajamento: 3+ respostas avança para prospecção, 5+ qualifica via BANT.",
-                  agent: "Motor de Pipeline",
-                  status: hasAiConfig ? "active" as const : "inactive" as const,
-                  detail: "Automação roda periodicamente, analisa conversas ativas e envia mensagens personalizadas conforme o estágio do lead no pipeline.",
+                  icon: TrendingUp, title: "6. Pipeline Atualiza",
+                  desc: "O CRM move o lead pelo pipeline baseado no engajamento.",
+                  agent: "Motor de Pipeline", status: hasAiConfig ? "active" as const : "inactive" as const,
+                  detail: "3+ respostas avança para prospecção, 5+ qualifica.",
                 },
                 {
-                  icon: Target,
-                  title: "7. Agendamento Autônomo",
-                  desc: "Se o lead pedir para agendar uma reunião, a IA detecta e cria o agendamento automaticamente no sistema.",
-                  agent: "Agente de Agendamento",
-                  status: hasActiveAgent ? "active" as const : "inactive" as const,
-                  detail: "Comandos invisíveis [AGENDAR:DATA:HORA:NOME] são processados sem que o lead veja. Suporta cancelamento e verificação de agenda.",
+                  icon: Target, title: "7. Agendamento Autônomo",
+                  desc: "A IA detecta pedidos de agendamento e cria automaticamente.",
+                  agent: "Agente de Agendamento", status: hasActiveAgent ? "active" as const : "inactive" as const,
+                  detail: "Comandos invisíveis [AGENDAR:DATA:HORA:NOME] processados automaticamente.",
                 },
               ];
 
@@ -927,32 +1190,22 @@ export default function MySeller() {
                     const isActive = step.status === "active" || step.status === "always";
                     return (
                       <div key={i} className="relative flex gap-4">
-                        {/* Vertical line */}
                         <div className="flex flex-col items-center">
-                          <div className={`h-10 w-10 rounded-xl flex items-center justify-center shrink-0 ${
-                            isActive ? "bg-primary/15 text-primary border border-primary/30" : "bg-secondary text-muted-foreground border border-border"
-                          }`}>
+                          <div className={`h-10 w-10 rounded-xl flex items-center justify-center shrink-0 ${isActive ? "bg-primary/15 text-primary border border-primary/30" : "bg-secondary text-muted-foreground border border-border"}`}>
                             <Icon className="h-4.5 w-4.5" />
                           </div>
                           {i < steps.length - 1 && (
                             <div className={`w-0.5 flex-1 min-h-[24px] my-1 ${isActive ? "bg-primary/30" : "bg-border"}`} />
                           )}
                         </div>
-                        {/* Content */}
                         <div className="pb-5 flex-1 min-w-0">
                           <div className="flex items-center gap-2 flex-wrap">
                             <p className={`text-sm font-semibold ${isActive ? "text-foreground" : "text-muted-foreground"}`}>{step.title}</p>
-                            <Badge variant={isActive ? "default" : "secondary"} className="text-[9px] h-4 px-1.5">
-                              {step.agent}
-                            </Badge>
-                            {step.status === "inactive" && (
-                              <Badge variant="destructive" className="text-[9px] h-4 px-1.5">Inativo</Badge>
-                            )}
+                            <Badge variant={isActive ? "default" : "secondary"} className="text-[9px] h-4 px-1.5">{step.agent}</Badge>
+                            {step.status === "inactive" && <Badge variant="destructive" className="text-[9px] h-4 px-1.5">Inativo</Badge>}
                           </div>
                           <p className={`text-xs mt-1 ${isActive ? "text-muted-foreground" : "text-muted-foreground/60"}`}>{step.desc}</p>
-                          <p className={`text-[11px] mt-1.5 rounded-md px-2 py-1 inline-block ${
-                            isActive ? "bg-secondary/60 text-muted-foreground" : "bg-secondary/30 text-muted-foreground/50"
-                          }`}>{step.detail}</p>
+                          <p className={`text-[11px] mt-1.5 rounded-md px-2 py-1 inline-block ${isActive ? "bg-secondary/60 text-muted-foreground" : "bg-secondary/30 text-muted-foreground/50"}`}>{step.detail}</p>
                         </div>
                       </div>
                     );
@@ -996,8 +1249,6 @@ export default function MySeller() {
                 setSaving(null);
               };
 
-
-
               const tabs = [
                 { key: "b2b" as const, label: "B2B", icon: Briefcase, desc: "Usado para conversas com empresas e leads corporativos" },
                 { key: "b2c_broadcast" as const, label: "B2C — Vendedor Disparo", icon: Radio, desc: "Usado quando o lead responde a uma campanha de disparo" },
@@ -1012,7 +1263,6 @@ export default function MySeller() {
 
               return (
                 <div className="space-y-4">
-                  {/* Tab selector */}
                   <div className="flex gap-1 p-0.5 bg-secondary rounded-lg">
                     {tabs.map(t => (
                       <button
@@ -1025,7 +1275,6 @@ export default function MySeller() {
                     ))}
                   </div>
 
-                  {/* Current tab content */}
                   {tabs.filter(t => t.key === promptTab).map(t => (
                     <div key={t.key} className="space-y-3">
                       <div className="p-3 rounded-lg bg-primary/5 border border-primary/20">
@@ -1034,7 +1283,6 @@ export default function MySeller() {
                         </p>
                         <p className="text-[11px] text-muted-foreground mt-0.5">{t.desc}</p>
                       </div>
-                      {/* AI Prompt Generator */}
                       <div className="p-3 rounded-lg bg-gradient-to-r from-primary/5 to-accent/5 border border-primary/20 space-y-2">
                         <Label className="text-xs font-medium flex items-center gap-1.5">
                           <Sparkles className="h-3.5 w-3.5 text-primary" /> Gerador Inteligente de Prompt
@@ -1045,11 +1293,11 @@ export default function MySeller() {
                         <Textarea
                           value={promptDescription}
                           onChange={(e) => setPromptDescription(e.target.value)}
-                          placeholder={t.key === "b2b" 
-                            ? "Ex: Quero um vendedor consultivo que foque em dados e ROI, que faça perguntas estratégicas e nunca force a venda..."
+                          placeholder={t.key === "b2b"
+                            ? "Ex: Quero um vendedor consultivo que foque em dados e ROI..."
                             : t.key === "b2c_broadcast"
-                            ? "Ex: Quero um vendedor simpático que continue a conversa da campanha, focado em experiência pessoal, que crie urgência..."
-                            : "Ex: Quero um vendedor acolhedor que descubra o que o lead precisa, adaptando o tom conforme o perfil..."}
+                            ? "Ex: Quero um vendedor simpático que continue a conversa da campanha..."
+                            : "Ex: Quero um vendedor acolhedor que descubra o que o lead precisa..."}
                           rows={3}
                           className="text-xs resize-none"
                           disabled={generatingPrompt}
@@ -1131,6 +1379,46 @@ export default function MySeller() {
             })() : (
               <p className="text-sm text-muted-foreground italic text-center py-4">Configure um agente IA primeiro para definir prompts por modelo.</p>
             )}
+          </CollapsibleContent>
+        </Collapsible>
+
+        {/* ====== FINAL PROMPT PREVIEW ====== */}
+        <Collapsible open={openSections["final_prompt"]} onOpenChange={() => toggleSection("final_prompt")}>
+          <CollapsibleTrigger asChild>
+            <button className="w-full glass-card p-4 flex items-center justify-between hover:border-primary/30 transition-colors">
+              <div className="flex items-center gap-3">
+                <div className="h-9 w-9 rounded-lg bg-chart-1/15 flex items-center justify-center"><Eye className="h-4 w-4 text-chart-1" /></div>
+                <div className="text-left">
+                  <p className="text-sm font-semibold">Prompt Final do Agente</p>
+                  <p className="text-[11px] text-muted-foreground">Visualize exatamente o que a IA recebe como instrução</p>
+                </div>
+              </div>
+              {openSections["final_prompt"] ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
+            </button>
+          </CollapsibleTrigger>
+          <CollapsibleContent className="glass-card border-t-0 rounded-t-none p-4 space-y-3 animate-fade-in">
+            <div className="flex items-center gap-2">
+              <Label className="text-xs text-muted-foreground">Simular audiência:</Label>
+              <div className="flex gap-1 p-0.5 bg-secondary rounded-lg">
+                {([null, "b2b", "b2c"] as const).map(aud => (
+                  <button
+                    key={aud || "auto"}
+                    onClick={() => setPreviewAudience(aud as any)}
+                    className={`text-xs py-1 px-2.5 rounded-md transition-colors ${previewAudience === aud ? "bg-card shadow-sm font-medium" : "text-muted-foreground hover:text-foreground"}`}
+                  >
+                    {aud === null ? "Auto" : aud.toUpperCase()}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="p-3 rounded-lg bg-secondary/40 border max-h-[400px] overflow-auto">
+              <pre className="text-[11px] font-mono whitespace-pre-wrap text-muted-foreground leading-relaxed">
+                {finalPromptPreview}
+              </pre>
+            </div>
+            <p className="text-[10px] text-muted-foreground flex items-center gap-1">
+              <Eye className="h-3 w-3" /> {finalPromptPreview.length} caracteres · Somente leitura — edite nos Prompts por Modelo ou Agente IA acima
+            </p>
           </CollapsibleContent>
         </Collapsible>
 
