@@ -130,9 +130,9 @@ export default function WhatsAppChatViewer({ instanceName, onClose }: Props) {
   });
 
   return (
-    <div className="fixed inset-0 z-50 bg-background flex flex-col">
+    <div className="flex flex-col h-[calc(100vh-8rem)] -mx-4 -mt-2 sm:-mx-6 lg:-mx-8 rounded-2xl overflow-hidden border border-border/50 bg-card">
       {/* Top bar */}
-      <div className="flex items-center gap-3 px-4 py-3 border-b border-border bg-card shrink-0">
+      <div className="flex items-center gap-3 px-4 py-3 border-b border-border bg-card/80 backdrop-blur shrink-0">
         <Button variant="ghost" size="icon" onClick={selectedContact ? () => setSelectedContact(null) : onClose}>
           <ArrowLeft className="h-5 w-5" />
         </Button>
