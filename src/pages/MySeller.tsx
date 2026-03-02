@@ -359,10 +359,18 @@ Responda em português brasileiro.${companyCtx}${knowledgeCtx}`;
   // Strict isolation: audience-specific prompts FULLY REPLACE the base prompt
   // and use the matching audience context (b2b_ or b2c_ prefixed fields)
   const cfgPrompts = configData || {};
-  if (audience === "b2b" && cfgPrompts.prompt_b2b) {
-    systemPrompt = cfgPrompts.prompt_b2b + behaviorRules + buildCtx(company, "b2b") + knowledgeCtx;
-  } else if (audience === "b2c" && cfgPrompts.prompt_b2c_organic) {
-    systemPrompt = cfgPrompts.prompt_b2c_organic + behaviorRules + buildCtx(company, "b2c") + knowledgeCtx;
+  if (audience === "b2b") {
+    if (cfgPrompts.prompt_b2b) {
+      systemPrompt = cfgPrompts.prompt_b2b + behaviorRules + buildCtx(company, "b2b") + knowledgeCtx;
+    } else {
+      systemPrompt = `⚠️ NENHUM PROMPT B2B CONFIGURADO.\n\nVá em "Prompts por Modelo" acima e configure o prompt B2B para visualizar o prompt final.\n\nO prompt base do agente NÃO será usado para B2B (isolamento estrito).`;
+    }
+  } else if (audience === "b2c") {
+    if (cfgPrompts.prompt_b2c_organic) {
+      systemPrompt = cfgPrompts.prompt_b2c_organic + behaviorRules + buildCtx(company, "b2c") + knowledgeCtx;
+    } else {
+      systemPrompt = `⚠️ NENHUM PROMPT B2C QUALIFICATIVO CONFIGURADO.\n\nVá em "Prompts por Modelo" acima e configure o prompt B2C Qualificativo para visualizar o prompt final.\n\nO prompt base do agente NÃO será usado para B2C (isolamento estrito).`;
+    }
   }
 
   return systemPrompt;
@@ -605,7 +613,10 @@ export default function MySeller() {
 
   // ---- Final prompt preview (memoized) ----
   const finalPromptPreview = useMemo(() => {
-    const mainCfg = aiConfigs.find(c => c.enabled) || aiConfigs[0] || null;
+    // Only use chatbot configs for preview, not broadcast configs
+    const mainCfg = aiConfigs.find(c => c.enabled && c.config_type === "chatbot") 
+      || aiConfigs.find(c => c.config_type === "chatbot") 
+      || null;
     return buildFinalPromptPreview(mainCfg, company, docs, previewAudience);
   }, [aiConfigs, company, docs, previewAudience]);
 
