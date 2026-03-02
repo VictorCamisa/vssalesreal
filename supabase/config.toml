@@ -47,3 +47,6 @@ verify_jwt = false
 
 [functions.crm-pipeline-automation]
 verify_jwt = false
+
+[functions.generate-prompt]
+verify_jwt = false

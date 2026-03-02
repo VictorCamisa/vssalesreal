@@ -252,6 +252,8 @@ export default function MySeller() {
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState<string | null>(null);
+  const [generatingPrompt, setGeneratingPrompt] = useState(false);
+  const [promptDescription, setPromptDescription] = useState("");
   const [company, setCompany] = useState<CompanyData | null>(null);
   const [aiConfigs, setAiConfigs] = useState<AiConfig[]>([]);
   const [docs, setDocs] = useState<KnowledgeDoc[]>([]);
@@ -1032,6 +1034,65 @@ export default function MySeller() {
                         </p>
                         <p className="text-[11px] text-muted-foreground mt-0.5">{t.desc}</p>
                       </div>
+                      {/* AI Prompt Generator */}
+                      <div className="p-3 rounded-lg bg-gradient-to-r from-primary/5 to-accent/5 border border-primary/20 space-y-2">
+                        <Label className="text-xs font-medium flex items-center gap-1.5">
+                          <Sparkles className="h-3.5 w-3.5 text-primary" /> Gerador Inteligente de Prompt
+                        </Label>
+                        <p className="text-[10px] text-muted-foreground">
+                          Descreva com suas palavras como o vendedor deve se comportar. A IA vai gerar o prompt final otimizado usando os dados da sua empresa.
+                        </p>
+                        <Textarea
+                          value={promptDescription}
+                          onChange={(e) => setPromptDescription(e.target.value)}
+                          placeholder={t.key === "b2b" 
+                            ? "Ex: Quero um vendedor consultivo que foque em dados e ROI, que faça perguntas estratégicas e nunca force a venda..."
+                            : t.key === "b2c_broadcast"
+                            ? "Ex: Quero um vendedor simpático que continue a conversa da campanha, focado em experiência pessoal, que crie urgência..."
+                            : "Ex: Quero um vendedor acolhedor que descubra o que o lead precisa, adaptando o tom conforme o perfil..."}
+                          rows={3}
+                          className="text-xs resize-none"
+                          disabled={generatingPrompt}
+                        />
+                        <Button
+                          size="sm"
+                          className="gap-1.5 text-xs"
+                          disabled={generatingPrompt || !promptDescription.trim()}
+                          onClick={async () => {
+                            setGeneratingPrompt(true);
+                            try {
+                              const { data: { session } } = await supabase.auth.getSession();
+                              const resp = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-prompt`, {
+                                method: "POST",
+                                headers: {
+                                  "Content-Type": "application/json",
+                                  Authorization: `Bearer ${session?.access_token}`,
+                                  apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+                                },
+                                body: JSON.stringify({
+                                  user_description: promptDescription,
+                                  prompt_type: t.key,
+                                }),
+                              });
+                              const result = await resp.json();
+                              if (result.error) {
+                                toast({ title: "Erro", description: result.error, variant: "destructive" });
+                              } else if (result.prompt) {
+                                updatePromptField(`prompt_${t.key}`, result.prompt);
+                                toast({ title: "Prompt gerado!", description: "Revise e ajuste se necessário, depois salve." });
+                                setPromptDescription("");
+                              }
+                            } catch (err: any) {
+                              toast({ title: "Erro", description: err.message, variant: "destructive" });
+                            }
+                            setGeneratingPrompt(false);
+                          }}
+                        >
+                          {generatingPrompt ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
+                          {generatingPrompt ? "Gerando..." : "Gerar Prompt com IA"}
+                        </Button>
+                      </div>
+
                       <div className="space-y-1">
                         <Label className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">
                           Prompt do Sistema — {t.label}
