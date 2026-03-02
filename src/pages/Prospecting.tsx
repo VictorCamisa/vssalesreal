@@ -277,97 +277,7 @@ export default function Prospecting() {
     } finally { setScrapingLoading(false); }
   };
 
-  // === Send to CRM ===
-  const handleSendToCrm = async (results: ScrapeResult[]) => {
-    if (!profile?.org_id) return;
-    setSendingToCrm(true);
-    try {
-      // Get or create first CRM stage
-      let { data: stages } = await supabase
-        .from("crm_stages")
-        .select("id")
-        .eq("org_id", profile.org_id)
-        .order("stage_order", { ascending: true })
-        .limit(1);
-
-      if (!stages?.length) {
-        const { data: newStage, error: stageErr } = await supabase
-          .from("crm_stages")
-          .insert({ org_id: profile.org_id, name: "Novo Lead", stage_order: 0 })
-          .select("id")
-          .single();
-        if (stageErr) throw stageErr;
-        stages = [newStage];
-      }
-
-      const stageId = stages[0].id;
-
-      // Find the leads by phone/email that were just scraped
-      const phones = results.filter(r => r.phone).map(r => r.phone!);
-      const emails = results.filter(r => r.email && !r.phone).map(r => r.email!);
-
-      let leadIds: string[] = [];
-
-      if (phones.length) {
-        const { data: phonLeads } = await supabase
-          .from("leads_raw")
-          .select("id")
-          .eq("org_id", profile.org_id)
-          .in("phone", phones);
-        leadIds.push(...(phonLeads || []).map(l => l.id));
-      }
-      if (emails.length) {
-        const { data: emailLeads } = await supabase
-          .from("leads_raw")
-          .select("id")
-          .eq("org_id", profile.org_id)
-          .in("email", emails);
-        leadIds.push(...(emailLeads || []).map(l => l.id));
-      }
-
-      if (leadIds.length === 0) {
-        toast({ title: "Nenhum lead encontrado", description: "Os leads podem já ter sido removidos.", variant: "destructive" });
-        return;
-      }
-
-      // Check existing opportunities
-      const { data: existingOpps } = await supabase
-        .from("opportunities")
-        .select("lead_id")
-        .eq("org_id", profile.org_id)
-        .in("lead_id", leadIds);
-      const existingLeadIds = new Set((existingOpps || []).map(o => o.lead_id));
-      const newLeadIds = leadIds.filter(id => !existingLeadIds.has(id));
-
-      if (newLeadIds.length === 0) {
-        toast({ title: "Todos já estão no CRM", description: "Esses leads já possuem oportunidades." });
-        return;
-      }
-
-      const opportunities = newLeadIds.map(lead_id => ({
-        org_id: profile.org_id!,
-        lead_id,
-        stage_id: stageId,
-        value: 0,
-        probability: 0,
-      }));
-
-      const { error: oppErr } = await supabase.from("opportunities").insert(opportunities);
-      if (oppErr) throw oppErr;
-
-      // Also mark leads as converted
-      await supabase
-        .from("leads_raw")
-        .update({ status: "converted" as const })
-        .eq("org_id", profile.org_id)
-        .in("id", newLeadIds);
-
-      toast({ title: "Enviados ao CRM! 🚀", description: `${newLeadIds.length} oportunidades criadas.` });
-      setViewResults(null);
-    } catch (error: any) {
-      toast({ title: "Erro ao enviar ao CRM", description: error.message, variant: "destructive" });
-    } finally { setSendingToCrm(false); }
-  };
+  // Removed: handleSendToCrm - leads are saved directly and managed in Leads page
 
   // === WhatsApp Extract ===
   const handleFetchGroups = async () => {
@@ -603,16 +513,18 @@ export default function Prospecting() {
                         {job.error_message && <p className="text-xs text-destructive mt-1">{job.error_message}</p>}
                       </div>
                       <div className="flex items-center gap-1.5">
-                        {job.status === "completed" && job.results.length > 0 && (
+                         {job.status === "completed" && (
                           <>
-                            <Button variant="outline" size="sm" className="text-xs gap-1" onClick={() => { setViewResults(job); setSelectedResults(new Set()); }}>
-                              <Eye className="h-3 w-3" /> Ver
-                            </Button>
-                            <Button size="sm" className="text-xs gap-1" onClick={() => handleSendToCrm(job.results)} disabled={sendingToCrm}>
-                              {sendingToCrm ? <Loader2 className="h-3 w-3 animate-spin" /> : <Send className="h-3 w-3" />} CRM
-                            </Button>
-                          </>
-                        )}
+                             {job.results.length > 0 && (
+                               <Button variant="outline" size="sm" className="text-xs gap-1" onClick={() => { setViewResults(job); setSelectedResults(new Set()); }}>
+                                 <Eye className="h-3 w-3" /> Ver
+                               </Button>
+                             )}
+                             <Button size="sm" className="text-xs gap-1" onClick={() => navigate("/leads")}>
+                               <ArrowRight className="h-3 w-3" /> Ver em Leads
+                             </Button>
+                           </>
+                         )}
                       </div>
                     </div>
                   </div>
@@ -1014,55 +926,38 @@ export default function Prospecting() {
 
           {viewResults?.results?.length ? (
             <>
-              <div className="flex items-center justify-between">
-                <Button variant="ghost" size="sm" onClick={selectAllResults} className="text-xs h-7">
-                  {selectedResults.size === viewResults.results.length ? "Desmarcar todos" : "Selecionar todos"}
-                </Button>
-                <div className="flex gap-2">
-                  {selectedResults.size > 0 && (
-                    <Button size="sm" className="text-xs gap-1" disabled={sendingToCrm}
-                      onClick={() => {
-                        const selected = Array.from(selectedResults).map(i => viewResults.results[i]);
-                        handleSendToCrm(selected);
-                      }}>
-                      {sendingToCrm ? <Loader2 className="h-3 w-3 animate-spin" /> : <Send className="h-3 w-3" />}
-                      Enviar {selectedResults.size} ao CRM
-                    </Button>
-                  )}
-                  <Button variant="outline" size="sm" className="text-xs gap-1" disabled={sendingToCrm}
-                    onClick={() => handleSendToCrm(viewResults.results)}>
-                    <ArrowRight className="h-3 w-3" /> Enviar todos ao CRM
-                  </Button>
-                </div>
-              </div>
+               <div className="flex items-center justify-between">
+                 <p className="text-xs text-muted-foreground">{viewResults.results.length} leads encontrados e salvos na base</p>
+                 <Button size="sm" className="text-xs gap-1" onClick={() => { setViewResults(null); navigate("/leads"); }}>
+                   <ArrowRight className="h-3 w-3" /> Ver em Leads
+                 </Button>
+               </div>
 
-              <ScrollArea className="h-[400px]">
+               <ScrollArea className="h-[400px]">
                 <div className="space-y-1.5">
-                  {viewResults.results.map((r, i) => (
-                    <div key={i} className={`border rounded-md p-3 cursor-pointer transition-colors ${selectedResults.has(i) ? "bg-primary/5 border-primary/30" : "hover:bg-secondary/30"}`}
-                      onClick={() => toggleResultSelection(i)}>
-                      <div className="flex items-start gap-2.5">
-                        <Checkbox checked={selectedResults.has(i)} className="mt-0.5 pointer-events-none" />
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium flex items-center gap-1.5">
-                            <User className="h-3 w-3 text-primary shrink-0" />
-                            {r.name || `Lead ${i + 1}`}
-                          </p>
-                          <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1.5 text-xs text-muted-foreground">
-                            {r.phone && <span className="flex items-center gap-1"><Phone className="h-3 w-3" />{r.phone}</span>}
-                            {r.email && <span>✉ {r.email}</span>}
-                            {r.company && <span className="flex items-center gap-1"><Building2 className="h-3 w-3" />{r.company}</span>}
-                            {r.role && <span className="text-primary/80">{r.role}</span>}
-                            {r.city && <span className="flex items-center gap-1"><MapPin className="h-3 w-3" />{r.city}</span>}
-                            {r.website && <span className="flex items-center gap-1"><Globe className="h-3 w-3" />{r.website}</span>}
-                            {r.segment && <Badge variant="secondary" className="text-[10px]">{r.segment}</Badge>}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </ScrollArea>
+                   {viewResults.results.map((r, i) => (
+                     <div key={i} className="border rounded-md p-3 hover:bg-secondary/30 transition-colors">
+                       <div className="flex items-start gap-2.5">
+                         <div className="flex-1 min-w-0">
+                           <p className="text-sm font-medium flex items-center gap-1.5">
+                             <User className="h-3 w-3 text-primary shrink-0" />
+                             {r.name || `Lead ${i + 1}`}
+                           </p>
+                           <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1.5 text-xs text-muted-foreground">
+                             {r.phone && <span className="flex items-center gap-1"><Phone className="h-3 w-3" />{r.phone}</span>}
+                             {r.email && <span>✉ {r.email}</span>}
+                             {r.company && <span className="flex items-center gap-1"><Building2 className="h-3 w-3" />{r.company}</span>}
+                             {r.role && <span className="text-primary/80">{r.role}</span>}
+                             {r.city && <span className="flex items-center gap-1"><MapPin className="h-3 w-3" />{r.city}</span>}
+                             {r.website && <span className="flex items-center gap-1"><Globe className="h-3 w-3" />{r.website}</span>}
+                             {r.segment && <Badge variant="secondary" className="text-[10px]">{r.segment}</Badge>}
+                           </div>
+                         </div>
+                       </div>
+                     </div>
+                   ))}
+                 </div>
+               </ScrollArea>
             </>
           ) : <p className="text-xs text-muted-foreground text-center py-4">Leads salvos na base. Confira em "Meus Leads".</p>}
         </DialogContent>

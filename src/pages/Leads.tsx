@@ -6,7 +6,7 @@ import { logActivity } from "@/lib/activityLogger";
 import {
   Users, Search, Sparkles, ArrowRight, Trash2, Loader2, Download,
   Upload, Plus, Eye, MoreVertical, Target, BarChart3, Filter,
-  Phone, Mail, Globe, X, Building2, User
+  Phone, Mail, Globe, X, Building2, User, Zap, Send
 } from "lucide-react";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
@@ -40,16 +40,16 @@ type Lead = {
 };
 
 const statusColors: Record<string, string> = {
-  pending: "bg-warning/10 text-warning border-warning/30",
+  pending: "bg-chart-4/10 text-chart-4 border-chart-4/30",
   enriched: "bg-primary/10 text-primary border-primary/30",
   converted: "bg-success/10 text-success border-success/30",
   discarded: "bg-destructive/10 text-destructive border-destructive/30",
 };
 
 const statusLabels: Record<string, string> = {
-  pending: "Pendente",
+  pending: "Prospectado",
   enriched: "Enriquecido",
-  converted: "Convertido",
+  converted: "Em Comercial",
   discarded: "Descartado",
 };
 
@@ -113,8 +113,8 @@ export default function Leads() {
 
   useEffect(() => { fetchLeads(); }, [profile?.org_id]);
 
-  const enrichedCount = leads.filter(l => !!l.enrichment_data && Object.keys(l.enrichment_data).length > 1).length;
-  const pendingCount = leads.filter(l => l.status === "pending").length;
+  const enrichedCount = leads.filter(l => l.status === "enriched").length;
+  const prospectedCount = leads.filter(l => l.status === "pending").length;
   const convertedCount = leads.filter(l => l.status === "converted").length;
   const conversionRate = leads.length > 0 ? ((convertedCount / leads.length) * 100).toFixed(1) : "0";
 
@@ -128,8 +128,7 @@ export default function Leads() {
       const matchSource = sourceFilter === "all" || l.source === sourceFilter;
 
       let matchQuick = true;
-      if (quickFilter === "enriched") matchQuick = !!l.enrichment_data && Object.keys(l.enrichment_data).length > 1;
-      else if (quickFilter === "not_enriched") matchQuick = !l.enrichment_data || Object.keys(l.enrichment_data).length <= 1;
+      if (quickFilter === "enriched") matchQuick = l.status === "enriched";
       else if (quickFilter === "pending") matchQuick = l.status === "pending";
       else if (quickFilter === "converted") matchQuick = l.status === "converted";
 
@@ -182,7 +181,7 @@ export default function Leads() {
     } finally { setEnrichingId(null); }
   };
 
-  const handleConvertToCRM = async () => {
+  const handleActivateCommercial = async () => {
     if (!profile?.org_id || selected.size === 0) return;
     setConverting(true);
     try {
@@ -190,22 +189,28 @@ export default function Leads() {
         .from("crm_stages").select("id").eq("org_id", profile.org_id).order("stage_order").limit(1);
       if (!stages?.length) throw new Error("Crie estágios no CRM primeiro.");
 
-      const opportunities = Array.from(selected).map((lead_id) => ({
-        org_id: profile.org_id!, lead_id, stage_id: stages[0].id,
+      // Only convert enriched leads
+      const selectedLeads = leads.filter(l => selected.has(l.id) && l.status === "enriched");
+      if (selectedLeads.length === 0) {
+        toast({ title: "Enriqueça os leads primeiro", description: "Apenas leads enriquecidos podem ser ativados comercialmente.", variant: "destructive" });
+        return;
+      }
+
+      const opportunities = selectedLeads.map((lead) => ({
+        org_id: profile.org_id!, lead_id: lead.id, stage_id: stages[0].id,
       }));
 
       const { error: oppError } = await supabase.from("opportunities").insert(opportunities);
       if (oppError) throw oppError;
 
-      await supabase.from("leads_raw").update({ status: "converted" as const }).in("id", Array.from(selected));
+      await supabase.from("leads_raw").update({ status: "converted" as const }).in("id", selectedLeads.map(l => l.id));
 
-      toast({ title: "Leads enviados ao CRM!", description: `${selected.size} oportunidades criadas.` });
-      logActivity({ action: "leads_convertidos", description: `${selected.size} leads convertidos para o CRM` });
+      toast({ title: "Comercial ativado! 🚀", description: `${selectedLeads.length} leads entraram no pipeline de vendas.` });
+      logActivity({ action: "leads_comercial_ativado", description: `${selectedLeads.length} leads com comercial ativado` });
       setSelected(new Set());
       fetchLeads();
     } catch (error: any) {
       toast({ title: "Erro", description: error.message, variant: "destructive" });
-      logActivity({ action: "leads_convertidos", description: "Falha ao converter leads", success: false, errorMessage: error.message });
     } finally { setConverting(false); }
   };
 
@@ -346,9 +351,9 @@ export default function Leads() {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {[
           { label: "Total", value: leads.length, icon: Users, color: "text-primary" },
-          { label: "Enriquecidos", value: enrichedCount, icon: Sparkles, color: "text-chart-4" },
-          { label: "Pendentes", value: pendingCount, icon: Target, color: "text-warning" },
-          { label: "Conversão", value: `${conversionRate}%`, icon: BarChart3, color: "text-success" },
+          { label: "Prospectados", value: prospectedCount, icon: Target, color: "text-chart-4" },
+          { label: "Enriquecidos", value: enrichedCount, icon: Sparkles, color: "text-primary" },
+          { label: "Em Comercial", value: convertedCount, icon: Zap, color: "text-success" },
         ].map(m => (
           <div key={m.label} className="glass rounded-xl p-4">
             <div className="flex items-center justify-between">
@@ -366,10 +371,9 @@ export default function Leads() {
       <div className="flex flex-wrap gap-2">
         {[
           { key: "all", label: "Todos", count: leads.length },
-          { key: "pending", label: "Pendentes", count: pendingCount },
+          { key: "pending", label: "Prospectados", count: prospectedCount },
           { key: "enriched", label: "Enriquecidos", count: enrichedCount },
-          { key: "not_enriched", label: "Sem Enriquecimento", count: leads.length - enrichedCount },
-          { key: "converted", label: "Convertidos", count: convertedCount },
+          { key: "converted", label: "Em Comercial", count: convertedCount },
         ].map(f => (
           <button key={f.key} onClick={() => setQuickFilter(f.key)}
             className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-all ${
@@ -390,12 +394,12 @@ export default function Leads() {
             onChange={(e) => setSearchQuery(e.target.value)} className="pl-10 rounded-xl bg-secondary/30 border-border/30" />
         </div>
         <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="w-[140px] rounded-xl bg-secondary/30 border-border/30"><SelectValue placeholder="Status" /></SelectTrigger>
+          <SelectTrigger className="w-[150px] rounded-xl bg-secondary/30 border-border/30"><SelectValue placeholder="Status" /></SelectTrigger>
           <SelectContent className="rounded-xl">
             <SelectItem value="all">Todos</SelectItem>
-            <SelectItem value="pending">Pendente</SelectItem>
+            <SelectItem value="pending">Prospectado</SelectItem>
             <SelectItem value="enriched">Enriquecido</SelectItem>
-            <SelectItem value="converted">Convertido</SelectItem>
+            <SelectItem value="converted">Em Comercial</SelectItem>
             <SelectItem value="discarded">Descartado</SelectItem>
           </SelectContent>
         </Select>
@@ -418,8 +422,8 @@ export default function Leads() {
           <Button size="sm" className="rounded-xl h-8 text-xs gap-1.5" onClick={handleEnrich} disabled={enriching}>
             {enriching ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />} Enriquecer
           </Button>
-          <Button size="sm" className="rounded-xl h-8 text-xs gap-1.5 gradient-primary" onClick={handleConvertToCRM} disabled={converting}>
-            {converting ? <Loader2 className="h-3 w-3 animate-spin" /> : <ArrowRight className="h-3 w-3" />} Enviar ao CRM
+          <Button size="sm" className="rounded-xl h-8 text-xs gap-1.5 gradient-primary" onClick={handleActivateCommercial} disabled={converting}>
+            {converting ? <Loader2 className="h-3 w-3 animate-spin" /> : <Zap className="h-3 w-3" />} Ativar Comercial
           </Button>
           <Button size="sm" variant="outline" className="rounded-xl h-8 text-xs gap-1.5" onClick={handleDiscard}>
             <X className="h-3 w-3" /> Descartar
