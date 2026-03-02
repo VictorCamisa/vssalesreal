@@ -302,39 +302,29 @@ Deno.serve(async (req) => {
       const { remote_jid, limit: msgLimit } = body;
       if (!remote_jid) return json({ error: "remote_jid is required" }, 400);
 
-      const response = await fetch(`${baseUrl}/chat/findMessages/${instance_name}`, {
-        method: "POST",
-        headers: { apikey: apiKey, "Content-Type": "application/json" },
-        body: JSON.stringify({
-          where: { key: { remoteJid: remote_jid } },
-          limit: msgLimit || 100,
-        }),
-      });
+      // Read from our own chat_messages table
+      const { data: dbMessages, error: dbErr } = await supabaseAdmin
+        .from("chat_messages")
+        .select("id, from_me, message_text, message_type, push_name, message_id, timestamp")
+        .eq("org_id", org_id)
+        .or(`instance_name.eq.${instance_name},instance_name.like.${instance_name}__%`)
+        .eq("remote_jid", remote_jid)
+        .order("timestamp", { ascending: true })
+        .limit(msgLimit || 200);
 
-      if (!response.ok) {
-        const errText = await response.text();
-        return json({ error: `Erro ao buscar mensagens: ${response.status}` }, 502);
+      if (dbErr) {
+        console.error("fetch_messages db error:", dbErr);
+        return json({ error: dbErr.message }, 500);
       }
 
-      const rawMessages = await response.json();
-      const msgArray = Array.isArray(rawMessages)
-        ? rawMessages
-        : Array.isArray(rawMessages?.messages)
-          ? rawMessages.messages
-          : Array.isArray(rawMessages?.data)
-            ? rawMessages.data
-            : [];
-      const messages = msgArray
-        .map((m: any) => ({
-          id: m.key?.id || m.id || crypto.randomUUID(),
-          fromMe: m.key?.fromMe ?? false,
-          text: m.message?.conversation || m.message?.extendedTextMessage?.text || m.message?.imageMessage?.caption || m.body || "",
-          timestamp: m.messageTimestamp ? Number(m.messageTimestamp) * 1000 : Date.parse(m.createdAt || m.updatedAt || "0"),
-          pushName: m.pushName || null,
-          type: m.messageType || (m.message?.imageMessage ? "image" : m.message?.audioMessage ? "audio" : "text"),
-        }))
-        .filter((m: any) => m.text)
-        .sort((a: any, b: any) => a.timestamp - b.timestamp);
+      const messages = (dbMessages || []).map((m: any) => ({
+        id: m.message_id || m.id,
+        fromMe: m.from_me,
+        text: m.message_text,
+        timestamp: new Date(m.timestamp).getTime(),
+        pushName: m.push_name,
+        type: m.message_type || "text",
+      }));
 
       return json({ messages });
     }

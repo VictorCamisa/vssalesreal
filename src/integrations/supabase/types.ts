@@ -430,6 +430,56 @@ export type Database = {
           },
         ]
       }
+      chat_messages: {
+        Row: {
+          created_at: string
+          from_me: boolean
+          id: string
+          instance_name: string
+          message_id: string | null
+          message_text: string
+          message_type: string
+          org_id: string
+          push_name: string | null
+          remote_jid: string
+          timestamp: string
+        }
+        Insert: {
+          created_at?: string
+          from_me?: boolean
+          id?: string
+          instance_name: string
+          message_id?: string | null
+          message_text?: string
+          message_type?: string
+          org_id: string
+          push_name?: string | null
+          remote_jid: string
+          timestamp?: string
+        }
+        Update: {
+          created_at?: string
+          from_me?: boolean
+          id?: string
+          instance_name?: string
+          message_id?: string | null
+          message_text?: string
+          message_type?: string
+          org_id?: string
+          push_name?: string | null
+          remote_jid?: string
+          timestamp?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chat_messages_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       company_profiles: {
         Row: {
           address: string | null
