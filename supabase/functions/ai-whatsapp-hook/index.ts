@@ -40,30 +40,28 @@ serve(async (req) => {
     // Helper: save message to chat_messages table
     const saveMessage = async (orgId: string, instName: string, jid: string, fromMe: boolean, text: string, pName?: string, msgId?: string) => {
       try {
-        if (msgId) {
-          await supabaseAdmin.from("chat_messages").upsert({
-            org_id: orgId,
-            instance_name: instName,
-            remote_jid: jid,
-            from_me: fromMe,
-            message_text: text,
-            push_name: pName || null,
-            message_id: msgId,
-            timestamp: new Date().toISOString(),
-          }, { onConflict: "instance_name,message_id", ignoreDuplicates: true });
+        const record = {
+          org_id: orgId,
+          instance_name: instName,
+          remote_jid: jid,
+          from_me: fromMe,
+          message_text: text,
+          push_name: pName || null,
+          message_id: msgId || `msg_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+          timestamp: new Date().toISOString(),
+        };
+        const { error } = await supabaseAdmin.from("chat_messages").insert(record);
+        if (error) {
+          // If duplicate, ignore
+          if (error.code === '23505') {
+            console.log(`saveMessage: duplicate skipped for ${msgId}`);
+          } else {
+            console.error("saveMessage insert error:", error.message, error.code);
+          }
         } else {
-          await supabaseAdmin.from("chat_messages").insert({
-            org_id: orgId,
-            instance_name: instName,
-            remote_jid: jid,
-            from_me: fromMe,
-            message_text: text,
-            push_name: pName || null,
-            message_id: null,
-            timestamp: new Date().toISOString(),
-          });
+          console.log(`saveMessage OK: fromMe=${fromMe}, jid=${jid.slice(0,10)}...`);
         }
-      } catch (e) { console.error("saveMessage error:", e); }
+      } catch (e) { console.error("saveMessage exception:", e); }
     };
 
     // Find which org owns this instance
