@@ -8,7 +8,8 @@ import {
   Contact, Smartphone, QrCode, RefreshCw, Trash2, Wifi, WifiOff,
   CheckCircle2, Tag, X, Zap, Eye,
   Sparkles, Phone, Building2, User, Upload,
-  FileSpreadsheet, AlertCircle, MapPin, Hash, ArrowRight, Send
+  FileSpreadsheet, AlertCircle, MapPin, Hash, ArrowRight, Send,
+  ExternalLink, Compass
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -95,6 +96,12 @@ export default function Prospecting() {
   const [groupSearchFilter, setGroupSearchFilter] = useState("");
   const [extractTags, setExtractTags] = useState<string[]>([]);
   const [newTag, setNewTag] = useState("");
+
+  // Group search
+  const [groupSearchNiche, setGroupSearchNiche] = useState("");
+  const [groupSearchRegion, setGroupSearchRegion] = useState("");
+  const [groupSearchLoading, setGroupSearchLoading] = useState(false);
+  const [foundGroups, setFoundGroups] = useState<{ name: string; url: string; source: string }[]>([]);
 
   // Manual
   const [manualName, setManualName] = useState("");
@@ -407,7 +414,32 @@ export default function Prospecting() {
       setSelectedGroupIds(new Set());
     } catch (error: any) {
       toast({ title: "Erro na extração", description: error.message, variant: "destructive" });
-    } finally { setEvolutionLoading(false); }
+  } finally { setEvolutionLoading(false); }
+  };
+
+  // === Search WhatsApp Groups ===
+  const handleSearchGroups = async () => {
+    if (!groupSearchNiche.trim()) return;
+    setGroupSearchLoading(true);
+    setFoundGroups([]);
+    try {
+      const { data, error } = await supabase.functions.invoke("search-whatsapp-groups", {
+        body: {
+          niche: groupSearchNiche.trim(),
+          region: groupSearchRegion.trim() || undefined,
+          limit: 20,
+        },
+      });
+      if (error) throw error;
+      if (!data?.success) throw new Error(data?.error || "Erro na busca");
+      setFoundGroups(data.groups || []);
+      toast({
+        title: `${data.total || 0} grupos encontrados! 🔍`,
+        description: `Busca: "${groupSearchNiche}"${groupSearchRegion ? ` em ${groupSearchRegion}` : ""}`,
+      });
+    } catch (error: any) {
+      toast({ title: "Erro na busca de grupos", description: error.message, variant: "destructive" });
+    } finally { setGroupSearchLoading(false); }
   };
 
   // === Manual ===
@@ -592,6 +624,61 @@ export default function Prospecting() {
 
         {/* ===== WHATSAPP TAB ===== */}
         <TabsContent value="whatsapp" className="space-y-4">
+          {/* === Group Search === */}
+          <div className="border rounded-lg p-5 space-y-4">
+            <div>
+              <h3 className="text-sm font-medium flex items-center gap-2"><Compass className="h-4 w-4 text-primary" />Buscar Grupos Abertos</h3>
+              <p className="text-xs text-muted-foreground mt-0.5">Encontre links de grupos públicos do WhatsApp por nicho e região</p>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-3">
+              <div className="space-y-1 sm:col-span-1">
+                <Label className="text-xs">Nicho / Interesse *</Label>
+                <Input placeholder="Ex: fitness, vendas, mães, crypto..." value={groupSearchNiche}
+                  onChange={e => setGroupSearchNiche(e.target.value)} className="text-sm"
+                  onKeyDown={e => e.key === "Enter" && handleSearchGroups()} />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Região (opcional)</Label>
+                <Input placeholder="Ex: São Paulo, Curitiba..." value={groupSearchRegion}
+                  onChange={e => setGroupSearchRegion(e.target.value)} className="text-sm"
+                  onKeyDown={e => e.key === "Enter" && handleSearchGroups()} />
+              </div>
+              <div className="flex items-end">
+                <Button onClick={handleSearchGroups} size="sm" disabled={groupSearchLoading || !groupSearchNiche.trim()} className="gap-1.5 text-xs w-full">
+                  {groupSearchLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Search className="h-3.5 w-3.5" />}
+                  Buscar Grupos
+                </Button>
+              </div>
+            </div>
+
+            {foundGroups.length > 0 && (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-medium">{foundGroups.length} grupos encontrados</p>
+                  <Button variant="ghost" size="sm" onClick={() => setFoundGroups([])} className="text-xs h-7"><X className="h-3 w-3 mr-1" />Limpar</Button>
+                </div>
+                <ScrollArea className="h-[260px] border rounded-md">
+                  <div className="p-1.5 space-y-1">
+                    {foundGroups.map((g, i) => (
+                      <div key={i} className="flex items-center justify-between gap-2 p-2.5 rounded-md border hover:bg-secondary/50 transition-colors">
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-medium truncate">{g.name}</p>
+                          <p className="text-[10px] text-muted-foreground truncate">{g.source}</p>
+                        </div>
+                        <a href={g.url} target="_blank" rel="noopener noreferrer">
+                          <Button variant="outline" size="sm" className="text-xs gap-1 h-7 shrink-0">
+                            <ExternalLink className="h-3 w-3" /> Entrar
+                          </Button>
+                        </a>
+                      </div>
+                    ))}
+                  </div>
+                </ScrollArea>
+                <p className="text-[10px] text-muted-foreground">💡 Após entrar nos grupos, volte aqui e extraia os contatos pela seção abaixo.</p>
+              </div>
+            )}
+          </div>
+
           <div className="border rounded-lg p-5 space-y-4">
             <div className="flex items-center justify-between">
               <div>
