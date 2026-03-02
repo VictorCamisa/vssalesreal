@@ -187,23 +187,97 @@ export default function CRM() {
   const [oppProbability, setOppProbability] = useState("");
   const [oppNotes, setOppNotes] = useState("");
   const [handoffNumber, setHandoffNumber] = useState("");
+  const [handoffAutoStages, setHandoffAutoStages] = useState<string[]>([]);
   const [handoffSaving, setHandoffSaving] = useState(false);
   const [showHandoffConfig, setShowHandoffConfig] = useState(false);
+  const [handoffSending, setHandoffSending] = useState(false);
 
   const fetchHandoffNumber = useCallback(async () => {
     if (!profile?.org_id) return;
-    const { data } = await supabase.from("organizations").select("handoff_number").eq("id", profile.org_id).single();
+    const { data } = await supabase.from("organizations").select("handoff_number, handoff_auto_stages").eq("id", profile.org_id).single();
     if (data?.handoff_number) setHandoffNumber(data.handoff_number);
+    if (data?.handoff_auto_stages) setHandoffAutoStages(data.handoff_auto_stages);
   }, [profile?.org_id]);
 
   const saveHandoffNumber = async () => {
     if (!profile?.org_id) return;
     setHandoffSaving(true);
-    const { error } = await supabase.from("organizations").update({ handoff_number: handoffNumber || null }).eq("id", profile.org_id);
+    const { error } = await supabase.from("organizations").update({
+      handoff_number: handoffNumber || null,
+      handoff_auto_stages: handoffAutoStages,
+    }).eq("id", profile.org_id);
     setHandoffSaving(false);
     if (error) { toast({ title: "Erro", description: error.message, variant: "destructive" }); return; }
-    toast({ title: "Número de handoff salvo!" });
+    toast({ title: "Configuração de handoff salva!" });
     setShowHandoffConfig(false);
+  };
+
+  const toggleAutoStage = (stageKey: string) => {
+    setHandoffAutoStages(prev =>
+      prev.includes(stageKey) ? prev.filter(s => s !== stageKey) : [...prev, stageKey]
+    );
+  };
+
+  const sendManualHandoff = async (opp: Opportunity) => {
+    if (!handoffNumber) {
+      toast({ title: "Configure o número de handoff primeiro", variant: "destructive" });
+      setShowHandoffConfig(true);
+      return;
+    }
+    if (!profile?.org_id) return;
+    setHandoffSending(true);
+
+    // Get Evolution instance
+    const { data: integration } = await supabase
+      .from("integrations")
+      .select("config")
+      .eq("org_id", profile.org_id)
+      .eq("service_name", "evolution")
+      .single();
+
+    const instanceName = (integration?.config as any)?.instanceName;
+    if (!instanceName) {
+      toast({ title: "Instância WhatsApp não configurada", variant: "destructive" });
+      setHandoffSending(false);
+      return;
+    }
+
+    const enrichment = opp.lead?.enrichment_data || {};
+    const stageDef = stageMap.get(opp.stage_id);
+    const lines = [
+      "🤖 *HANDOFF — Ficha de Qualificação*",
+      "",
+      `👤 *Nome:* ${opp.lead?.name || "N/A"}`,
+      `📱 *Telefone:* ${opp.lead?.phone || "N/A"}`,
+      `📧 *Email:* ${opp.lead?.email || "N/A"}`,
+      enrichment?.empresa ? `🏢 *Empresa:* ${enrichment.empresa}` : null,
+      enrichment?.segmento ? `📊 *Segmento:* ${enrichment.segmento}` : null,
+      enrichment?.cargo_estimado ? `💼 *Cargo:* ${enrichment.cargo_estimado}` : null,
+      enrichment?.porte ? `📐 *Porte:* ${enrichment.porte}` : null,
+      enrichment?.score_conversao ? `🎯 *Score:* ${enrichment.score_conversao}/100` : null,
+      "",
+      `📍 *Etapa:* ${stageDef?.name || "N/A"}`,
+      opp.value ? `💰 *Valor:* R$ ${opp.value}` : null,
+      opp.probability ? `📈 *Probabilidade:* ${opp.probability}%` : null,
+      opp.notes ? `📝 *Notas:* ${opp.notes}` : null,
+      opp.personalized_message ? `\n💬 *Última msg IA:*\n${opp.personalized_message}` : null,
+    ].filter(Boolean).join("\n");
+
+    try {
+      const { data: result, error } = await supabase.functions.invoke("manage-evolution", {
+        body: {
+          action: "sendText",
+          instanceName,
+          number: handoffNumber.replace(/\D/g, ""),
+          text: lines,
+        },
+      });
+      if (error) throw error;
+      toast({ title: "Ficha enviada para handoff! ✅" });
+    } catch (err: any) {
+      toast({ title: "Erro ao enviar handoff", description: err.message, variant: "destructive" });
+    }
+    setHandoffSending(false);
   };
 
   const fetchData = useCallback(async () => {
@@ -368,17 +442,18 @@ export default function CRM() {
 
         {/* ─── Handoff Config Dialog ─── */}
         <Dialog open={showHandoffConfig} onOpenChange={setShowHandoffConfig}>
-          <DialogContent className="sm:max-w-md">
+          <DialogContent className="sm:max-w-lg max-h-[85vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
                 <Headphones className="h-5 w-5 text-primary" />
-                Número de Handoff
+                Configuração de Handoff
               </DialogTitle>
               <DialogDescription>
-                Quando a IA qualificar um lead e decidir transferir para um humano, a ficha de qualificação será enviada para este número no WhatsApp.
+                Configure o número que receberá as fichas e as regras de transferência automática.
               </DialogDescription>
             </DialogHeader>
-            <div className="space-y-4 pt-2">
+            <div className="space-y-5 pt-2">
+              {/* Number */}
               <div className="space-y-2">
                 <Label htmlFor="handoff-number">Número do WhatsApp</Label>
                 <Input
@@ -391,7 +466,48 @@ export default function CRM() {
                   Formato: código do país + DDD + número (ex: 5511999999999)
                 </p>
               </div>
-              <div className="flex justify-end gap-2">
+
+              {/* Auto-handoff stages */}
+              <div className="space-y-3">
+                <div>
+                  <Label>Handoff Automático por Etapa</Label>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Quando um lead chegar a estas etapas, a ficha será enviada automaticamente.
+                  </p>
+                </div>
+                <div className="grid grid-cols-1 gap-1.5">
+                  {PIPELINE_STAGES.filter(s => !["won", "lost"].includes(s.key)).map(stage => {
+                    const isSelected = handoffAutoStages.includes(stage.key);
+                    const StageIcon = stage.icon;
+                    return (
+                      <button
+                        key={stage.key}
+                        onClick={() => toggleAutoStage(stage.key)}
+                        className={`flex items-center gap-3 px-3 py-2.5 rounded-lg border transition-all text-left ${
+                          isSelected
+                            ? "border-primary/40 bg-primary/10"
+                            : "border-border/30 hover:border-border/60 bg-secondary/10"
+                        }`}
+                      >
+                        <div className={`h-6 w-6 rounded-md bg-gradient-to-br ${stage.gradient} flex items-center justify-center`}>
+                          <StageIcon className="h-3 w-3 text-white" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-semibold">{stage.name}</p>
+                          <p className="text-[10px] text-muted-foreground">{stage.description}</p>
+                        </div>
+                        <div className={`h-4 w-4 rounded border-2 flex items-center justify-center transition-colors ${
+                          isSelected ? "border-primary bg-primary" : "border-muted-foreground/30"
+                        }`}>
+                          {isSelected && <CheckCircle2 className="h-3 w-3 text-primary-foreground" />}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2">
                 <Button variant="outline" size="sm" onClick={() => setShowHandoffConfig(false)}>
                   Cancelar
                 </Button>
@@ -791,10 +907,22 @@ export default function CRM() {
                   </div>
                 )}
 
-                <Button variant="destructive" size="sm" className="rounded-lg gap-2 w-full text-xs h-8"
-                  onClick={() => deleteOpp(detailOpp.id)}>
-                  <Trash2 className="h-3.5 w-3.5" /> Excluir Oportunidade
-                </Button>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="rounded-lg gap-2 flex-1 text-xs h-8 border-amber-500/30 text-amber-400 hover:bg-amber-500/10"
+                    onClick={() => sendManualHandoff(detailOpp)}
+                    disabled={handoffSending}
+                  >
+                    {handoffSending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Headphones className="h-3.5 w-3.5" />}
+                    Fazer Handoff
+                  </Button>
+                  <Button variant="destructive" size="sm" className="rounded-lg gap-2 flex-1 text-xs h-8"
+                    onClick={() => deleteOpp(detailOpp.id)}>
+                    <Trash2 className="h-3.5 w-3.5" /> Excluir
+                  </Button>
+                </div>
               </div>
             )}
           </DialogContent>
