@@ -484,25 +484,51 @@ Regras:
           content: leadBroadcast.message_sent,
         });
         const bcast = leadBroadcast.broadcast as any;
-        console.log(`Broadcast context found: audience_type=${bcast?.audience_type}, campaign="${bcast?.name}", ai_config_id=${bcast?.ai_config_id}`);
-
-        // Inject custom prompt with STRICT model isolation for broadcast responses
         const broadcastAudienceType = bcast?.audience_type || "b2c";
+        console.log(`Broadcast context found: audience_type=${broadcastAudienceType}, campaign="${bcast?.name}", ai_config_id=${bcast?.ai_config_id}`);
+
+        // CRITICAL: Save detected_audience from broadcast so ALL subsequent messages use it
+        if (!detectedAudience) {
+          detectedAudience = broadcastAudienceType;
+          await supabaseAdmin
+            .from("conversation_tracker")
+            .update({ detected_audience: broadcastAudienceType })
+            .eq("org_id", orgId)
+            .eq("instance_name", instanceName)
+            .eq("remote_jid", remoteJid);
+          console.log(`Saved detected_audience=${broadcastAudienceType} from broadcast`);
+        }
+
+        // Build STRICT model-isolated context (no cross-model data)
         const strictBcastCtx = companyProfile ? buildCompanyContext(companyProfile as any, broadcastAudienceType, true) : "";
+
+        // Negative rules based on audience type
+        const b2cNegativeRules = `
+PROIBIÇÕES ABSOLUTAS (B2C - consumidor final):
+- NÃO pergunte sobre negócio, empresa, estabelecimento, restaurante, bar, loja
+- NÃO use termos como: PDV, parceria comercial, reposição, volume comercial, revenda, distribuição
+- NÃO diga "seus clientes", "seu estabelecimento", "sua empresa", "projetos na região"
+- NÃO tente qualificar como B2B — este lead é CONSUMIDOR FINAL
+- FOQUE em: consumo pessoal, festas, churrascos, eventos, reunião de amigos, família, aniversários`;
+        const b2bNegativeRules = `
+PROIBIÇÕES ABSOLUTAS (B2B - empresa/negócio):
+- NÃO mencione consumo pessoal, festa, churrasco, aniversário, amigos
+- NÃO use tom casual demais — mantenha profissionalismo
+- FOQUE em: ROI, parceria, volume, cases, resultados mensuráveis`;
+
+        const negativeRules = broadcastAudienceType === "b2c" ? b2cNegativeRules : b2bNegativeRules;
+        const campaignCtx = `\n\nCONTEXTO DA CAMPANHA: Conversa iniciada pelo disparo "${bcast.name || ""}". ${bcast.description ? `Objetivo: ${bcast.description}.` : ""}
+O lead está respondendo à mensagem acima. Continue naturalmente. NÃO repita a mensagem já enviada.${negativeRules}`;
+
+        // Priority 1: Custom prompt for this audience type
         if (broadcastAudienceType === "b2c" && cfgPrompts.prompt_b2c_broadcast) {
-          const campaignCtx = `\n\nCONTEXTO DA CAMPANHA: Conversa iniciada pelo disparo "${bcast.name || ""}". ${bcast.description ? `Objetivo: ${bcast.description}.` : ""}
-O lead está respondendo à mensagem acima. Continue naturalmente. NÃO repita a mensagem já enviada.
-IMPORTANTE: Este é um lead B2C (consumidor final). NÃO mencione termos B2B como PDV, parceria comercial, reposição, volume comercial.`;
           conversationMessages[0].content = cfgPrompts.prompt_b2c_broadcast + campaignCtx + strictBcastCtx + knowledgeContext;
           console.log("REPLACED with strict B2C broadcast prompt");
         } else if (broadcastAudienceType === "b2b" && cfgPrompts.prompt_b2b) {
-          const campaignCtx = `\n\nCONTEXTO DA CAMPANHA: Conversa iniciada pelo disparo "${bcast.name || ""}". ${bcast.description ? `Objetivo: ${bcast.description}.` : ""}
-O lead está respondendo à mensagem acima. Continue naturalmente. NÃO repita a mensagem já enviada.
-IMPORTANTE: Este é um lead B2B (empresa/negócio). NÃO mencione termos B2C como consumo pessoal, festa, churrasco.`;
           conversationMessages[0].content = cfgPrompts.prompt_b2b + campaignCtx + strictBcastCtx + knowledgeContext;
           console.log("REPLACED with strict B2B broadcast prompt");
         } else if (bcast?.ai_config_id) {
-          // Fallback: use the broadcast's dedicated AI config
+          // Priority 2: Broadcast's dedicated AI config
           const { data: broadcastAiConfig } = await supabaseAdmin
             .from("ai_configs")
             .select("system_prompt")
@@ -510,11 +536,18 @@ IMPORTANTE: Este é um lead B2B (empresa/negócio). NÃO mencione termos B2C com
             .maybeSingle();
 
           if (broadcastAiConfig?.system_prompt) {
-            const campaignCtx = `\n\nCONTEXTO DA CAMPANHA: Conversa iniciada pelo disparo "${bcast.name || ""}". ${bcast.description ? `Objetivo: ${bcast.description}.` : ""}
-O lead está respondendo à mensagem acima. Continue naturalmente. NÃO repita a mensagem já enviada.`;
-            conversationMessages[0].content = broadcastAiConfig.system_prompt + campaignCtx + companyContext + knowledgeContext;
-            console.log("Using dedicated broadcast AI config prompt — fallback");
+            conversationMessages[0].content = broadcastAiConfig.system_prompt + campaignCtx + strictBcastCtx + knowledgeContext;
+            console.log("Using dedicated broadcast AI config prompt with strict isolation");
+          } else {
+            // Even fallback AI config had no prompt — use general prompt BUT with strict context
+            conversationMessages[0].content = conversationMessages[0].content.replace(companyContext, "") + campaignCtx + strictBcastCtx;
+            console.log("Fallback: stripped general company context, applied strict isolation");
           }
+        } else {
+          // Priority 3: NO custom prompt exists — STILL enforce strict isolation
+          // Remove the general (mixed) company context and replace with strict one
+          conversationMessages[0].content = conversationMessages[0].content.replace(companyContext, "") + campaignCtx + strictBcastCtx;
+          console.log(`No custom prompt found — enforced strict ${broadcastAudienceType.toUpperCase()} isolation on general prompt`);
         }
       }
     }
