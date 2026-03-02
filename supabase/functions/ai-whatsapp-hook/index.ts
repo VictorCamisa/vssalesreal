@@ -348,7 +348,19 @@ FORMATO DE RESPOSTA (CRÍTICO — MÁXIMA PRIORIDADE):
 - Máximo ${maxBlocks} blocos por resposta. NUNCA exceda ${maxBlocks} blocos.
 - Máximo ${maxEmojisPerBlock} emoji(s) por bloco
 - Cada bloco deve ser uma mensagem independente e natural
-- NÃO envie paredes de texto. Mensagens CURTAS como um humano digitaria.`;
+- NÃO envie paredes de texto. Mensagens CURTAS como um humano digitaria.
+
+REGRA DE ENGAJAMENTO (OBRIGATÓRIO — NUNCA IGNORE):
+- A ÚLTIMA mensagem da sua resposta DEVE SEMPRE terminar com uma PERGUNTA ABERTA ou convite para o cliente responder.
+- NUNCA encerre uma resposta de forma fechada. Sempre deixe o gancho para o cliente continuar a conversa.
+- Exemplos de fechamentos corretos: "Faz sentido pra você?", "Quer que eu te explique melhor?", "Qual desses cenários te interessa mais?", "Posso te mostrar como funciona?"
+
+REGRA DE PREÇO (OBRIGATÓRIO — NUNCA IGNORE):
+- NUNCA passe preço de projetos premium/personalizados (faixa de R$10k-R$20k). Para esses, o objetivo é MARCAR UMA REUNIÃO.
+- Só mencione valores de produtos com preço fixo e acessível (ex: Escale a partir de R$600) quando o contexto for claro e o cliente perguntar diretamente.
+- Se o cliente perguntar "quanto custa?" sem contexto claro, PRIMEIRO descubra qual solução se encaixa fazendo perguntas, DEPOIS direcione adequadamente.
+- Para projetos sob medida/consultoria/Labs, NUNCA fale valor. Diga algo como: "O investimento depende do escopo. Vamos agendar uma conversa rápida pra eu entender seu cenário e te passar uma proposta personalizada?"
+- Use o comando [AGENDAR] para facilitar o agendamento quando o lead demonstrar interesse em projetos premium.`;
 
     // Build system prompt
     const modularCfg = configData?.modular;
