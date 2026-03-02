@@ -654,6 +654,18 @@ Este lead é um CONSUMIDOR FINAL (B2C). Adapte sua comunicação:
       console.log(`Injecting audience context: ${detectedAudience}`);
     }
 
+    // ALWAYS ensure scheduling instructions are present (they may be lost during prompt replacement)
+    const schedulingInstructions = `\n\nCAPACIDADE DE AGENDAMENTO (SEMPRE ATIVO):
+Quando o lead quiser agendar, pergunte data e horário. Com data e hora confirmados, inclua no final da sua resposta (invisível ao lead):
+[AGENDAR:YYYY-MM-DD:HH:MM:NOME_DO_LEAD]
+Para cancelar: [CANCELAR:TELEFONE_DO_LEAD]. Para verificar agenda: [VERIFICAR:YYYY-MM-DD]
+Esses comandos são processados automaticamente. NÃO mostre os comandos ao lead.
+FORMATO DE RESPOSTA: Divida em blocos curtos separados por ---BLOCO--- (linha isolada). Máximo 4 blocos.`;
+
+    if (!conversationMessages[0].content.includes("[AGENDAR:")) {
+      conversationMessages[0].content += schedulingInstructions;
+    }
+
     // Add the current user message
     conversationMessages.push({
       role: "user",
@@ -705,7 +717,7 @@ Este lead é um CONSUMIDOR FINAL (B2C). Adapte sua comunicação:
 
     if (agendarMatch) {
       try {
-        await fetch(`${supabaseUrl}/functions/v1/manage-appointments`, {
+        const aptResponse = await fetch(`${supabaseUrl}/functions/v1/manage-appointments`, {
           method: "POST",
           headers: { "Content-Type": "application/json", Authorization: `Bearer ${serviceKey}` },
           body: JSON.stringify({
@@ -717,6 +729,85 @@ Este lead é um CONSUMIDOR FINAL (B2C). Adapte sua comunicação:
             lead_phone: phone,
           }),
         });
+        const aptResult = await aptResponse.json();
+        console.log("Appointment result:", JSON.stringify(aptResult));
+
+        // After successful appointment: create/move CRM opportunity + update pipeline
+        if (aptResult.success) {
+          try {
+            // Find the lead
+            const { data: crmLead } = await supabaseAdmin
+              .from("leads_raw")
+              .select("id")
+              .eq("org_id", orgId)
+              .or(`phone.ilike.%${phone}%,phone.ilike.%${phone.slice(-8)}%`)
+              .maybeSingle();
+
+            if (crmLead) {
+              // Find the "agendamento" stage (or similar)
+              const { data: stages } = await supabaseAdmin
+                .from("crm_stages")
+                .select("id, name, stage_order")
+                .eq("org_id", orgId)
+                .order("stage_order");
+
+              const agendamentoStage = stages?.find((s: any) =>
+                s.name.toLowerCase().includes("agendament") ||
+                s.name.toLowerCase().includes("reunião") ||
+                s.name.toLowerCase().includes("reuniao") ||
+                s.name.toLowerCase().includes("qualificad")
+              );
+              // Fallback: use the 3rd stage or last available
+              const targetStage = agendamentoStage || (stages && stages.length >= 3 ? stages[2] : stages?.[stages.length - 1]);
+
+              if (targetStage) {
+                // Check if opportunity already exists for this lead
+                const { data: existingOpp } = await supabaseAdmin
+                  .from("opportunities")
+                  .select("id")
+                  .eq("org_id", orgId)
+                  .eq("lead_id", crmLead.id)
+                  .maybeSingle();
+
+                if (existingOpp) {
+                  // Move existing opportunity to agendamento stage
+                  await supabaseAdmin
+                    .from("opportunities")
+                    .update({
+                      stage_id: targetStage.id,
+                      notes: `Agendamento automático: ${agendarMatch[1]} às ${agendarMatch[2]}`,
+                      updated_at: new Date().toISOString(),
+                    })
+                    .eq("id", existingOpp.id);
+                  console.log(`Moved opportunity ${existingOpp.id} to stage "${targetStage.name}"`);
+                } else {
+                  // Create new opportunity
+                  await supabaseAdmin
+                    .from("opportunities")
+                    .insert({
+                      org_id: orgId,
+                      lead_id: crmLead.id,
+                      stage_id: targetStage.id,
+                      notes: `Agendamento automático via IA: ${agendarMatch[1]} às ${agendarMatch[2]}`,
+                      automation_status: "completed",
+                    });
+                  console.log(`Created new opportunity for lead ${crmLead.id} at stage "${targetStage.name}"`);
+                }
+              }
+
+              // Update conversation tracker pipeline stage
+              await supabaseAdmin
+                .from("conversation_tracker")
+                .update({ pipeline_stage_key: "agendamento" })
+                .eq("org_id", orgId)
+                .eq("instance_name", instanceName)
+                .eq("remote_jid", remoteJid);
+              console.log("Updated pipeline_stage_key to 'agendamento'");
+            }
+          } catch (crmErr) {
+            console.error("CRM/Pipeline update error (non-blocking):", crmErr);
+          }
+        }
       } catch (e) { console.error("Scheduling error:", e); }
     }
 
