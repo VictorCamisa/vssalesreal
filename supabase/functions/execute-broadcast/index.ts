@@ -112,19 +112,26 @@ Deno.serve(async (req) => {
     if (broadcast.ai_enabled) {
       const { data: company } = await supabase
         .from("company_profiles")
-        .select("company_name, description, segment, products_services, target_audience, tone_of_voice, differentials")
+        .select("*")
         .eq("org_id", org_id)
         .maybeSingle();
       
       if (company) {
+        const cp = company as any;
+        const prefix = businessMode === "b2b" || businessMode === "b2c" ? businessMode : null;
+        const targetAudience = (prefix && cp[`${prefix}_target_audience`]) || cp.target_audience || "";
+        const toneOfVoice = (prefix && cp[`${prefix}_tone_of_voice`]) || cp.tone_of_voice || "";
+        const differentials = (prefix && cp[`${prefix}_differentials`]) || cp.differentials || "";
+        const products = (prefix && cp[`${prefix}_products_services`]?.length > 0 ? cp[`${prefix}_products_services`] : cp.products_services) || [];
+
         companyContext = `
-EMPRESA: ${company.company_name || ""}
-SEGMENTO: ${company.segment || ""}
-DESCRIÇÃO: ${company.description || ""}
-PÚBLICO-ALVO: ${company.target_audience || ""}
-TOM DE VOZ: ${company.tone_of_voice || ""}
-DIFERENCIAIS: ${company.differentials || ""}
-PRODUTOS/SERVIÇOS: ${company.products_services ? JSON.stringify(company.products_services) : ""}`.trim();
+EMPRESA: ${cp.company_name || ""}
+SEGMENTO: ${cp.segment || ""}
+DESCRIÇÃO: ${cp.description || ""}
+PÚBLICO-ALVO: ${targetAudience}
+TOM DE VOZ: ${toneOfVoice}
+DIFERENCIAIS: ${differentials}
+PRODUTOS/SERVIÇOS: ${products.length > 0 ? JSON.stringify(products) : ""}`.trim();
       }
 
       // Get AI agent system prompt + modular config if configured
