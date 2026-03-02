@@ -105,7 +105,7 @@ Deno.serve(async (req) => {
     }
     console.log(`Using instance: ${instanceName}`);
 
-    // Get company profile for AI context
+    // Get company profile for AI context — STRICT model isolation
     let companyContext = "";
     // Use audience_type from broadcast (set by user in wizard)
     let businessMode = (broadcast as any).audience_type || "b2c";
@@ -120,10 +120,11 @@ Deno.serve(async (req) => {
       if (company) {
         const cp = company as any;
         const prefix = businessMode === "b2b" || businessMode === "b2c" ? businessMode : null;
-        const targetAudience = (prefix && cp[`${prefix}_target_audience`]) || cp.target_audience || "";
-        const toneOfVoice = (prefix && cp[`${prefix}_tone_of_voice`]) || cp.tone_of_voice || "";
-        const differentials = (prefix && cp[`${prefix}_differentials`]) || cp.differentials || "";
-        const products = (prefix && cp[`${prefix}_products_services`]?.length > 0 ? cp[`${prefix}_products_services`] : cp.products_services) || [];
+        // STRICT: use ONLY model-specific fields, no fallback to general
+        const targetAudience = prefix ? (cp[`${prefix}_target_audience`] || "") : (cp.target_audience || "");
+        const toneOfVoice = prefix ? (cp[`${prefix}_tone_of_voice`] || "") : (cp.tone_of_voice || "");
+        const differentials = prefix ? (cp[`${prefix}_differentials`] || "") : (cp.differentials || "");
+        const products = prefix ? (cp[`${prefix}_products_services`] || []) : (cp.products_services || []);
 
         companyContext = `
 EMPRESA: ${cp.company_name || ""}
@@ -132,7 +133,8 @@ DESCRIÇÃO: ${cp.description || ""}
 PÚBLICO-ALVO: ${targetAudience}
 TOM DE VOZ: ${toneOfVoice}
 DIFERENCIAIS: ${differentials}
-PRODUTOS/SERVIÇOS: ${products.length > 0 ? JSON.stringify(products) : ""}`.trim();
+PRODUTOS/SERVIÇOS: ${products.length > 0 ? JSON.stringify(products) : ""}
+[Modelo ${(prefix || "geral").toUpperCase()} EXCLUSIVO — NÃO use informações de outro modelo]`.trim();
       }
 
       // Get AI agent system prompt + modular config if configured
@@ -162,9 +164,9 @@ PRODUTOS/SERVIÇOS: ${products.length > 0 ? JSON.stringify(products) : ""}`.trim
     // Build audience-specific instruction
     let audienceInstruction = "";
     if (businessMode === "b2b") {
-      audienceInstruction = `TIPO DE LEAD: Este é um lead B2B (empresa/estabelecimento). Foque em: ROI, volume, logística, parceria comercial, reposição. Trate como um potencial parceiro de negócio.`;
+      audienceInstruction = `TIPO DE LEAD: Este é um lead B2B (empresa/estabelecimento). Foque EXCLUSIVAMENTE em: ROI, volume, logística, parceria comercial, reposição. Trate como um potencial parceiro de negócio. PROIBIDO usar termos B2C como consumo pessoal, festa, churrasco, aniversário.`;
     } else {
-      audienceInstruction = `TIPO DE LEAD: Este é um CLIENTE FINAL (consumidor/pessoa física). Foque em: eventos, aniversários, churrascos, festas, happy hours, consumo pessoal, experiência, sabor, praticidade. NÃO fale como se fosse vender para restaurante/bar/empresa. Venda o PRODUTO diretamente para CONSUMO PESSOAL e momentos especiais.`;
+      audienceInstruction = `TIPO DE LEAD: Este é um CLIENTE FINAL (consumidor/pessoa física). Foque EXCLUSIVAMENTE em: eventos, aniversários, churrascos, festas, happy hours, consumo pessoal, experiência, sabor, praticidade. PROIBIDO falar como se fosse vender para restaurante/bar/empresa. PROIBIDO usar termos B2B como PDV, parceria comercial, reposição, volume comercial, CNPJ. Venda o PRODUTO diretamente para CONSUMO PESSOAL.`;
     }
     // Prepend custom model prompt if available
     if (customModelPrompt) {
