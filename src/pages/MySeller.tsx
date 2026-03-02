@@ -8,7 +8,7 @@ import {
   Loader2, Send, ChevronDown, ChevronUp, Sparkles, Shield, AlertTriangle,
   CheckCircle2, XCircle, TrendingUp, Users, Zap, MessageCircle, RefreshCw,
   Bot, Lightbulb, HelpCircle, Save, Plus, X, Trash2,
-  ArrowDown, Radio, Clock, Workflow,
+  ArrowDown, Radio, Clock, Workflow, Briefcase, ShoppingBag,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -22,6 +22,9 @@ import { Progress } from "@/components/ui/progress";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 
 // ---- Types ----
+type ProductItem = { name: string; description: string; price?: string };
+type FaqItem = { question: string; answer: string };
+
 type CompanyData = {
   id?: string;
   company_name: string;
@@ -34,11 +37,27 @@ type CompanyData = {
   sales_process: string;
   avg_ticket: string | null;
   logo_url: string | null;
-  products_services: { name: string; description: string; price?: string }[];
-  objections_faq: { question: string; answer: string }[];
+  products_services: ProductItem[];
+  objections_faq: FaqItem[];
   phone: string | null;
   email: string | null;
   website: string | null;
+  // B2B/B2C
+  business_models: string[];
+  b2b_target_audience: string;
+  b2b_products_services: ProductItem[];
+  b2b_differentials: string;
+  b2b_objections_faq: FaqItem[];
+  b2b_sales_process: string;
+  b2b_avg_ticket: string | null;
+  b2b_tone_of_voice: string;
+  b2c_target_audience: string;
+  b2c_products_services: ProductItem[];
+  b2c_differentials: string;
+  b2c_objections_faq: FaqItem[];
+  b2c_sales_process: string;
+  b2c_avg_ticket: string | null;
+  b2c_tone_of_voice: string;
 };
 
 type AiConfig = {
@@ -247,6 +266,7 @@ export default function MySeller() {
 
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({});
   const toggleSection = (key: string) => setOpenSections((prev) => ({ ...prev, [key]: !prev[key] }));
+  const [viewMode, setViewMode] = useState<"general" | "b2b" | "b2c">("general");
 
   // ---- Company updater ----
   const updateCompany = (field: keyof CompanyData, value: any) => {
@@ -366,13 +386,28 @@ export default function MySeller() {
         supabase.from("opportunities").select("value, probability").eq("org_id", orgId),
       ]);
       if (companyRes.data) {
+        const cd = companyRes.data as any;
         setCompany({
-          ...companyRes.data,
-          products_services: (companyRes.data.products_services as any) || [],
-          objections_faq: (companyRes.data.objections_faq as any) || [],
+          ...cd,
+          products_services: cd.products_services || [],
+          objections_faq: cd.objections_faq || [],
+          business_models: cd.business_models || [],
+          b2b_products_services: cd.b2b_products_services || [],
+          b2b_objections_faq: cd.b2b_objections_faq || [],
+          b2c_products_services: cd.b2c_products_services || [],
+          b2c_objections_faq: cd.b2c_objections_faq || [],
         } as CompanyData);
       } else {
-        setCompany({ company_name: "", segment: null, description: "", mission: "", tone_of_voice: "", differentials: "", target_audience: "", sales_process: "", avg_ticket: null, logo_url: null, products_services: [], objections_faq: [], phone: null, email: null, website: null });
+        setCompany({
+          company_name: "", segment: null, description: "", mission: "", tone_of_voice: "", differentials: "",
+          target_audience: "", sales_process: "", avg_ticket: null, logo_url: null, products_services: [],
+          objections_faq: [], phone: null, email: null, website: null,
+          business_models: [],
+          b2b_target_audience: "", b2b_products_services: [], b2b_differentials: "", b2b_objections_faq: [],
+          b2b_sales_process: "", b2b_avg_ticket: null, b2b_tone_of_voice: "",
+          b2c_target_audience: "", b2c_products_services: [], b2c_differentials: "", b2c_objections_faq: [],
+          b2c_sales_process: "", b2c_avg_ticket: null, b2c_tone_of_voice: "",
+        });
       }
       setAiConfigs((aiRes.data as any[]) || []);
       setDocs((docsRes.data as any[]) || []);
@@ -426,12 +461,43 @@ export default function MySeller() {
     <div className="space-y-6 animate-fade-in">
       {/* Header */}
       <div className="page-header">
-        <h1 className="page-title flex items-center gap-2">
-          <UserCheck className="h-5 w-5 text-primary" /> Meu Vendedor
-        </h1>
-        <p className="page-description">
-          Visão 360° do seu agente de vendas. Edite tudo inline e salve por seção.
-        </p>
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="page-title flex items-center gap-2">
+              <UserCheck className="h-5 w-5 text-primary" /> Meu Vendedor
+            </h1>
+            <p className="page-description">
+              Visão 360° do seu agente de vendas. Edite tudo inline e salve por seção.
+            </p>
+          </div>
+          {/* B2B/B2C Toggle */}
+          {company?.business_models && company.business_models.length > 0 && (
+            <div className="flex gap-1 p-0.5 bg-secondary rounded-lg">
+              <button
+                onClick={() => setViewMode("general")}
+                className={`text-xs py-1.5 px-3 rounded-md transition-colors ${viewMode === "general" ? "bg-card shadow-sm font-medium" : "text-muted-foreground hover:text-foreground"}`}
+              >
+                Geral
+              </button>
+              {company.business_models.includes("b2b") && (
+                <button
+                  onClick={() => setViewMode("b2b")}
+                  className={`text-xs py-1.5 px-3 rounded-md transition-colors flex items-center gap-1 ${viewMode === "b2b" ? "bg-card shadow-sm font-medium" : "text-muted-foreground hover:text-foreground"}`}
+                >
+                  <Briefcase className="h-3 w-3" /> B2B
+                </button>
+              )}
+              {company.business_models.includes("b2c") && (
+                <button
+                  onClick={() => setViewMode("b2c")}
+                  className={`text-xs py-1.5 px-3 rounded-md transition-colors flex items-center gap-1 ${viewMode === "b2c" ? "bg-card shadow-sm font-medium" : "text-muted-foreground hover:text-foreground"}`}
+                >
+                  <ShoppingBag className="h-3 w-3" /> B2C
+                </button>
+              )}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* ====== MAIN CARD ====== */}
@@ -506,9 +572,13 @@ export default function MySeller() {
           <CollapsibleTrigger asChild>
             <button className="w-full glass-card p-4 flex items-center justify-between hover:border-primary/30 transition-colors">
               <div className="flex items-center gap-3">
-                <div className="h-9 w-9 rounded-lg bg-primary/10 flex items-center justify-center"><Building2 className="h-4 w-4 text-primary" /></div>
+                <div className="h-9 w-9 rounded-lg bg-primary/10 flex items-center justify-center">
+                  {viewMode === "b2b" ? <Briefcase className="h-4 w-4 text-primary" /> : viewMode === "b2c" ? <ShoppingBag className="h-4 w-4 text-primary" /> : <Building2 className="h-4 w-4 text-primary" />}
+                </div>
                 <div className="text-left">
-                  <p className="text-sm font-semibold">Identidade & Tom de Voz</p>
+                  <p className="text-sm font-semibold">
+                    {viewMode === "b2b" ? "Perfil B2B — Empresas" : viewMode === "b2c" ? "Perfil B2C — Consumidores" : "Identidade & Tom de Voz"}
+                  </p>
                   <p className="text-[11px] text-muted-foreground">{company?.company_name || "Não configurado"} · {company?.segment || "Sem segmento"}</p>
                 </div>
               </div>
@@ -516,26 +586,50 @@ export default function MySeller() {
             </button>
           </CollapsibleTrigger>
           <CollapsibleContent className="glass-card border-t-0 rounded-t-none p-4 space-y-4 animate-fade-in">
-            <div className="grid grid-cols-2 gap-4">
-              <EditField label="Nome da Empresa" value={company?.company_name || ""} onChange={(v) => updateCompany("company_name", v)} placeholder="Ex: VS Soluções" />
-              <EditField label="Segmento" value={company?.segment || ""} onChange={(v) => updateCompany("segment", v)} placeholder="Ex: Tecnologia B2B" />
-            </div>
-            <EditField label="Descrição" value={company?.description || ""} onChange={(v) => updateCompany("description", v)} multiline placeholder="O que sua empresa faz?" />
-            <div className="grid grid-cols-2 gap-4">
-              <EditField label="Missão" value={company?.mission || ""} onChange={(v) => updateCompany("mission", v)} multiline placeholder="Propósito da empresa" />
-              <EditField label="Tom de Voz" value={company?.tone_of_voice || ""} onChange={(v) => updateCompany("tone_of_voice", v)} multiline placeholder="Ex: Profissional mas acessível" />
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <EditField label="Diferenciais" value={company?.differentials || ""} onChange={(v) => updateCompany("differentials", v)} multiline placeholder="O que te diferencia?" />
-              <EditField label="Público-alvo" value={company?.target_audience || ""} onChange={(v) => updateCompany("target_audience", v)} multiline placeholder="Quem é o cliente ideal?" />
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <EditField label="Processo de Vendas" value={company?.sales_process || ""} onChange={(v) => updateCompany("sales_process", v)} multiline placeholder="Como funciona sua venda?" />
-              <EditField label="Ticket Médio" value={company?.avg_ticket || ""} onChange={(v) => updateCompany("avg_ticket", v)} placeholder="Ex: R$ 2.000/mês" />
-            </div>
+            {viewMode === "general" ? (
+              <>
+                <div className="grid grid-cols-2 gap-4">
+                  <EditField label="Nome da Empresa" value={company?.company_name || ""} onChange={(v) => updateCompany("company_name", v)} placeholder="Ex: VS Soluções" />
+                  <EditField label="Segmento" value={company?.segment || ""} onChange={(v) => updateCompany("segment", v)} placeholder="Ex: Tecnologia B2B" />
+                </div>
+                <EditField label="Descrição" value={company?.description || ""} onChange={(v) => updateCompany("description", v)} multiline placeholder="O que sua empresa faz?" />
+                <div className="grid grid-cols-2 gap-4">
+                  <EditField label="Missão" value={company?.mission || ""} onChange={(v) => updateCompany("mission", v)} multiline placeholder="Propósito da empresa" />
+                  <EditField label="Tom de Voz" value={company?.tone_of_voice || ""} onChange={(v) => updateCompany("tone_of_voice", v)} multiline placeholder="Ex: Profissional mas acessível" />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <EditField label="Diferenciais" value={company?.differentials || ""} onChange={(v) => updateCompany("differentials", v)} multiline placeholder="O que te diferencia?" />
+                  <EditField label="Público-alvo" value={company?.target_audience || ""} onChange={(v) => updateCompany("target_audience", v)} multiline placeholder="Quem é o cliente ideal?" />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <EditField label="Processo de Vendas" value={company?.sales_process || ""} onChange={(v) => updateCompany("sales_process", v)} multiline placeholder="Como funciona sua venda?" />
+                  <EditField label="Ticket Médio" value={company?.avg_ticket || ""} onChange={(v) => updateCompany("avg_ticket", v)} placeholder="Ex: R$ 2.000/mês" />
+                </div>
+              </>
+            ) : (
+              <>
+                {/* B2B or B2C specific fields */}
+                <div className="p-3 rounded-lg bg-primary/5 border border-primary/20 text-sm">
+                  <p className="font-medium flex items-center gap-1.5">
+                    {viewMode === "b2b" ? <Briefcase className="h-4 w-4" /> : <ShoppingBag className="h-4 w-4" />}
+                    Perfil {viewMode === "b2b" ? "B2B" : "B2C"} — dados exclusivos para este modelo
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-1">Esses dados serão injetados na IA quando o contexto for {viewMode === "b2b" ? "empresarial" : "consumidor final"}.</p>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <EditField label={`Público-Alvo (${viewMode.toUpperCase()})`} value={(company as any)?.[`${viewMode}_target_audience`] || ""} onChange={(v) => updateCompany(`${viewMode}_target_audience` as any, v)} multiline placeholder={viewMode === "b2b" ? "Empresas, porte, segmento, decisor..." : "Perfil demográfico, interesses, ocasiões..."} />
+                  <EditField label={`Tom de Voz (${viewMode.toUpperCase()})`} value={(company as any)?.[`${viewMode}_tone_of_voice`] || ""} onChange={(v) => updateCompany(`${viewMode}_tone_of_voice` as any, v)} multiline placeholder={viewMode === "b2b" ? "Profissional, consultivo, dados e ROI" : "Amigável, leve, experiência e emoção"} />
+                </div>
+                <EditField label={`Diferenciais (${viewMode.toUpperCase()})`} value={(company as any)?.[`${viewMode}_differentials`] || ""} onChange={(v) => updateCompany(`${viewMode}_differentials` as any, v)} multiline placeholder={viewMode === "b2b" ? "Logística, preço por volume, suporte..." : "Qualidade, experiência, praticidade..."} />
+                <div className="grid grid-cols-2 gap-4">
+                  <EditField label={`Processo de Vendas (${viewMode.toUpperCase()})`} value={(company as any)?.[`${viewMode}_sales_process`] || ""} onChange={(v) => updateCompany(`${viewMode}_sales_process` as any, v)} multiline placeholder={viewMode === "b2b" ? "Prospecção → BANT → Proposta → Fechamento" : "Interesse → Recomendação → Pedido"} />
+                  <EditField label={`Ticket Médio (${viewMode.toUpperCase()})`} value={(company as any)?.[`${viewMode}_avg_ticket`] || ""} onChange={(v) => updateCompany(`${viewMode}_avg_ticket` as any, v)} placeholder={viewMode === "b2b" ? "Ex: R$ 5.000/mês" : "Ex: R$ 200"} />
+                </div>
+              </>
+            )}
             <div className="flex justify-end">
               <Button onClick={saveCompany} disabled={saving === "company"} size="sm" className="gap-1.5">
-                {saving === "company" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />} Salvar Identidade
+                {saving === "company" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />} Salvar
               </Button>
             </div>
           </CollapsibleContent>

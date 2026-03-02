@@ -128,22 +128,35 @@ serve(async (req) => {
       if (aiConfig?.system_prompt) systemPrompt += `## PERSONALIDADE\n${aiConfig.system_prompt}\n`;
     }
 
-    // Add company context
+    // Add company context — use B2B/B2C specific data if available
     if (company) {
+      const cp = company as any;
+      const businessModels: string[] = cp.business_models || [];
+      // Default to general; could be extended to accept audience param from frontend
+      const prefix = businessModels.includes("b2b") && !businessModels.includes("b2c") ? "b2b"
+        : businessModels.includes("b2c") && !businessModels.includes("b2b") ? "b2c"
+        : null; // both or none = use general
+
       systemPrompt += `\n\n## EMPRESA\n`;
-      if (company.company_name) systemPrompt += `- Nome: ${company.company_name}\n`;
-      if (company.segment) systemPrompt += `- Segmento: ${company.segment}\n`;
-      if (company.description) systemPrompt += `- Descrição: ${company.description}\n`;
-      if (company.differentials) systemPrompt += `- Diferenciais: ${company.differentials}\n`;
-      if (company.target_audience) systemPrompt += `- Público-alvo: ${company.target_audience}\n`;
-      if (company.tone_of_voice) systemPrompt += `- Tom de voz: ${company.tone_of_voice}\n`;
-      if (company.avg_ticket) systemPrompt += `- Ticket médio: ${company.avg_ticket}\n`;
-      const products = company.products_services as any[];
+      if (cp.company_name) systemPrompt += `- Nome: ${cp.company_name}\n`;
+      if (cp.segment) systemPrompt += `- Segmento: ${cp.segment}\n`;
+      if (cp.description) systemPrompt += `- Descrição: ${cp.description}\n`;
+
+      const differentials = (prefix && cp[`${prefix}_differentials`]) || cp.differentials;
+      const targetAudience = (prefix && cp[`${prefix}_target_audience`]) || cp.target_audience;
+      const toneOfVoice = (prefix && cp[`${prefix}_tone_of_voice`]) || cp.tone_of_voice;
+      const avgTicket = (prefix && cp[`${prefix}_avg_ticket`]) || cp.avg_ticket;
+      const products = (prefix && cp[`${prefix}_products_services`]?.length > 0 ? cp[`${prefix}_products_services`] : cp.products_services) as any[];
+      const faqs = (prefix && cp[`${prefix}_objections_faq`]?.length > 0 ? cp[`${prefix}_objections_faq`] : cp.objections_faq) as any[];
+
+      if (differentials) systemPrompt += `- Diferenciais: ${differentials}\n`;
+      if (targetAudience) systemPrompt += `- Público-alvo: ${targetAudience}\n`;
+      if (toneOfVoice) systemPrompt += `- Tom de voz: ${toneOfVoice}\n`;
+      if (avgTicket) systemPrompt += `- Ticket médio: ${avgTicket}\n`;
       if (products?.length) {
         systemPrompt += `\n## PRODUTOS\n`;
         products.forEach((p: any) => { systemPrompt += `- ${p.name}: ${p.description}${p.price ? ` (${p.price})` : ""}\n`; });
       }
-      const faqs = company.objections_faq as any[];
       if (faqs?.length) {
         systemPrompt += `\n## FAQ\n`;
         faqs.forEach((f: any) => { systemPrompt += `- "${f.question}" → "${f.answer}"\n`; });

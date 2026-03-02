@@ -434,6 +434,21 @@ export type Database = {
         Row: {
           address: string | null
           avg_ticket: string | null
+          b2b_avg_ticket: string | null
+          b2b_differentials: string | null
+          b2b_objections_faq: Json | null
+          b2b_products_services: Json | null
+          b2b_sales_process: string | null
+          b2b_target_audience: string | null
+          b2b_tone_of_voice: string | null
+          b2c_avg_ticket: string | null
+          b2c_differentials: string | null
+          b2c_objections_faq: Json | null
+          b2c_products_services: Json | null
+          b2c_sales_process: string | null
+          b2c_target_audience: string | null
+          b2c_tone_of_voice: string | null
+          business_models: string[]
           cnpj: string | null
           company_name: string
           created_at: string
@@ -464,6 +479,21 @@ export type Database = {
         Insert: {
           address?: string | null
           avg_ticket?: string | null
+          b2b_avg_ticket?: string | null
+          b2b_differentials?: string | null
+          b2b_objections_faq?: Json | null
+          b2b_products_services?: Json | null
+          b2b_sales_process?: string | null
+          b2b_target_audience?: string | null
+          b2b_tone_of_voice?: string | null
+          b2c_avg_ticket?: string | null
+          b2c_differentials?: string | null
+          b2c_objections_faq?: Json | null
+          b2c_products_services?: Json | null
+          b2c_sales_process?: string | null
+          b2c_target_audience?: string | null
+          b2c_tone_of_voice?: string | null
+          business_models?: string[]
           cnpj?: string | null
           company_name?: string
           created_at?: string
@@ -494,6 +524,21 @@ export type Database = {
         Update: {
           address?: string | null
           avg_ticket?: string | null
+          b2b_avg_ticket?: string | null
+          b2b_differentials?: string | null
+          b2b_objections_faq?: Json | null
+          b2b_products_services?: Json | null
+          b2b_sales_process?: string | null
+          b2b_target_audience?: string | null
+          b2b_tone_of_voice?: string | null
+          b2c_avg_ticket?: string | null
+          b2c_differentials?: string | null
+          b2c_objections_faq?: Json | null
+          b2c_products_services?: Json | null
+          b2c_sales_process?: string | null
+          b2c_target_audience?: string | null
+          b2c_tone_of_voice?: string | null
+          business_models?: string[]
           cnpj?: string | null
           company_name?: string
           created_at?: string

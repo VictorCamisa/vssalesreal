@@ -178,18 +178,29 @@ serve(async (req) => {
       if (cp.company_name) parts.push(`Empresa: ${cp.company_name}`);
       if (cp.segment) parts.push(`Segmento: ${cp.segment}`);
       if (cp.description) parts.push(`Sobre: ${cp.description}`);
-      if (cp.target_audience) parts.push(`Público-alvo: ${cp.target_audience}`);
-      if (cp.differentials) parts.push(`Diferenciais: ${cp.differentials}`);
-      if (cp.tone_of_voice) parts.push(`Tom de voz: ${cp.tone_of_voice}`);
-      if (cp.sales_process) parts.push(`Processo: ${cp.sales_process}`);
-      const products = cp.products_services || [];
+
+      // Use B2B/B2C-specific data if audience is detected, otherwise use general
+      const audience = detectedAudience; // "b2b", "b2c", or null
+      const prefix = audience === "b2b" || audience === "b2c" ? audience : null;
+
+      const targetAudience = (prefix && cp[`${prefix}_target_audience`]) || cp.target_audience;
+      const differentials = (prefix && cp[`${prefix}_differentials`]) || cp.differentials;
+      const toneOfVoice = (prefix && cp[`${prefix}_tone_of_voice`]) || cp.tone_of_voice;
+      const salesProcess = (prefix && cp[`${prefix}_sales_process`]) || cp.sales_process;
+      const products = (prefix && cp[`${prefix}_products_services`]?.length > 0 ? cp[`${prefix}_products_services`] : cp.products_services) || [];
+      const faqs = (prefix && cp[`${prefix}_objections_faq`]?.length > 0 ? cp[`${prefix}_objections_faq`] : cp.objections_faq) || [];
+
+      if (targetAudience) parts.push(`Público-alvo: ${targetAudience}`);
+      if (differentials) parts.push(`Diferenciais: ${differentials}`);
+      if (toneOfVoice) parts.push(`Tom de voz: ${toneOfVoice}`);
+      if (salesProcess) parts.push(`Processo: ${salesProcess}`);
       if (products.length > 0) {
         parts.push("Produtos:\n" + products.map((p: any) => `- ${p.name}${p.price ? ` (${p.price})` : ""}: ${p.description}`).join("\n"));
       }
-      const faqs = cp.objections_faq || [];
       if (faqs.length > 0) {
         parts.push("Objeções:\n" + faqs.map((f: any) => `Q: ${f.question}\nR: ${f.answer}`).join("\n"));
       }
+      if (prefix) parts.push(`\n[Perfil ${prefix.toUpperCase()} ativo]`);
       companyContext = `\n\n--- EMPRESA ---\n${parts.join("\n")}\n--- FIM ---`;
     }
 
