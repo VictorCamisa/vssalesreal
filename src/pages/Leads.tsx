@@ -189,10 +189,10 @@ export default function Leads() {
         .from("crm_stages").select("id").eq("org_id", profile.org_id).order("stage_order").limit(1);
       if (!stages?.length) throw new Error("Crie estágios no CRM primeiro.");
 
-      // Only convert enriched leads
-      const selectedLeads = leads.filter(l => selected.has(l.id) && l.status === "enriched");
+      // Allow any non-converted/non-discarded lead to be activated
+      const selectedLeads = leads.filter(l => selected.has(l.id) && l.status !== "converted" && l.status !== "discarded");
       if (selectedLeads.length === 0) {
-        toast({ title: "Enriqueça os leads primeiro", description: "Apenas leads enriquecidos podem ser ativados comercialmente.", variant: "destructive" });
+        toast({ title: "Nenhum lead disponível", description: "Os leads selecionados já estão em comercial ou descartados.", variant: "destructive" });
         return;
       }
 
