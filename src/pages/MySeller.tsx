@@ -354,12 +354,12 @@ Agendamento: [AGENDAR:DATA:HORA:NOME], [CANCELAR:TEL], [VERIFICAR:DATA]
 Responda em português brasileiro.${companyCtx}${knowledgeCtx}`;
   }
 
-  // Custom prompt overrides
+  // Custom prompt overrides — inject as additional instructions, don't discard system_prompt
   const cfgPrompts = configData || {};
   if (audience === "b2b" && cfgPrompts.prompt_b2b) {
-    systemPrompt = cfgPrompts.prompt_b2b + behaviorRules + buildCtx(company, "b2b") + knowledgeCtx;
+    systemPrompt += `\n\n--- PROMPT B2B ESPECÍFICO ---\n${cfgPrompts.prompt_b2b}`;
   } else if (audience === "b2c" && cfgPrompts.prompt_b2c_organic) {
-    systemPrompt = cfgPrompts.prompt_b2c_organic + behaviorRules + buildCtx(company, "b2c") + knowledgeCtx;
+    systemPrompt += `\n\n--- PROMPT B2C ESPECÍFICO ---\n${cfgPrompts.prompt_b2c_organic}`;
   }
 
   return systemPrompt;
