@@ -284,13 +284,15 @@ function buildFinalPromptPreview(
     if (cp.segment) parts.push(`Segmento: ${cp.segment}`);
     if (cp.description) parts.push(`Sobre: ${cp.description}`);
 
+    // Strict isolation: when a specific audience is selected, use ONLY prefixed fields
+    // Never fall back to general fields to avoid context leaking (e.g. B2B terms in B2C)
     const prefix = aud === "b2b" || aud === "b2c" ? aud : null;
-    const ta = prefix ? (cp as any)[`${prefix}_target_audience`] || cp.target_audience : cp.target_audience;
-    const df = prefix ? (cp as any)[`${prefix}_differentials`] || cp.differentials : cp.differentials;
-    const tv = prefix ? (cp as any)[`${prefix}_tone_of_voice`] || cp.tone_of_voice : cp.tone_of_voice;
-    const sp = prefix ? (cp as any)[`${prefix}_sales_process`] || cp.sales_process : cp.sales_process;
-    const pd = prefix ? ((cp as any)[`${prefix}_products_services`]?.length ? (cp as any)[`${prefix}_products_services`] : cp.products_services) : cp.products_services;
-    const fq = prefix ? ((cp as any)[`${prefix}_objections_faq`]?.length ? (cp as any)[`${prefix}_objections_faq`] : cp.objections_faq) : cp.objections_faq;
+    const ta = prefix ? (cp as any)[`${prefix}_target_audience`] || "" : cp.target_audience;
+    const df = prefix ? (cp as any)[`${prefix}_differentials`] || "" : cp.differentials;
+    const tv = prefix ? (cp as any)[`${prefix}_tone_of_voice`] || "" : cp.tone_of_voice;
+    const sp = prefix ? (cp as any)[`${prefix}_sales_process`] || "" : cp.sales_process;
+    const pd = prefix ? ((cp as any)[`${prefix}_products_services`] || []) : cp.products_services;
+    const fq = prefix ? ((cp as any)[`${prefix}_objections_faq`] || []) : cp.objections_faq;
 
     if (ta) parts.push(`Público-alvo: ${ta}`);
     if (df) parts.push(`Diferenciais: ${df}`);
