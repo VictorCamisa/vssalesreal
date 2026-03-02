@@ -125,7 +125,7 @@ serve(async (req) => {
       response_delay_seconds: configData.behavior?.response_delay_seconds ?? 3,
       client_wait_timeout_minutes: configData.behavior?.client_wait_timeout_minutes ?? 30,
       emoji_usage: configData.behavior?.emoji_usage ?? "moderate",
-      context_window: configData.behavior?.context_window ?? 10,
+      context_window: configData.behavior?.context_window ?? 50,
     };
 
     // Track conversation
@@ -676,7 +676,30 @@ NÃO mostre os comandos ao lead.`;
       conversationMessages[0].content += schedulingInstructions;
     }
 
-    // Add user message
+    // ---- Load conversation history from chat_messages ----
+    const { data: historyMsgs } = await supabaseAdmin
+      .from("chat_messages")
+      .select("from_me, message_text, push_name, timestamp")
+      .eq("org_id", orgId)
+      .eq("instance_name", instanceName)
+      .eq("remote_jid", remoteJid)
+      .order("timestamp", { ascending: false })
+      .limit(behavior.context_window);
+
+    if (historyMsgs && historyMsgs.length > 0) {
+      // Reverse to chronological order, skip the current incoming message (already at the end)
+      const sorted = [...historyMsgs].reverse();
+      for (const hm of sorted) {
+        // Skip if this is the current message we're about to add
+        if (!hm.from_me && hm.message_text === messageText) continue;
+        conversationMessages.push({
+          role: hm.from_me ? "assistant" : "user",
+          content: hm.from_me ? hm.message_text : `[${hm.push_name || pushName}]: ${hm.message_text}`,
+        });
+      }
+    }
+
+    // Add current user message
     conversationMessages.push({
       role: "user",
       content: `[${pushName}]: ${messageText}`,
