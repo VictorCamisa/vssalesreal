@@ -39,7 +39,7 @@ Deno.serve(async (req) => {
     if (authError || !user) return json({ error: "Unauthorized" }, 401);
 
     const body = await req.json();
-    const { org_id, mode = "group", group_ids, instance_name } = body;
+    const { org_id, mode = "group", group_ids, instance_name, tags } = body;
 
     if (!org_id) return json({ error: "org_id is required" }, 400);
 
@@ -166,6 +166,7 @@ Deno.serve(async (req) => {
               phone: ph,
               source: "whatsapp" as const,
               status: "pending" as const,
+              tags: Array.isArray(tags) && tags.length > 0 ? tags : [],
               enrichment_data: { group: groupName, group_id: groupId, extraction_type: "group" },
             };
           })
