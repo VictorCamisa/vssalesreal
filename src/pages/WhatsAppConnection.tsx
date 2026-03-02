@@ -5,7 +5,7 @@ import { useToast } from "@/hooks/use-toast";
 import { logActivity } from "@/lib/activityLogger";
 import {
   Smartphone, QrCode, Wifi, WifiOff, Loader2, Plus, Trash2,
-  RefreshCw, CheckCircle2, AlertCircle
+  RefreshCw, CheckCircle2, AlertCircle, MessageCircle
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -13,6 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
+import WhatsAppChatViewer from "@/components/whatsapp/WhatsAppChatViewer";
 
 type EvolutionInstance = {
   name: string;
@@ -26,6 +27,7 @@ export default function WhatsAppConnection() {
 
   const [instances, setInstances] = useState<EvolutionInstance[]>([]);
   const [instancesLoading, setInstancesLoading] = useState(false);
+  const [chatViewerInstance, setChatViewerInstance] = useState<string | null>(null);
   const [newInstanceName, setNewInstanceName] = useState("");
   const [creatingInstance, setCreatingInstance] = useState(false);
   const [qrDialogOpen, setQrDialogOpen] = useState(false);
@@ -224,16 +226,21 @@ export default function WhatsAppConnection() {
                       <Badge variant="outline" className={`text-[10px] ${status.color}`}>{status.label}</Badge>
                     </div>
                   </div>
-                  <div className="flex gap-1">
-                    {inst.state !== "open" && (
-                      <Button variant="outline" size="sm" className="rounded-xl text-xs gap-1" onClick={() => handleGetQR(inst.name)}>
-                        <QrCode className="h-3.5 w-3.5" /> Conectar
-                      </Button>
-                    )}
-                    <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive" onClick={() => handleDeleteInstance(inst.name)}>
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </Button>
-                  </div>
+                   <div className="flex gap-1">
+                     {inst.state === "open" && (
+                       <Button variant="outline" size="sm" className="rounded-xl text-xs gap-1" onClick={() => setChatViewerInstance(inst.name)}>
+                         <MessageCircle className="h-3.5 w-3.5" /> Ver WhatsApp
+                       </Button>
+                     )}
+                     {inst.state !== "open" && (
+                       <Button variant="outline" size="sm" className="rounded-xl text-xs gap-1" onClick={() => handleGetQR(inst.name)}>
+                         <QrCode className="h-3.5 w-3.5" /> Conectar
+                       </Button>
+                     )}
+                     <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive" onClick={() => handleDeleteInstance(inst.name)}>
+                       <Trash2 className="h-3.5 w-3.5" />
+                     </Button>
+                   </div>
                 </div>
               );
             })}
@@ -277,6 +284,13 @@ export default function WhatsAppConnection() {
           </div>
         </DialogContent>
       </Dialog>
+      {/* WhatsApp Chat Viewer */}
+      {chatViewerInstance && (
+        <WhatsAppChatViewer
+          instanceName={chatViewerInstance}
+          onClose={() => setChatViewerInstance(null)}
+        />
+      )}
     </div>
   );
 }

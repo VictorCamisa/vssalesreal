@@ -295,6 +295,66 @@ Deno.serve(async (req) => {
     }
 
     // ============================================
+    // ACTION: fetch_messages - Get chat messages for a specific contact
+    // ============================================
+    if (action === "fetch_messages") {
+      if (!instance_name) return json({ error: "instance_name is required" }, 400);
+      const { remote_jid, limit: msgLimit } = body;
+      if (!remote_jid) return json({ error: "remote_jid is required" }, 400);
+
+      const response = await fetch(`${baseUrl}/chat/findMessages/${instance_name}`, {
+        method: "POST",
+        headers: { apikey: apiKey, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          where: { key: { remoteJid: remote_jid } },
+          limit: msgLimit || 100,
+        }),
+      });
+
+      if (!response.ok) {
+        const errText = await response.text();
+        return json({ error: `Erro ao buscar mensagens: ${response.status}` }, 502);
+      }
+
+      const rawMessages = await response.json();
+      const messages = (Array.isArray(rawMessages) ? rawMessages : rawMessages?.messages || rawMessages?.data || [])
+        .map((m: any) => ({
+          id: m.key?.id || m.id || crypto.randomUUID(),
+          fromMe: m.key?.fromMe ?? false,
+          text: m.message?.conversation || m.message?.extendedTextMessage?.text || m.message?.imageMessage?.caption || m.body || "",
+          timestamp: m.messageTimestamp ? Number(m.messageTimestamp) * 1000 : Date.parse(m.createdAt || m.updatedAt || "0"),
+          pushName: m.pushName || null,
+          type: m.messageType || (m.message?.imageMessage ? "image" : m.message?.audioMessage ? "audio" : "text"),
+        }))
+        .filter((m: any) => m.text)
+        .sort((a: any, b: any) => a.timestamp - b.timestamp);
+
+      return json({ messages });
+    }
+
+    // ============================================
+    // ACTION: list_contacts - List all conversation contacts for this instance
+    // ============================================
+    if (action === "list_contacts") {
+      if (!instance_name) return json({ error: "instance_name is required" }, 400);
+
+      // Fetch conversations from conversation_tracker for this org + instance
+      const { data: convos, error: convErr } = await supabaseAdmin
+        .from("conversation_tracker")
+        .select("remote_jid, push_name, customer_msg_count, last_customer_msg_at, last_bot_msg_at, pipeline_stage_key, detected_audience")
+        .eq("org_id", org_id)
+        .or(`instance_name.eq.${instance_name},instance_name.like.${instance_name}__%`)
+        .order("updated_at", { ascending: false });
+
+      if (convErr) {
+        console.error("list_contacts db error:", convErr);
+        return json({ error: convErr.message }, 500);
+      }
+
+      return json({ contacts: convos || [] });
+    }
+
+    // ============================================
     // ACTION: setup-webhook (force webhook config for existing instances)
     // ============================================
     if (action === "setup-webhook") {
