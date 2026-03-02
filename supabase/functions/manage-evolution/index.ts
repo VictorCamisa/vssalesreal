@@ -317,7 +317,14 @@ Deno.serve(async (req) => {
       }
 
       const rawMessages = await response.json();
-      const messages = (Array.isArray(rawMessages) ? rawMessages : rawMessages?.messages || rawMessages?.data || [])
+      const msgArray = Array.isArray(rawMessages)
+        ? rawMessages
+        : Array.isArray(rawMessages?.messages)
+          ? rawMessages.messages
+          : Array.isArray(rawMessages?.data)
+            ? rawMessages.data
+            : [];
+      const messages = msgArray
         .map((m: any) => ({
           id: m.key?.id || m.id || crypto.randomUUID(),
           fromMe: m.key?.fromMe ?? false,
