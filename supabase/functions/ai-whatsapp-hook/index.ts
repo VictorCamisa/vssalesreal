@@ -416,6 +416,19 @@ Regras:
 - Responda em português brasileiro${companyContext}${knowledgeContext}${smartRoutingContext}`;
     }
 
+    // --- Inject model-specific custom prompts from config ---
+    const cfgPrompts = configData || {};
+    // Determine which prompt to use based on context (will be refined after broadcast detection)
+    // For organic leads: b2b → prompt_b2b, b2c → prompt_b2c_organic
+    // For broadcast leads: prompt_b2c_broadcast (applied later after broadcast detection)
+    if (detectedAudience === "b2b" && cfgPrompts.prompt_b2b) {
+      systemPrompt = cfgPrompts.prompt_b2b + "\n\n" + systemPrompt;
+      console.log("Injected custom B2B prompt");
+    } else if (detectedAudience === "b2c" && cfgPrompts.prompt_b2c_organic) {
+      systemPrompt = cfgPrompts.prompt_b2c_organic + "\n\n" + systemPrompt;
+      console.log("Injected custom B2C organic prompt");
+    }
+
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY not configured");
 
@@ -458,9 +471,20 @@ Regras:
         const bcast = leadBroadcast.broadcast as any;
         console.log(`Broadcast context found: audience_type=${bcast?.audience_type}, campaign="${bcast?.name}", ai_config_id=${bcast?.ai_config_id}`);
 
-        // Use the broadcast's dedicated AI config if available
-        // This config has audience-specific instructions (B2B or B2C) baked in
-        if (bcast?.ai_config_id) {
+        // Inject custom B2C broadcast prompt if configured
+        const broadcastAudienceType = bcast?.audience_type || "b2c";
+        if (broadcastAudienceType === "b2c" && cfgPrompts.prompt_b2c_broadcast) {
+          const campaignCtx = `\n\nCONTEXTO DA CAMPANHA: Conversa iniciada pelo disparo "${bcast.name || ""}". ${bcast.description ? `Objetivo: ${bcast.description}.` : ""}
+O lead está respondendo à mensagem acima. Continue naturalmente. NÃO repita a mensagem já enviada.`;
+          conversationMessages[0].content = cfgPrompts.prompt_b2c_broadcast + campaignCtx + companyContext + knowledgeContext;
+          console.log("Using custom B2C broadcast prompt from config");
+        } else if (broadcastAudienceType === "b2b" && cfgPrompts.prompt_b2b) {
+          const campaignCtx = `\n\nCONTEXTO DA CAMPANHA: Conversa iniciada pelo disparo "${bcast.name || ""}". ${bcast.description ? `Objetivo: ${bcast.description}.` : ""}
+O lead está respondendo à mensagem acima. Continue naturalmente. NÃO repita a mensagem já enviada.`;
+          conversationMessages[0].content = cfgPrompts.prompt_b2b + campaignCtx + companyContext + knowledgeContext;
+          console.log("Using custom B2B prompt for broadcast response");
+        } else if (bcast?.ai_config_id) {
+          // Fallback: use the broadcast's dedicated AI config
           const { data: broadcastAiConfig } = await supabaseAdmin
             .from("ai_configs")
             .select("system_prompt")
@@ -470,10 +494,8 @@ Regras:
           if (broadcastAiConfig?.system_prompt) {
             const campaignCtx = `\n\nCONTEXTO DA CAMPANHA: Conversa iniciada pelo disparo "${bcast.name || ""}". ${bcast.description ? `Objetivo: ${bcast.description}.` : ""}
 O lead está respondendo à mensagem acima. Continue naturalmente. NÃO repita a mensagem já enviada.`;
-
-            // Replace system prompt entirely with the dedicated config's prompt + company + knowledge
             conversationMessages[0].content = broadcastAiConfig.system_prompt + campaignCtx + companyContext + knowledgeContext;
-            console.log("Using dedicated broadcast AI config prompt — no filtering needed");
+            console.log("Using dedicated broadcast AI config prompt — fallback");
           }
         }
       }

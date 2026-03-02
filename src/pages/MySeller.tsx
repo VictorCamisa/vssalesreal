@@ -8,7 +8,7 @@ import {
   Loader2, Send, ChevronDown, ChevronUp, Sparkles, Shield, AlertTriangle,
   CheckCircle2, XCircle, TrendingUp, Users, Zap, MessageCircle, RefreshCw,
   Bot, Lightbulb, HelpCircle, Save, Plus, X, Trash2,
-  ArrowDown, Radio, Clock, Workflow, Briefcase, ShoppingBag,
+  ArrowDown, Radio, Clock, Workflow, Briefcase, ShoppingBag, FileText,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -267,6 +267,7 @@ export default function MySeller() {
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({});
   const toggleSection = (key: string) => setOpenSections((prev) => ({ ...prev, [key]: !prev[key] }));
   const [viewMode, setViewMode] = useState<"general" | "b2b" | "b2c">("general");
+  const [promptTab, setPromptTab] = useState<"b2b" | "b2c_broadcast" | "b2c_organic">("b2b");
 
   // ---- Company updater ----
   const updateCompany = (field: keyof CompanyData, value: any) => {
@@ -957,6 +958,118 @@ export default function MySeller() {
                 </div>
               );
             })()}
+          </CollapsibleContent>
+        </Collapsible>
+
+        {/* ====== PROMPTS POR MODELO ====== */}
+        <Collapsible open={openSections["prompts"]} onOpenChange={() => toggleSection("prompts")}>
+          <CollapsibleTrigger asChild>
+            <button className="w-full glass-card p-4 flex items-center justify-between hover:border-primary/30 transition-colors">
+              <div className="flex items-center gap-3">
+                <div className="h-9 w-9 rounded-lg bg-accent/15 flex items-center justify-center"><FileText className="h-4 w-4 text-accent-foreground" /></div>
+                <div className="text-left">
+                  <p className="text-sm font-semibold">Prompts por Modelo de Negócio</p>
+                  <p className="text-[11px] text-muted-foreground">Prompts exatos que a IA usará para B2B, B2C Disparo e B2C Qualificativo</p>
+                </div>
+              </div>
+              {openSections["prompts"] ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
+            </button>
+          </CollapsibleTrigger>
+          <CollapsibleContent className="glass-card border-t-0 rounded-t-none p-4 space-y-4 animate-fade-in">
+            {aiConfigs.length > 0 ? (() => {
+              const mainCfg = aiConfigs.find(c => c.enabled) || aiConfigs[0];
+              const cfgData = (mainCfg.config || {}) as Record<string, any>;
+
+              const updatePromptField = (field: string, value: string) => {
+                updateAiConfig(mainCfg.id, "config", { ...cfgData, [field]: value });
+              };
+
+              const savePrompts = async () => {
+                setSaving("prompts");
+                const { error } = await supabase.from("ai_configs").update({
+                  config: { ...cfgData },
+                }).eq("id", mainCfg.id);
+                if (error) toast({ title: "Erro", description: error.message, variant: "destructive" });
+                else toast({ title: "Prompts salvos!" });
+                setSaving(null);
+              };
+
+
+
+              const tabs = [
+                { key: "b2b" as const, label: "B2B", icon: Briefcase, desc: "Usado para conversas com empresas e leads corporativos" },
+                { key: "b2c_broadcast" as const, label: "B2C — Vendedor Disparo", icon: Radio, desc: "Usado quando o lead responde a uma campanha de disparo" },
+                { key: "b2c_organic" as const, label: "B2C — Vendedor Qualificativo", icon: MessageCircle, desc: "Usado para leads que chegam organicamente no WhatsApp" },
+              ];
+
+              const defaultPrompts: Record<string, string> = {
+                b2b: `Você é um vendedor consultivo B2B. Foque em ROI, dados, cases e resultados mensuráveis.\n\nREGRAS:\n- Trate o lead como potencial parceiro de negócio\n- Explore necessidades com perguntas estratégicas (BANT)\n- Destaque benefícios de volume, logística e suporte\n- Use tom profissional e consultivo\n- Apresente propostas de valor claras\n\nResponda em português brasileiro.`,
+                b2c_broadcast: `Você é um vendedor simpático respondendo a um lead que recebeu uma campanha promocional.\n\nREGRAS:\n- O lead recebeu um disparo e está respondendo — continue a conversa naturalmente\n- Foque em consumo pessoal: eventos, aniversários, churrascos, festas\n- NÃO pergunte se é empresa/estabelecimento — é consumidor final\n- Use tom leve, amigável e focado em experiência\n- Crie urgência com ofertas e disponibilidade limitada\n\nResponda em português brasileiro.`,
+                b2c_organic: `Você é um vendedor qualificativo para leads orgânicos (WhatsApp).\n\nREGRAS:\n- O lead chegou por conta própria — descubra o que precisa\n- Faça perguntas para entender o contexto (pessoal ou comercial)\n- Se for consumo pessoal, foque em experiência e praticidade\n- Se parecer comercial, adapte para tom B2B consultivo\n- Seja acolhedor e consultivo na primeira interação\n\nResponda em português brasileiro.`,
+              };
+
+              return (
+                <div className="space-y-4">
+                  {/* Tab selector */}
+                  <div className="flex gap-1 p-0.5 bg-secondary rounded-lg">
+                    {tabs.map(t => (
+                      <button
+                        key={t.key}
+                        onClick={() => setPromptTab(t.key)}
+                        className={`text-xs py-1.5 px-3 rounded-md transition-colors flex items-center gap-1.5 flex-1 justify-center ${promptTab === t.key ? "bg-card shadow-sm font-medium" : "text-muted-foreground hover:text-foreground"}`}
+                      >
+                        <t.icon className="h-3 w-3" /> {t.label}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Current tab content */}
+                  {tabs.filter(t => t.key === promptTab).map(t => (
+                    <div key={t.key} className="space-y-3">
+                      <div className="p-3 rounded-lg bg-primary/5 border border-primary/20">
+                        <p className="text-xs font-medium flex items-center gap-1.5">
+                          <t.icon className="h-3.5 w-3.5 text-primary" /> {t.label}
+                        </p>
+                        <p className="text-[11px] text-muted-foreground mt-0.5">{t.desc}</p>
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">
+                          Prompt do Sistema — {t.label}
+                        </Label>
+                        <Textarea
+                          value={cfgData[`prompt_${t.key}`] || ""}
+                          onChange={(e) => updatePromptField(`prompt_${t.key}`, e.target.value)}
+                          placeholder={defaultPrompts[t.key]}
+                          rows={10}
+                          className="text-xs resize-none font-mono"
+                        />
+                        <p className="text-[10px] text-muted-foreground">
+                          {cfgData[`prompt_${t.key}`] ? `${cfgData[`prompt_${t.key}`].length} caracteres` : "Usando prompt padrão — preencha para personalizar"}
+                        </p>
+                      </div>
+                      {!cfgData[`prompt_${t.key}`] && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="text-xs gap-1"
+                          onClick={() => updatePromptField(`prompt_${t.key}`, defaultPrompts[t.key])}
+                        >
+                          <Sparkles className="h-3 w-3" /> Usar prompt padrão como base
+                        </Button>
+                      )}
+                    </div>
+                  ))}
+
+                  <div className="flex justify-end">
+                    <Button onClick={savePrompts} disabled={saving === "prompts"} size="sm" className="gap-1.5">
+                      {saving === "prompts" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />} Salvar Prompts
+                    </Button>
+                  </div>
+                </div>
+              );
+            })() : (
+              <p className="text-sm text-muted-foreground italic text-center py-4">Configure um agente IA primeiro para definir prompts por modelo.</p>
+            )}
           </CollapsibleContent>
         </Collapsible>
 

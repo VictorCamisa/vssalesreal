@@ -109,6 +109,7 @@ Deno.serve(async (req) => {
     let companyContext = "";
     // Use audience_type from broadcast (set by user in wizard)
     let businessMode = (broadcast as any).audience_type || "b2c";
+    let customModelPrompt = "";
     if (broadcast.ai_enabled) {
       const { data: company } = await supabase
         .from("company_profiles")
@@ -149,6 +150,12 @@ PRODUTOS/SERVIÇOS: ${products.length > 0 ? JSON.stringify(products) : ""}`.trim
         if (modCfg?.modular?.business_mode) {
           businessMode = modCfg.modular.business_mode;
         }
+        // Use model-specific custom prompt if configured
+        if (businessMode === "b2b" && modCfg?.prompt_b2b) {
+          customModelPrompt = modCfg.prompt_b2b;
+        } else if (businessMode === "b2c" && modCfg?.prompt_b2c_broadcast) {
+          customModelPrompt = modCfg.prompt_b2c_broadcast;
+        }
       }
     }
 
@@ -158,6 +165,10 @@ PRODUTOS/SERVIÇOS: ${products.length > 0 ? JSON.stringify(products) : ""}`.trim
       audienceInstruction = `TIPO DE LEAD: Este é um lead B2B (empresa/estabelecimento). Foque em: ROI, volume, logística, parceria comercial, reposição. Trate como um potencial parceiro de negócio.`;
     } else {
       audienceInstruction = `TIPO DE LEAD: Este é um CLIENTE FINAL (consumidor/pessoa física). Foque em: eventos, aniversários, churrascos, festas, happy hours, consumo pessoal, experiência, sabor, praticidade. NÃO fale como se fosse vender para restaurante/bar/empresa. Venda o PRODUTO diretamente para CONSUMO PESSOAL e momentos especiais.`;
+    }
+    // Prepend custom model prompt if available
+    if (customModelPrompt) {
+      audienceInstruction = customModelPrompt + "\n\n" + audienceInstruction;
     }
 
     // Get pending broadcast leads
