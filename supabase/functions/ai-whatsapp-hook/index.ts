@@ -327,17 +327,30 @@ serve(async (req) => {
       }
     }
 
-    // ---- Build behavior rules string ----
+    // ---- Build behavior rules string (MUST survive all prompt replacements) ----
     const emojiMap: Record<string, string> = {
       none: "NÃO use emojis em nenhuma mensagem",
       minimal: "Use emojis com muita moderação (1 a cada 3 mensagens no máximo)",
       moderate: "Use emojis com moderação (máximo 1 por mensagem/bloco)",
       frequent: "Use emojis livremente (2+ por mensagem quando natural)",
     };
-    const behaviorRules = `\nCONFIGURAÇÕES DE COMPORTAMENTO:
+    const blocksCfg = (configData?.modular?.blocks) || { max_blocks: 4, max_chars_per_block: 200, max_emojis_per_block: 1 };
+    const maxBlocks = blocksCfg.max_blocks ?? 4;
+    const maxCharsPerBlock = blocksCfg.max_chars_per_block ?? 200;
+    const maxEmojisPerBlock = blocksCfg.max_emojis_per_block ?? 1;
+
+    const behaviorRules = `\n\nCONFIGURAÇÕES DE COMPORTAMENTO (OBRIGATÓRIO — NÃO IGNORE):
 - ${emojiMap[behavior.emoji_usage] || emojiMap.moderate}
 - Máximo de mensagens nesta conversa: ${behavior.max_messages_per_conversation} (após isso, encaminhe para atendente humano)
-- Você já enviou ~${botMsgCount} mensagens nesta conversa`;
+- Você já enviou ~${botMsgCount} mensagens nesta conversa
+
+FORMATO DE RESPOSTA (CRÍTICO — MÁXIMA PRIORIDADE):
+- Divida SEMPRE sua resposta em blocos CURTOS de no máximo ${maxCharsPerBlock} caracteres cada
+- Separe cada bloco com a marcação ---BLOCO--- (numa linha isolada)
+- Máximo ${maxBlocks} blocos por resposta. NUNCA exceda ${maxBlocks} blocos.
+- Máximo ${maxEmojisPerBlock} emoji(s) por bloco
+- Cada bloco deve ser uma mensagem independente e natural
+- NÃO envie paredes de texto. Mensagens CURTAS como um humano digitaria.`;
 
     // Build system prompt
     const modularCfg = configData?.modular;
@@ -430,13 +443,7 @@ serve(async (req) => {
         modularCfg.ctas.forEach((c: any) => { if (c.label?.trim()) parts.push(`- ${c.label}: "${c.text}"`); });
       }
 
-      const blocks = modularCfg.blocks || { max_blocks: 4, max_chars_per_block: 200, max_emojis_per_block: 1 };
-      parts.push(`\nFORMATO DE RESPOSTA (CRÍTICO):`);
-      parts.push(`- Divida SEMPRE sua resposta em blocos CURTOS de no máximo ${blocks.max_chars_per_block} caracteres cada`);
-      parts.push(`- Separe cada bloco com a marcação ---BLOCO--- (numa linha isolada)`);
-      parts.push(`- Máximo ${blocks.max_blocks} blocos por resposta`);
-      parts.push(`- Máximo ${blocks.max_emojis_per_block} emoji(s) por bloco`);
-      parts.push(`- Cada bloco deve ser uma mensagem independente e natural`);
+      // Block formatting is already in behaviorRules, just add scheduling
 
       parts.push(`\nCAPACIDADE DE AGENDAMENTO:`);
       parts.push(`Quando o lead quiser agendar, pergunte data e horário. Com data e hora, inclua: [AGENDAR:YYYY-MM-DD:HH:MM:NOME_DO_LEAD]`);
@@ -466,12 +473,6 @@ Quando o lead quiser agendar:
 3. Para cancelar: [CANCELAR:TELEFONE_DO_LEAD]
 4. Para verificar agenda: [VERIFICAR:YYYY-MM-DD]
 Esses comandos são processados automaticamente. NÃO mostre os comandos ao lead.
-
-FORMATO DE RESPOSTA (CRÍTICO):
-- Divida SEMPRE sua resposta em blocos CURTOS de no máximo 2 linhas cada
-- Separe cada bloco com a marcação ---BLOCO--- (numa linha isolada)
-- Cada bloco deve ser uma mensagem independente e natural
-- Máximo 3-4 blocos por resposta
 
 Regras:
 - Mensagens CURTAS e naturais (como um humano digitaria)
@@ -671,8 +672,7 @@ PROIBIDO usar termos B2B: "PDV", "parceiros", "reposição".`;
 Quando o lead quiser agendar, pergunte data e horário. Com data e hora confirmados, inclua:
 [AGENDAR:YYYY-MM-DD:HH:MM:NOME_DO_LEAD]
 Para cancelar: [CANCELAR:TELEFONE_DO_LEAD]. Para verificar agenda: [VERIFICAR:YYYY-MM-DD]
-NÃO mostre os comandos ao lead.
-FORMATO: Divida em blocos curtos separados por ---BLOCO---. Máximo 4 blocos.`;
+NÃO mostre os comandos ao lead.`;
 
     if (!conversationMessages[0].content.includes("[AGENDAR:")) {
       conversationMessages[0].content += schedulingInstructions;
