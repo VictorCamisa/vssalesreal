@@ -92,6 +92,9 @@ export default function Prospecting() {
   const [availableGroups, setAvailableGroups] = useState<{ id: string; name: string; size: number }[]>([]);
   const [selectedGroupIds, setSelectedGroupIds] = useState<Set<string>>(new Set());
   const [groupsLoading, setGroupsLoading] = useState(false);
+  const [groupSearchFilter, setGroupSearchFilter] = useState("");
+  const [extractTags, setExtractTags] = useState<string[]>([]);
+  const [newTag, setNewTag] = useState("");
 
   // Manual
   const [manualName, setManualName] = useState("");
@@ -389,7 +392,10 @@ export default function Prospecting() {
     setEvolutionLoading(true);
     try {
       const body: any = { org_id: profile.org_id, mode: whatsappMode, instance_name: selectedInstance || undefined };
-      if (whatsappMode === "group") body.group_ids = Array.from(selectedGroupIds);
+      if (whatsappMode === "group") {
+        body.group_ids = Array.from(selectedGroupIds);
+        if (extractTags.length > 0) body.tags = extractTags;
+      }
       const { data, error } = await supabase.functions.invoke("extract-whatsapp", { body });
       if (error) throw error;
       const desc = whatsappMode === "group"
@@ -644,9 +650,24 @@ export default function Prospecting() {
             </div>
 
             {whatsappMode === "group" && (
-              <div className="space-y-2">
+              <div className="space-y-3">
+                {/* Search filter */}
+                <div className="relative">
+                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                  <Input
+                    placeholder="Filtrar grupos por nome (ex: vendas, mães, fitness...)"
+                    value={groupSearchFilter}
+                    onChange={(e) => setGroupSearchFilter(e.target.value)}
+                    className="text-xs pl-8 h-8"
+                  />
+                </div>
+
                 <div className="flex items-center justify-between">
-                  <p className="text-xs text-muted-foreground">Selecione os grupos</p>
+                  <p className="text-xs text-muted-foreground">
+                    {availableGroups.length > 0
+                      ? `${availableGroups.filter(g => !groupSearchFilter || g.name.toLowerCase().includes(groupSearchFilter.toLowerCase())).length} de ${availableGroups.length} grupos`
+                      : "Selecione os grupos"}
+                  </p>
                   <div className="flex gap-1.5">
                     {availableGroups.length > 0 && <Button variant="ghost" size="sm" onClick={selectAllGroups} className="text-xs h-7">{selectedGroupIds.size === availableGroups.length ? "Desmarcar" : "Todos"}</Button>}
                     <Button variant="outline" size="sm" onClick={handleFetchGroups} disabled={groupsLoading || !selectedInstance} className="text-xs h-7 gap-1">
@@ -659,7 +680,9 @@ export default function Prospecting() {
                 ) : availableGroups.length > 0 ? (
                   <ScrollArea className="h-[200px] border rounded-md">
                     <div className="p-1.5 space-y-0.5">
-                      {availableGroups.map((group) => (
+                      {availableGroups
+                        .filter(g => !groupSearchFilter || g.name.toLowerCase().includes(groupSearchFilter.toLowerCase()))
+                        .map((group) => (
                         <div key={group.id} onClick={() => toggleGroupSelection(group.id)}
                           className={`flex items-center gap-2.5 p-2 rounded-md cursor-pointer transition-colors ${selectedGroupIds.has(group.id) ? "bg-primary/10" : "hover:bg-secondary"}`}>
                           <Checkbox checked={selectedGroupIds.has(group.id)} className="pointer-events-none" />
@@ -674,6 +697,54 @@ export default function Prospecting() {
                 ) : !selectedInstance ? (
                   <p className="text-xs text-warning py-3 text-center">Selecione uma instância primeiro</p>
                 ) : null}
+
+                {/* Tags de segmentação */}
+                {selectedGroupIds.size > 0 && (
+                  <div className="border rounded-md p-3 space-y-2 bg-secondary/30">
+                    <Label className="text-xs font-medium flex items-center gap-1.5">
+                      <Tag className="h-3.5 w-3.5" /> Tags de segmentação
+                    </Label>
+                    <p className="text-[10px] text-muted-foreground">Adicione tags para categorizar os leads extraídos (ex: região, interesse, perfil)</p>
+                    <div className="flex gap-1.5">
+                      <Input
+                        placeholder="Ex: São Paulo, Fitness, Mães..."
+                        value={newTag}
+                        onChange={(e) => setNewTag(e.target.value)}
+                        className="text-xs h-7"
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" && newTag.trim()) {
+                            e.preventDefault();
+                            if (!extractTags.includes(newTag.trim())) {
+                              setExtractTags(prev => [...prev, newTag.trim()]);
+                            }
+                            setNewTag("");
+                          }
+                        }}
+                      />
+                      <Button variant="outline" size="sm" className="h-7 text-xs shrink-0" disabled={!newTag.trim()}
+                        onClick={() => {
+                          if (newTag.trim() && !extractTags.includes(newTag.trim())) {
+                            setExtractTags(prev => [...prev, newTag.trim()]);
+                          }
+                          setNewTag("");
+                        }}>
+                        <Plus className="h-3 w-3" />
+                      </Button>
+                    </div>
+                    {extractTags.length > 0 && (
+                      <div className="flex flex-wrap gap-1">
+                        {extractTags.map(tag => (
+                          <Badge key={tag} variant="secondary" className="text-[10px] gap-1 pr-1">
+                            {tag}
+                            <button onClick={() => setExtractTags(prev => prev.filter(t => t !== tag))} className="hover:text-destructive">
+                              <X className="h-2.5 w-2.5" />
+                            </button>
+                          </Badge>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             )}
 
