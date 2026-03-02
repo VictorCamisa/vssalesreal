@@ -205,10 +205,16 @@ export default function Leads() {
 
       await supabase.from("leads_raw").update({ status: "converted" as const }).in("id", selectedLeads.map(l => l.id));
 
-      toast({ title: "Comercial ativado! 🚀", description: `${selectedLeads.length} leads entraram no pipeline de vendas.` });
+      toast({ title: "Comercial ativado! 🚀", description: `${selectedLeads.length} leads entraram no pipeline. Automação de mensagens iniciada.` });
       logActivity({ action: "leads_comercial_ativado", description: `${selectedLeads.length} leads com comercial ativado` });
       setSelected(new Set());
       fetchLeads();
+
+      // Trigger pipeline automation to enrich + send first message
+      supabase.functions.invoke("crm-pipeline-automation").then(({ error }) => {
+        if (error) console.error("Pipeline automation error:", error);
+        else toast({ title: "Automação concluída ✅", description: "Leads estão sendo enriquecidos e contatados." });
+      });
     } catch (error: any) {
       toast({ title: "Erro", description: error.message, variant: "destructive" });
     } finally { setConverting(false); }
