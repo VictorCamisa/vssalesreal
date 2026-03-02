@@ -61,29 +61,41 @@ Deno.serve(async (req) => {
 
     console.log(`Searching: "${searchQuery}" (limit: ${searchLimit}, location: ${locationStr})`);
 
-    // Step 1: Firecrawl SEARCH - find real business pages
-    const searchResponse = await fetch("https://api.firecrawl.dev/v1/search", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${FIRECRAWL_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        query: searchQuery,
-        limit: searchLimit,
-        lang: "pt-br",
-        country: "br",
-        scrapeOptions: {
-          formats: ["markdown"],
-          onlyMainContent: true,
-        },
-      }),
-    });
+    // Step 1: Firecrawl SEARCH - find real business pages (with retry)
+    let searchResponse: Response | null = null;
+    const maxRetries = 3;
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        searchResponse = await fetch("https://api.firecrawl.dev/v1/search", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${FIRECRAWL_API_KEY}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            query: searchQuery,
+            limit: searchLimit,
+            lang: "pt-br",
+            country: "br",
+            scrapeOptions: {
+              formats: ["markdown"],
+              onlyMainContent: true,
+            },
+          }),
+        });
+        if (searchResponse.ok || searchResponse.status < 500) break;
+        const errText = await searchResponse.text();
+        console.error(`Firecrawl attempt ${attempt}/${maxRetries} failed: ${searchResponse.status} ${errText}`);
+        if (attempt < maxRetries) await new Promise(r => setTimeout(r, 2000 * attempt));
+      } catch (fetchErr) {
+        console.error(`Firecrawl fetch error attempt ${attempt}:`, fetchErr);
+        if (attempt < maxRetries) await new Promise(r => setTimeout(r, 2000 * attempt));
+      }
+    }
 
-    if (!searchResponse.ok) {
-      const errText = await searchResponse.text();
-      console.error("Firecrawl search error:", searchResponse.status, errText);
-      return new Response(JSON.stringify({ error: `Erro na busca: ${searchResponse.status}` }), {
+    if (!searchResponse || !searchResponse.ok) {
+      const status = searchResponse?.status || 502;
+      return new Response(JSON.stringify({ error: `Erro na busca após ${maxRetries} tentativas (status: ${status}). Tente novamente em alguns instantes.` }), {
         status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
