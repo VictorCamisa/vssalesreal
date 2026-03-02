@@ -196,6 +196,30 @@ Deno.serve(async (req) => {
       }
 
       // =========================================
+      // STAGE 1.5: Reset stuck "processing" opportunities (>5 min old)
+      // =========================================
+      if (canAutoEnrich && enrichedStageId) {
+        await supabase
+          .from("opportunities")
+          .update({ automation_status: "pending_enrichment" })
+          .eq("org_id", orgId)
+          .eq("stage_id", enrichedStageId)
+          .eq("automation_status", "processing")
+          .lt("updated_at", new Date(Date.now() - 5 * 60 * 1000).toISOString());
+      }
+
+      // Also reset stuck "enriched_no_send" and "enrichment_failed" for retry
+      if (canAutoEnrich && enrichedStageId) {
+        await supabase
+          .from("opportunities")
+          .update({ automation_status: "pending_enrichment" })
+          .eq("org_id", orgId)
+          .eq("stage_id", enrichedStageId)
+          .in("automation_status", ["enriched_no_send", "enrichment_failed"])
+          .lt("updated_at", new Date(Date.now() - 30 * 60 * 1000).toISOString());
+      }
+
+      // =========================================
       // STAGE 2: Enriquecidas → Contato Feito
       // Deep enrich + generate message + send WhatsApp
       // =========================================
