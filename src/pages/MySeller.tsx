@@ -354,12 +354,13 @@ Agendamento: [AGENDAR:DATA:HORA:NOME], [CANCELAR:TEL], [VERIFICAR:DATA]
 Responda em português brasileiro.${companyCtx}${knowledgeCtx}`;
   }
 
-  // Custom prompt overrides — inject as additional instructions, don't discard system_prompt
+  // Strict isolation: audience-specific prompts FULLY REPLACE the base prompt
+  // and use the matching audience context (b2b_ or b2c_ prefixed fields)
   const cfgPrompts = configData || {};
   if (audience === "b2b" && cfgPrompts.prompt_b2b) {
-    systemPrompt += `\n\n--- PROMPT B2B ESPECÍFICO ---\n${cfgPrompts.prompt_b2b}`;
+    systemPrompt = cfgPrompts.prompt_b2b + behaviorRules + buildCtx(company, "b2b") + knowledgeCtx;
   } else if (audience === "b2c" && cfgPrompts.prompt_b2c_organic) {
-    systemPrompt += `\n\n--- PROMPT B2C ESPECÍFICO ---\n${cfgPrompts.prompt_b2c_organic}`;
+    systemPrompt = cfgPrompts.prompt_b2c_organic + behaviorRules + buildCtx(company, "b2c") + knowledgeCtx;
   }
 
   return systemPrompt;
