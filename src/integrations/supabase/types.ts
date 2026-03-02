@@ -960,6 +960,7 @@ export type Database = {
           created_at: string
           external_mapping: Json | null
           form_token: string
+          handoff_auto_stages: string[] | null
           handoff_number: string | null
           id: string
           name: string
@@ -970,6 +971,7 @@ export type Database = {
           created_at?: string
           external_mapping?: Json | null
           form_token?: string
+          handoff_auto_stages?: string[] | null
           handoff_number?: string | null
           id?: string
           name: string
@@ -980,6 +982,7 @@ export type Database = {
           created_at?: string
           external_mapping?: Json | null
           form_token?: string
+          handoff_auto_stages?: string[] | null
           handoff_number?: string | null
           id?: string
           name?: string
