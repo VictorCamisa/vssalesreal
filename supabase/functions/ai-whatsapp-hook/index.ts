@@ -40,16 +40,29 @@ serve(async (req) => {
     // Helper: save message to chat_messages table
     const saveMessage = async (orgId: string, instName: string, jid: string, fromMe: boolean, text: string, pName?: string, msgId?: string) => {
       try {
-        await supabaseAdmin.from("chat_messages").upsert({
-          org_id: orgId,
-          instance_name: instName,
-          remote_jid: jid,
-          from_me: fromMe,
-          message_text: text,
-          push_name: pName || null,
-          message_id: msgId || null,
-          timestamp: new Date().toISOString(),
-        }, { onConflict: "instance_name,message_id", ignoreDuplicates: true });
+        if (msgId) {
+          await supabaseAdmin.from("chat_messages").upsert({
+            org_id: orgId,
+            instance_name: instName,
+            remote_jid: jid,
+            from_me: fromMe,
+            message_text: text,
+            push_name: pName || null,
+            message_id: msgId,
+            timestamp: new Date().toISOString(),
+          }, { onConflict: "instance_name,message_id", ignoreDuplicates: true });
+        } else {
+          await supabaseAdmin.from("chat_messages").insert({
+            org_id: orgId,
+            instance_name: instName,
+            remote_jid: jid,
+            from_me: fromMe,
+            message_text: text,
+            push_name: pName || null,
+            message_id: null,
+            timestamp: new Date().toISOString(),
+          });
+        }
       } catch (e) { console.error("saveMessage error:", e); }
     };
 
