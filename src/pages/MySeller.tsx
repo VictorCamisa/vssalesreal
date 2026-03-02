@@ -611,14 +611,23 @@ export default function MySeller() {
     [chatInput, chatMessages, chatLoading],
   );
 
-  // ---- Final prompt preview (memoized) ----
-  const finalPromptPreview = useMemo(() => {
-    // Only use chatbot configs for preview, not broadcast configs
+  // ---- Final prompt editor state ----
+  const [finalPromptText, setFinalPromptText] = useState("");
+  const [finalPromptDirty, setFinalPromptDirty] = useState(false);
+
+  // Auto-generate prompt when deps change (only if user hasn't manually edited)
+  const generatedPrompt = useMemo(() => {
     const mainCfg = aiConfigs.find(c => c.enabled && c.config_type === "chatbot") 
       || aiConfigs.find(c => c.config_type === "chatbot") 
       || null;
     return buildFinalPromptPreview(mainCfg, company, docs, previewAudience);
   }, [aiConfigs, company, docs, previewAudience]);
+
+  useEffect(() => {
+    if (!finalPromptDirty) {
+      setFinalPromptText(generatedPrompt);
+    }
+  }, [generatedPrompt, finalPromptDirty]);
 
   if (loading) {
     return <div className="flex min-h-[60vh] items-center justify-center"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div>;
@@ -1396,7 +1405,7 @@ export default function MySeller() {
           </CollapsibleContent>
         </Collapsible>
 
-        {/* ====== FINAL PROMPT PREVIEW ====== */}
+        {/* ====== FINAL PROMPT EDITOR ====== */}
         <Collapsible open={openSections["final_prompt"]} onOpenChange={() => toggleSection("final_prompt")}>
           <CollapsibleTrigger asChild>
             <button className="w-full glass-card p-4 flex items-center justify-between hover:border-primary/30 transition-colors">
@@ -1404,35 +1413,73 @@ export default function MySeller() {
                 <div className="h-9 w-9 rounded-lg bg-chart-1/15 flex items-center justify-center"><Eye className="h-4 w-4 text-chart-1" /></div>
                 <div className="text-left">
                   <p className="text-sm font-semibold">Prompt Final do Agente</p>
-                  <p className="text-[11px] text-muted-foreground">Visualize exatamente o que a IA recebe como instrução</p>
+                  <p className="text-[11px] text-muted-foreground">Edite diretamente o prompt que a IA recebe como instrução</p>
                 </div>
               </div>
               {openSections["final_prompt"] ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
             </button>
           </CollapsibleTrigger>
           <CollapsibleContent className="glass-card border-t-0 rounded-t-none p-4 space-y-3 animate-fade-in">
-            <div className="flex items-center gap-2">
-              <Label className="text-xs text-muted-foreground">Simular audiência:</Label>
-              <div className="flex gap-1 p-0.5 bg-secondary rounded-lg">
-                {([null, "b2b", "b2c"] as const).map(aud => (
-                  <button
-                    key={aud || "auto"}
-                    onClick={() => setPreviewAudience(aud as any)}
-                    className={`text-xs py-1 px-2.5 rounded-md transition-colors ${previewAudience === aud ? "bg-card shadow-sm font-medium" : "text-muted-foreground hover:text-foreground"}`}
-                  >
-                    {aud === null ? "Auto" : aud.toUpperCase()}
-                  </button>
-                ))}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Label className="text-xs text-muted-foreground">Simular audiência:</Label>
+                <div className="flex gap-1 p-0.5 bg-secondary rounded-lg">
+                  {([null, "b2b", "b2c"] as const).map(aud => (
+                    <button
+                      key={aud || "auto"}
+                      onClick={() => setPreviewAudience(aud as any)}
+                      className={`text-xs py-1 px-2.5 rounded-md transition-colors ${previewAudience === aud ? "bg-card shadow-sm font-medium" : "text-muted-foreground hover:text-foreground"}`}
+                    >
+                      {aud === null ? "Auto" : aud.toUpperCase()}
+                    </button>
+                  ))}
+                </div>
               </div>
+              <Button
+                size="sm"
+                variant="outline"
+                className="gap-1 text-xs"
+                disabled={saving === "final-prompt"}
+                onClick={async () => {
+                  const mainCfg = aiConfigs.find(c => c.enabled && c.config_type === "chatbot") || aiConfigs.find(c => c.config_type === "chatbot");
+                  if (!mainCfg) return;
+                  setSaving("final-prompt");
+                  const { error } = await supabase.from("ai_configs").update({
+                    system_prompt: finalPromptText,
+                  }).eq("id", mainCfg.id);
+                  if (error) toast({ title: "Erro", description: error.message, variant: "destructive" });
+                  else {
+                    updateAiConfig(mainCfg.id, "system_prompt", finalPromptText);
+                    setFinalPromptDirty(false);
+                    toast({ title: "Prompt final salvo!" });
+                  }
+                  setSaving(null);
+                }}
+              >
+                {saving === "final-prompt" ? <Loader2 className="h-3 w-3 animate-spin" /> : <Save className="h-3 w-3" />}
+                Salvar Prompt
+              </Button>
             </div>
-            <div className="p-3 rounded-lg bg-secondary/40 border max-h-[400px] overflow-auto">
-              <pre className="text-[11px] font-mono whitespace-pre-wrap text-muted-foreground leading-relaxed">
-                {finalPromptPreview}
-              </pre>
+            <Textarea
+              value={finalPromptText}
+              onChange={(e) => {
+                setFinalPromptText(e.target.value);
+                setFinalPromptDirty(true);
+              }}
+              rows={16}
+              className="text-[11px] font-mono leading-relaxed resize-y bg-secondary/40"
+            />
+            <div className="flex items-center justify-between">
+              <p className="text-[10px] text-muted-foreground flex items-center gap-1">
+                <Eye className="h-3 w-3" /> {finalPromptText.length} caracteres
+                {finalPromptDirty && <Badge variant="outline" className="text-[9px] ml-1">editado</Badge>}
+              </p>
+              {finalPromptDirty && (
+                <Button variant="ghost" size="sm" className="text-[10px] h-6 gap-1" onClick={() => { setFinalPromptText(generatedPrompt); setFinalPromptDirty(false); }}>
+                  <RefreshCw className="h-3 w-3" /> Restaurar auto-gerado
+                </Button>
+              )}
             </div>
-            <p className="text-[10px] text-muted-foreground flex items-center gap-1">
-              <Eye className="h-3 w-3" /> {finalPromptPreview.length} caracteres · Somente leitura — edite nos Prompts por Modelo ou Agente IA acima
-            </p>
           </CollapsibleContent>
         </Collapsible>
 
