@@ -171,37 +171,52 @@ serve(async (req) => {
       .eq("org_id", orgId)
       .maybeSingle();
 
-    let companyContext = "";
-    if (companyProfile) {
-      const cp = companyProfile as any;
+    // Helper: build company context STRICTLY for a given audience (no cross-model data)
+    const buildCompanyContext = (cp: any, audience: string | null, strict = false): string => {
       const parts: string[] = [];
       if (cp.company_name) parts.push(`Empresa: ${cp.company_name}`);
       if (cp.segment) parts.push(`Segmento: ${cp.segment}`);
       if (cp.description) parts.push(`Sobre: ${cp.description}`);
 
-      // Use B2B/B2C-specific data if audience is detected, otherwise use general
-      const audience = detectedAudience; // "b2b", "b2c", or null
       const prefix = audience === "b2b" || audience === "b2c" ? audience : null;
 
-      const targetAudience = (prefix && cp[`${prefix}_target_audience`]) || cp.target_audience;
-      const differentials = (prefix && cp[`${prefix}_differentials`]) || cp.differentials;
-      const toneOfVoice = (prefix && cp[`${prefix}_tone_of_voice`]) || cp.tone_of_voice;
-      const salesProcess = (prefix && cp[`${prefix}_sales_process`]) || cp.sales_process;
-      const products = (prefix && cp[`${prefix}_products_services`]?.length > 0 ? cp[`${prefix}_products_services`] : cp.products_services) || [];
-      const faqs = (prefix && cp[`${prefix}_objections_faq`]?.length > 0 ? cp[`${prefix}_objections_faq`] : cp.objections_faq) || [];
+      // When strict=true, use ONLY model-specific fields, NO fallback to general
+      const targetAudience = prefix ? cp[`${prefix}_target_audience`] : cp.target_audience;
+      const differentials = prefix ? cp[`${prefix}_differentials`] : cp.differentials;
+      const toneOfVoice = prefix ? cp[`${prefix}_tone_of_voice`] : cp.tone_of_voice;
+      const salesProcess = prefix ? cp[`${prefix}_sales_process`] : cp.sales_process;
+      const products = prefix 
+        ? (cp[`${prefix}_products_services`] || [])
+        : (cp.products_services || []);
+      const faqs = prefix
+        ? (cp[`${prefix}_objections_faq`] || [])
+        : (cp.objections_faq || []);
 
-      if (targetAudience) parts.push(`Público-alvo: ${targetAudience}`);
-      if (differentials) parts.push(`Diferenciais: ${differentials}`);
-      if (toneOfVoice) parts.push(`Tom de voz: ${toneOfVoice}`);
-      if (salesProcess) parts.push(`Processo: ${salesProcess}`);
-      if (products.length > 0) {
-        parts.push("Produtos:\n" + products.map((p: any) => `- ${p.name}${p.price ? ` (${p.price})` : ""}: ${p.description}`).join("\n"));
+      // Fallback to general ONLY when not strict
+      const ta = targetAudience || (!strict ? cp.target_audience : "");
+      const df = differentials || (!strict ? cp.differentials : "");
+      const tv = toneOfVoice || (!strict ? cp.tone_of_voice : "");
+      const sp = salesProcess || (!strict ? cp.sales_process : "");
+      const pd = products.length > 0 ? products : (!strict ? (cp.products_services || []) : []);
+      const fq = faqs.length > 0 ? faqs : (!strict ? (cp.objections_faq || []) : []);
+
+      if (ta) parts.push(`Público-alvo: ${ta}`);
+      if (df) parts.push(`Diferenciais: ${df}`);
+      if (tv) parts.push(`Tom de voz: ${tv}`);
+      if (sp) parts.push(`Processo: ${sp}`);
+      if (pd.length > 0) {
+        parts.push("Produtos:\n" + pd.map((p: any) => `- ${p.name}${p.price ? ` (${p.price})` : ""}: ${p.description}`).join("\n"));
       }
-      if (faqs.length > 0) {
-        parts.push("Objeções:\n" + faqs.map((f: any) => `Q: ${f.question}\nR: ${f.answer}`).join("\n"));
+      if (fq.length > 0) {
+        parts.push("Objeções:\n" + fq.map((f: any) => `Q: ${f.question}\nR: ${f.answer}`).join("\n"));
       }
-      if (prefix) parts.push(`\n[Perfil ${prefix.toUpperCase()} ativo]`);
-      companyContext = `\n\n--- EMPRESA ---\n${parts.join("\n")}\n--- FIM ---`;
+      if (prefix) parts.push(`\n[Modelo ${prefix.toUpperCase()} EXCLUSIVO — NÃO use informações de outro modelo]`);
+      return `\n\n--- EMPRESA ---\n${parts.join("\n")}\n--- FIM ---`;
+    };
+
+    let companyContext = "";
+    if (companyProfile) {
+      companyContext = buildCompanyContext(companyProfile as any, detectedAudience, false);
     }
 
     // Smart knowledge retrieval using keywords
@@ -417,16 +432,16 @@ Regras:
     }
 
     // --- Inject model-specific custom prompts from config ---
+    // When a custom prompt is set, it REPLACES the entire system prompt with strict model isolation
     const cfgPrompts = configData || {};
-    // Determine which prompt to use based on context (will be refined after broadcast detection)
-    // For organic leads: b2b → prompt_b2b, b2c → prompt_b2c_organic
-    // For broadcast leads: prompt_b2c_broadcast (applied later after broadcast detection)
     if (detectedAudience === "b2b" && cfgPrompts.prompt_b2b) {
-      systemPrompt = cfgPrompts.prompt_b2b + "\n\n" + systemPrompt;
-      console.log("Injected custom B2B prompt");
+      const strictCompanyCtx = companyProfile ? buildCompanyContext(companyProfile as any, "b2b", true) : "";
+      systemPrompt = cfgPrompts.prompt_b2b + strictCompanyCtx + knowledgeContext;
+      console.log("REPLACED system prompt with strict B2B custom prompt");
     } else if (detectedAudience === "b2c" && cfgPrompts.prompt_b2c_organic) {
-      systemPrompt = cfgPrompts.prompt_b2c_organic + "\n\n" + systemPrompt;
-      console.log("Injected custom B2C organic prompt");
+      const strictCompanyCtx = companyProfile ? buildCompanyContext(companyProfile as any, "b2c", true) : "";
+      systemPrompt = cfgPrompts.prompt_b2c_organic + strictCompanyCtx + knowledgeContext;
+      console.log("REPLACED system prompt with strict B2C organic prompt");
     }
 
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
@@ -471,18 +486,21 @@ Regras:
         const bcast = leadBroadcast.broadcast as any;
         console.log(`Broadcast context found: audience_type=${bcast?.audience_type}, campaign="${bcast?.name}", ai_config_id=${bcast?.ai_config_id}`);
 
-        // Inject custom B2C broadcast prompt if configured
+        // Inject custom prompt with STRICT model isolation for broadcast responses
         const broadcastAudienceType = bcast?.audience_type || "b2c";
+        const strictBcastCtx = companyProfile ? buildCompanyContext(companyProfile as any, broadcastAudienceType, true) : "";
         if (broadcastAudienceType === "b2c" && cfgPrompts.prompt_b2c_broadcast) {
           const campaignCtx = `\n\nCONTEXTO DA CAMPANHA: Conversa iniciada pelo disparo "${bcast.name || ""}". ${bcast.description ? `Objetivo: ${bcast.description}.` : ""}
-O lead está respondendo à mensagem acima. Continue naturalmente. NÃO repita a mensagem já enviada.`;
-          conversationMessages[0].content = cfgPrompts.prompt_b2c_broadcast + campaignCtx + companyContext + knowledgeContext;
-          console.log("Using custom B2C broadcast prompt from config");
+O lead está respondendo à mensagem acima. Continue naturalmente. NÃO repita a mensagem já enviada.
+IMPORTANTE: Este é um lead B2C (consumidor final). NÃO mencione termos B2B como PDV, parceria comercial, reposição, volume comercial.`;
+          conversationMessages[0].content = cfgPrompts.prompt_b2c_broadcast + campaignCtx + strictBcastCtx + knowledgeContext;
+          console.log("REPLACED with strict B2C broadcast prompt");
         } else if (broadcastAudienceType === "b2b" && cfgPrompts.prompt_b2b) {
           const campaignCtx = `\n\nCONTEXTO DA CAMPANHA: Conversa iniciada pelo disparo "${bcast.name || ""}". ${bcast.description ? `Objetivo: ${bcast.description}.` : ""}
-O lead está respondendo à mensagem acima. Continue naturalmente. NÃO repita a mensagem já enviada.`;
-          conversationMessages[0].content = cfgPrompts.prompt_b2b + campaignCtx + companyContext + knowledgeContext;
-          console.log("Using custom B2B prompt for broadcast response");
+O lead está respondendo à mensagem acima. Continue naturalmente. NÃO repita a mensagem já enviada.
+IMPORTANTE: Este é um lead B2B (empresa/negócio). NÃO mencione termos B2C como consumo pessoal, festa, churrasco.`;
+          conversationMessages[0].content = cfgPrompts.prompt_b2b + campaignCtx + strictBcastCtx + knowledgeContext;
+          console.log("REPLACED with strict B2B broadcast prompt");
         } else if (bcast?.ai_config_id) {
           // Fallback: use the broadcast's dedicated AI config
           const { data: broadcastAiConfig } = await supabaseAdmin
