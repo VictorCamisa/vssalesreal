@@ -797,7 +797,7 @@ async function sendWhatsAppMessage(
     const remoteJid = `${cleanPhone}@s.whatsapp.net`;
     const { data: existing } = await supabase
       .from("conversation_tracker")
-      .select("id")
+      .select("id, detected_audience")
       .eq("org_id", orgId)
       .eq("instance_name", instanceName)
       .eq("remote_jid", remoteJid)
@@ -811,12 +811,30 @@ async function sendWhatsAppMessage(
         last_customer_msg_at: new Date().toISOString(),
         last_bot_msg_at: new Date().toISOString(),
         customer_msg_count: 0,
+        detected_audience: "b2b",
+        pipeline_stage_key: "contacted",
       });
     } else {
       await supabase
         .from("conversation_tracker")
-        .update({ last_bot_msg_at: new Date().toISOString() })
+        .update({ 
+          last_bot_msg_at: new Date().toISOString(),
+          detected_audience: existing.detected_audience || "b2b",
+          pipeline_stage_key: "contacted",
+        })
         .eq("id", existing.id);
+    }
+
+    // Save outgoing message to chat_messages
+    for (const part of finalParts) {
+      await supabase.from("chat_messages").insert({
+        org_id: orgId,
+        instance_name: instanceName,
+        remote_jid: remoteJid,
+        from_me: true,
+        message_text: part,
+        timestamp: new Date().toISOString(),
+      }).then(() => {}).catch(() => {});
     }
 
     return true;
