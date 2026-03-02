@@ -471,32 +471,26 @@ export default function MySeller() {
             </p>
           </div>
           {/* B2B/B2C Toggle */}
-          {company?.business_models && company.business_models.length > 0 && (
-            <div className="flex gap-1 p-0.5 bg-secondary rounded-lg">
-              <button
-                onClick={() => setViewMode("general")}
-                className={`text-xs py-1.5 px-3 rounded-md transition-colors ${viewMode === "general" ? "bg-card shadow-sm font-medium" : "text-muted-foreground hover:text-foreground"}`}
-              >
-                Geral
-              </button>
-              {company.business_models.includes("b2b") && (
-                <button
-                  onClick={() => setViewMode("b2b")}
-                  className={`text-xs py-1.5 px-3 rounded-md transition-colors flex items-center gap-1 ${viewMode === "b2b" ? "bg-card shadow-sm font-medium" : "text-muted-foreground hover:text-foreground"}`}
-                >
-                  <Briefcase className="h-3 w-3" /> B2B
-                </button>
-              )}
-              {company.business_models.includes("b2c") && (
-                <button
-                  onClick={() => setViewMode("b2c")}
-                  className={`text-xs py-1.5 px-3 rounded-md transition-colors flex items-center gap-1 ${viewMode === "b2c" ? "bg-card shadow-sm font-medium" : "text-muted-foreground hover:text-foreground"}`}
-                >
-                  <ShoppingBag className="h-3 w-3" /> B2C
-                </button>
-              )}
-            </div>
-          )}
+          <div className="flex gap-1 p-0.5 bg-secondary rounded-lg">
+            <button
+              onClick={() => setViewMode("general")}
+              className={`text-xs py-1.5 px-3 rounded-md transition-colors ${viewMode === "general" ? "bg-card shadow-sm font-medium" : "text-muted-foreground hover:text-foreground"}`}
+            >
+              Geral
+            </button>
+            <button
+              onClick={() => setViewMode("b2b")}
+              className={`text-xs py-1.5 px-3 rounded-md transition-colors flex items-center gap-1 ${viewMode === "b2b" ? "bg-card shadow-sm font-medium" : "text-muted-foreground hover:text-foreground"} ${!company?.business_models?.includes("b2b") ? "opacity-50" : ""}`}
+            >
+              <Briefcase className="h-3 w-3" /> B2B
+            </button>
+            <button
+              onClick={() => setViewMode("b2c")}
+              className={`text-xs py-1.5 px-3 rounded-md transition-colors flex items-center gap-1 ${viewMode === "b2c" ? "bg-card shadow-sm font-medium" : "text-muted-foreground hover:text-foreground"} ${!company?.business_models?.includes("b2c") ? "opacity-50" : ""}`}
+            >
+              <ShoppingBag className="h-3 w-3" /> B2C
+            </button>
+          </div>
         </div>
       </div>
 
