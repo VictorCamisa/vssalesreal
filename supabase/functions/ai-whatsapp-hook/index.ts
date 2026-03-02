@@ -13,7 +13,6 @@ serve(async (req) => {
   try {
     const body = await req.json();
 
-    // Evolution API webhook payload
     const event = body.event;
     if (event !== "messages.upsert") {
       return new Response(JSON.stringify({ ignored: true }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
@@ -67,8 +66,7 @@ serve(async (req) => {
       });
     }
 
-    // Check if chatbot is enabled for this instance — support smart routing
-    // Smart agents use instance_name like "INSTANCE__role", so we match both exact and prefixed names
+    // Check if chatbot is enabled for this instance
     const { data: aiConfigs } = await supabaseAdmin
       .from("ai_configs")
       .select("*")
@@ -85,13 +83,21 @@ serve(async (req) => {
     }
     console.log(`Found ${aiConfigs.length} active chatbot config(s) for instance "${instanceName}"`);
 
-    // Determine if smart routing is active
     const smartConfig = aiConfigs.find((c: any) => (c.config as any)?.routing_mode === "smart");
     const aiConfig = smartConfig || aiConfigs[0];
     const isSmartRouting = !!(smartConfig && (smartConfig.config as any)?.routing_mode === "smart");
 
-    // Track conversation for follow-up system
-    // When customer sends a message, reset follow-up state (they responded)
+    // ---- Read behavior settings ----
+    const configData = aiConfig.config as any || {};
+    const behavior = {
+      max_messages_per_conversation: configData.behavior?.max_messages_per_conversation ?? 15,
+      response_delay_seconds: configData.behavior?.response_delay_seconds ?? 3,
+      client_wait_timeout_minutes: configData.behavior?.client_wait_timeout_minutes ?? 30,
+      emoji_usage: configData.behavior?.emoji_usage ?? "moderate",
+      context_window: configData.behavior?.context_window ?? 10,
+    };
+
+    // Track conversation
     const { data: existingConv } = await supabaseAdmin
       .from("conversation_tracker")
       .select("id, customer_msg_count, detected_audience")
@@ -102,11 +108,11 @@ serve(async (req) => {
 
     let customerMsgCount = 0;
     let detectedAudience: string | null = null;
+    let botMsgCount = 0;
 
     if (existingConv) {
-      customerMsgCount = (existingConv.customer_msg_count || 0) + 1; // +1 because we're about to increment
+      customerMsgCount = (existingConv.customer_msg_count || 0) + 1;
       detectedAudience = (existingConv as any).detected_audience || null;
-      // Increment customer message count for pipeline automation
       await supabaseAdmin.rpc("increment_customer_msg_count", { p_conv_id: existingConv.id });
       await supabaseAdmin
         .from("conversation_tracker")
@@ -118,9 +124,11 @@ serve(async (req) => {
           ai_config_id: aiConfig.id,
         })
         .eq("id", existingConv.id);
+      
+      // Estimate bot message count (customer messages ~ bot messages in 1:1 conversation)
+      botMsgCount = customerMsgCount;
     } else {
-      customerMsgCount = 1; // First message ever
-      // Try to find matching lead by phone
+      customerMsgCount = 1;
       const phone = remoteJid.replace("@s.whatsapp.net", "");
       const { data: matchedLead } = await supabaseAdmin
         .from("leads_raw")
@@ -140,6 +148,20 @@ serve(async (req) => {
           ai_config_id: aiConfig.id,
           lead_id: matchedLead?.id || null,
         });
+    }
+
+    // ---- Check max messages limit ----
+    if (botMsgCount >= behavior.max_messages_per_conversation) {
+      console.log(`Max messages reached (${botMsgCount}/${behavior.max_messages_per_conversation}). Stopping auto-reply.`);
+      return new Response(JSON.stringify({ ignored: true, reason: "max_messages_reached" }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // ---- Apply response delay ----
+    if (behavior.response_delay_seconds > 0) {
+      const delayMs = behavior.response_delay_seconds * 1000;
+      await new Promise(resolve => setTimeout(resolve, delayMs));
     }
 
     // Check business hours
@@ -171,7 +193,6 @@ serve(async (req) => {
       .eq("org_id", orgId)
       .maybeSingle();
 
-    // Helper: build company context STRICTLY for a given audience (no cross-model data)
     const buildCompanyContext = (cp: any, audience: string | null, strict = false): string => {
       const parts: string[] = [];
       if (cp.company_name) parts.push(`Empresa: ${cp.company_name}`);
@@ -180,7 +201,6 @@ serve(async (req) => {
 
       const prefix = audience === "b2b" || audience === "b2c" ? audience : null;
 
-      // When strict=true, use ONLY model-specific fields, NO fallback to general
       const targetAudience = prefix ? cp[`${prefix}_target_audience`] : cp.target_audience;
       const differentials = prefix ? cp[`${prefix}_differentials`] : cp.differentials;
       const toneOfVoice = prefix ? cp[`${prefix}_tone_of_voice`] : cp.tone_of_voice;
@@ -192,7 +212,6 @@ serve(async (req) => {
         ? (cp[`${prefix}_objections_faq`] || [])
         : (cp.objections_faq || []);
 
-      // Fallback to general ONLY when not strict
       const ta = targetAudience || (!strict ? cp.target_audience : "");
       const df = differentials || (!strict ? cp.differentials : "");
       const tv = toneOfVoice || (!strict ? cp.tone_of_voice : "");
@@ -219,7 +238,7 @@ serve(async (req) => {
       companyContext = buildCompanyContext(companyProfile as any, detectedAudience, false);
     }
 
-    // Smart knowledge retrieval using keywords
+    // Smart knowledge retrieval
     const queryWords = messageText.toLowerCase().split(/\W+/).filter((w: string) => w.length > 3);
 
     const { data: kbDocs } = await supabaseAdmin
@@ -275,15 +294,24 @@ serve(async (req) => {
       }
     }
 
-    // Build system prompt from modular config or fallback to legacy prompt
-    const configData = aiConfig.config as any;
+    // ---- Build behavior rules string ----
+    const emojiMap: Record<string, string> = {
+      none: "NÃO use emojis em nenhuma mensagem",
+      minimal: "Use emojis com muita moderação (1 a cada 3 mensagens no máximo)",
+      moderate: "Use emojis com moderação (máximo 1 por mensagem/bloco)",
+      frequent: "Use emojis livremente (2+ por mensagem quando natural)",
+    };
+    const behaviorRules = `\nCONFIGURAÇÕES DE COMPORTAMENTO:
+- ${emojiMap[behavior.emoji_usage] || emojiMap.moderate}
+- Máximo de mensagens nesta conversa: ${behavior.max_messages_per_conversation} (após isso, encaminhe para atendente humano)
+- Você já enviou ~${botMsgCount} mensagens nesta conversa`;
+
+    // Build system prompt
     const modularCfg = configData?.modular;
     let systemPrompt = "";
 
-    // Smart routing: enrich prompt with conversation history for context detection
     let smartRoutingContext = "";
     if (isSmartRouting) {
-      // Fetch recent conversation history for better persona detection
       const { data: convTracker } = await supabaseAdmin
         .from("conversation_tracker")
         .select("customer_msg_count, pipeline_stage_key, push_name, last_customer_msg_at")
@@ -303,34 +331,30 @@ serve(async (req) => {
     }
 
     if (modularCfg && !modularCfg.use_custom_prompt) {
-      // --- Build prompt from modular sections ---
       const formalityLabels = ["muito informal e descontraído", "informal e amigável", "neutro e equilibrado", "formal e profissional", "muito formal e corporativo"];
       const energyLabels = ["calmo e tranquilo", "sereno", "equilibrado", "animado e positivo", "muito energético e entusiasmado"];
       const formalityIdx = Math.round((modularCfg.tone?.formality || 30) / 25);
       const energyIdx = Math.round((modularCfg.tone?.energy || 60) / 25);
-      const emojiMap: Record<string, string> = {
-        none: "NÃO use emojis em nenhuma mensagem",
-        minimal: "Use emojis com muita moderação (1 a cada 3 mensagens no máximo)",
-        moderate: "Use emojis com moderação (máximo 1 por mensagem/bloco)",
-        frequent: "Use emojis livremente (2+ por mensagem quando natural)",
-      };
 
       const parts: string[] = [];
       parts.push(`Você é um assistente virtual via WhatsApp para uma empresa.`);
       parts.push(`${aiConfig.system_prompt || "Seja educado, prestativo e profissional."}`);
 
-      // Anti-hallucination rules
+      // Anti-hallucination
       parts.push(`\nREGRAS ANTI-ALUCINAÇÃO (MÁXIMA PRIORIDADE):`);
-      parts.push(`- NUNCA invente informações sobre o lead (negócio, Instagram, localização, nome de empresa, etc.)`);
-      parts.push(`- Se você NÃO tem dados sobre o lead, NÃO mencione nada específico sobre ele`);
-      parts.push(`- Quando o lead manda apenas "oi" ou "olá", responda com uma saudação simples e se apresente`);
-      parts.push(`- Use APENAS informações que foram EXPLICITAMENTE fornecidas no contexto abaixo`);
+      parts.push(`- NUNCA invente informações sobre o lead`);
+      parts.push(`- Se você NÃO tem dados sobre o lead, NÃO mencione nada específico`);
+      parts.push(`- Use APENAS informações EXPLICITAMENTE fornecidas no contexto`);
       parts.push(`- É melhor ser genérico do que inventar qualquer dado`);
+
+      // Behavior
+      parts.push(behaviorRules);
+
       // Tone
       parts.push(`\nTOM DE VOZ:`);
       parts.push(`- Seja ${formalityLabels[formalityIdx]} no tom`);
       parts.push(`- Energia: ${energyLabels[energyIdx]}`);
-      parts.push(`- ${emojiMap[modularCfg.tone?.emoji_usage || "moderate"]}`);
+      parts.push(`- ${emojiMap[modularCfg.tone?.emoji_usage || behavior.emoji_usage]}`);
       if (modularCfg.tone?.custom_instructions) parts.push(`- ${modularCfg.tone.custom_instructions}`);
 
       // B2B/B2C context
@@ -356,13 +380,11 @@ serve(async (req) => {
         if (modularCfg.b2c_context?.emotional_triggers) parts.push(`- Se B2C: use gatilhos ${modularCfg.b2c_context.emotional_triggers}`);
       }
 
-      // Golden rules
       if (modularCfg.golden_rules?.length) {
         parts.push(`\nREGRAS DE OURO:`);
         modularCfg.golden_rules.forEach((r: string, i: number) => { if (r.trim()) parts.push(`${i + 1}. ${r}`); });
       }
 
-      // Objections
       if (modularCfg.objections?.length) {
         parts.push(`\nCONTORNO DE OBJEÇÕES:`);
         modularCfg.objections.forEach((o: any) => {
@@ -370,13 +392,11 @@ serve(async (req) => {
         });
       }
 
-      // CTAs
       if (modularCfg.ctas?.length) {
         parts.push(`\nCTAs PREFERIDOS (use quando apropriado):`);
         modularCfg.ctas.forEach((c: any) => { if (c.label?.trim()) parts.push(`- ${c.label}: "${c.text}"`); });
       }
 
-      // Block config
       const blocks = modularCfg.blocks || { max_blocks: 4, max_chars_per_block: 200, max_emojis_per_block: 1 };
       parts.push(`\nFORMATO DE RESPOSTA (CRÍTICO):`);
       parts.push(`- Divida SEMPRE sua resposta em blocos CURTOS de no máximo ${blocks.max_chars_per_block} caracteres cada`);
@@ -385,7 +405,6 @@ serve(async (req) => {
       parts.push(`- Máximo ${blocks.max_emojis_per_block} emoji(s) por bloco`);
       parts.push(`- Cada bloco deve ser uma mensagem independente e natural`);
 
-      // Scheduling capability
       parts.push(`\nCAPACIDADE DE AGENDAMENTO:`);
       parts.push(`Quando o lead quiser agendar, pergunte data e horário. Com data e hora, inclua: [AGENDAR:YYYY-MM-DD:HH:MM:NOME_DO_LEAD]`);
       parts.push(`Para cancelar: [CANCELAR:TELEFONE_DO_LEAD]. Para verificar agenda: [VERIFICAR:YYYY-MM-DD]`);
@@ -395,27 +414,25 @@ serve(async (req) => {
 
       systemPrompt = parts.join("\n") + companyContext + knowledgeContext + smartRoutingContext;
     } else if (modularCfg?.use_custom_prompt && modularCfg?.custom_base_prompt) {
-      // Custom manual prompt
-      systemPrompt = modularCfg.custom_base_prompt + companyContext + knowledgeContext + smartRoutingContext;
+      systemPrompt = modularCfg.custom_base_prompt + behaviorRules + companyContext + knowledgeContext + smartRoutingContext;
     } else {
-      // Legacy fallback
       systemPrompt = `Você é um assistente virtual via WhatsApp para uma empresa.
 ${aiConfig.system_prompt || "Seja educado, prestativo e profissional."}
 
 REGRAS ANTI-ALUCINAÇÃO (MÁXIMA PRIORIDADE):
-- NUNCA invente informações sobre o lead (negócio, Instagram, localização, nome de empresa, etc.)
-- Se você NÃO tem dados sobre o lead, NÃO mencione nada específico sobre ele
-- Quando o lead manda apenas "oi" ou "olá", responda com uma saudação simples e se apresente
-- Use APENAS informações que foram EXPLICITAMENTE fornecidas no contexto
+- NUNCA invente informações sobre o lead
+- Se você NÃO tem dados sobre o lead, NÃO mencione nada específico
+- Use APENAS informações EXPLICITAMENTE fornecidas no contexto
 - É melhor ser genérico do que inventar qualquer dado
+${behaviorRules}
 
 CAPACIDADE DE AGENDAMENTO:
-Você pode agendar, verificar e cancelar reuniões. Quando o lead quiser agendar:
+Quando o lead quiser agendar:
 1. Pergunte data e horário preferido
-2. Quando tiver data e hora, inclua no final da sua resposta (invisível ao lead): [AGENDAR:YYYY-MM-DD:HH:MM:NOME_DO_LEAD]
+2. Quando tiver data e hora, inclua: [AGENDAR:YYYY-MM-DD:HH:MM:NOME_DO_LEAD]
 3. Para cancelar: [CANCELAR:TELEFONE_DO_LEAD]
 4. Para verificar agenda: [VERIFICAR:YYYY-MM-DD]
-Esses comandos serão processados automaticamente. NÃO mostre os comandos ao lead.
+Esses comandos são processados automaticamente. NÃO mostre os comandos ao lead.
 
 FORMATO DE RESPOSTA (CRÍTICO):
 - Divida SEMPRE sua resposta em blocos CURTOS de no máximo 2 linhas cada
@@ -425,22 +442,20 @@ FORMATO DE RESPOSTA (CRÍTICO):
 
 Regras:
 - Mensagens CURTAS e naturais (como um humano digitaria)
-- Use emojis com moderação (1 por bloco no máximo)
 - Se não souber a resposta, diga que vai encaminhar para um atendente humano
 - Nunca invente informações
 - Responda em português brasileiro${companyContext}${knowledgeContext}${smartRoutingContext}`;
     }
 
     // --- Inject model-specific custom prompts from config ---
-    // When a custom prompt is set, it REPLACES the entire system prompt with strict model isolation
     const cfgPrompts = configData || {};
     if (detectedAudience === "b2b" && cfgPrompts.prompt_b2b) {
       const strictCompanyCtx = companyProfile ? buildCompanyContext(companyProfile as any, "b2b", true) : "";
-      systemPrompt = cfgPrompts.prompt_b2b + strictCompanyCtx + knowledgeContext;
+      systemPrompt = cfgPrompts.prompt_b2b + behaviorRules + strictCompanyCtx + knowledgeContext;
       console.log("REPLACED system prompt with strict B2B custom prompt");
     } else if (detectedAudience === "b2c" && cfgPrompts.prompt_b2c_organic) {
       const strictCompanyCtx = companyProfile ? buildCompanyContext(companyProfile as any, "b2c", true) : "";
-      systemPrompt = cfgPrompts.prompt_b2c_organic + strictCompanyCtx + knowledgeContext;
+      systemPrompt = cfgPrompts.prompt_b2c_organic + behaviorRules + strictCompanyCtx + knowledgeContext;
       console.log("REPLACED system prompt with strict B2C organic prompt");
     }
 
@@ -448,18 +463,14 @@ Regras:
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY not configured");
 
     const baseTemp = aiConfig.temperature ? Number(aiConfig.temperature) : 0.7;
-    // Use lower temperature to prevent hallucinations
     const temperature = Math.min(baseTemp, 0.5);
 
-    // Build conversation history: check if this lead was contacted via broadcast
     const conversationMessages: { role: string; content: string }[] = [
       { role: "system", content: systemPrompt },
     ];
 
-    // Check for previous broadcast message sent to this lead
     const phone = remoteJid.replace("@s.whatsapp.net", "");
 
-    // Find matching broadcast lead by phone
     const { data: matchedLead } = await supabaseAdmin
       .from("leads_raw")
       .select("id, name")
@@ -478,16 +489,14 @@ Regras:
         .maybeSingle();
 
       if (leadBroadcast?.message_sent) {
-        // Add the broadcast message as assistant context so AI knows what was said
         conversationMessages.push({
           role: "assistant",
           content: leadBroadcast.message_sent,
         });
         const bcast = leadBroadcast.broadcast as any;
         const broadcastAudienceType = bcast?.audience_type || "b2c";
-        console.log(`Broadcast context found: audience_type=${broadcastAudienceType}, campaign="${bcast?.name}", ai_config_id=${bcast?.ai_config_id}`);
+        console.log(`Broadcast context found: audience_type=${broadcastAudienceType}, campaign="${bcast?.name}"`);
 
-        // CRITICAL: Save detected_audience from broadcast so ALL subsequent messages use it
         if (!detectedAudience) {
           detectedAudience = broadcastAudienceType;
           await supabaseAdmin
@@ -499,36 +508,29 @@ Regras:
           console.log(`Saved detected_audience=${broadcastAudienceType} from broadcast`);
         }
 
-        // Build STRICT model-isolated context (no cross-model data)
         const strictBcastCtx = companyProfile ? buildCompanyContext(companyProfile as any, broadcastAudienceType, true) : "";
 
-        // Negative rules based on audience type
         const b2cNegativeRules = `
 PROIBIÇÕES ABSOLUTAS (B2C - consumidor final):
-- NÃO pergunte sobre negócio, empresa, estabelecimento, restaurante, bar, loja
-- NÃO use termos como: PDV, parceria comercial, reposição, volume comercial, revenda, distribuição
-- NÃO diga "seus clientes", "seu estabelecimento", "sua empresa", "projetos na região"
-- NÃO tente qualificar como B2B — este lead é CONSUMIDOR FINAL
-- FOQUE em: consumo pessoal, festas, churrascos, eventos, reunião de amigos, família, aniversários`;
+- NÃO pergunte sobre negócio, empresa, estabelecimento
+- NÃO use termos como: PDV, parceria comercial, reposição, volume comercial
+- FOQUE em: consumo pessoal, festas, churrascos, eventos`;
         const b2bNegativeRules = `
 PROIBIÇÕES ABSOLUTAS (B2B - empresa/negócio):
-- NÃO mencione consumo pessoal, festa, churrasco, aniversário, amigos
-- NÃO use tom casual demais — mantenha profissionalismo
-- FOQUE em: ROI, parceria, volume, cases, resultados mensuráveis`;
+- NÃO mencione consumo pessoal, festa, churrasco
+- FOQUE em: ROI, parceria, volume, cases, resultados`;
 
         const negativeRules = broadcastAudienceType === "b2c" ? b2cNegativeRules : b2bNegativeRules;
         const campaignCtx = `\n\nCONTEXTO DA CAMPANHA: Conversa iniciada pelo disparo "${bcast.name || ""}". ${bcast.description ? `Objetivo: ${bcast.description}.` : ""}
 O lead está respondendo à mensagem acima. Continue naturalmente. NÃO repita a mensagem já enviada.${negativeRules}`;
 
-        // Priority 1: Custom prompt for this audience type
         if (broadcastAudienceType === "b2c" && cfgPrompts.prompt_b2c_broadcast) {
-          conversationMessages[0].content = cfgPrompts.prompt_b2c_broadcast + campaignCtx + strictBcastCtx + knowledgeContext;
+          conversationMessages[0].content = cfgPrompts.prompt_b2c_broadcast + behaviorRules + campaignCtx + strictBcastCtx + knowledgeContext;
           console.log("REPLACED with strict B2C broadcast prompt");
         } else if (broadcastAudienceType === "b2b" && cfgPrompts.prompt_b2b) {
-          conversationMessages[0].content = cfgPrompts.prompt_b2b + campaignCtx + strictBcastCtx + knowledgeContext;
+          conversationMessages[0].content = cfgPrompts.prompt_b2b + behaviorRules + campaignCtx + strictBcastCtx + knowledgeContext;
           console.log("REPLACED with strict B2B broadcast prompt");
         } else if (bcast?.ai_config_id) {
-          // Priority 2: Broadcast's dedicated AI config
           const { data: broadcastAiConfig } = await supabaseAdmin
             .from("ai_configs")
             .select("system_prompt")
@@ -536,26 +538,17 @@ O lead está respondendo à mensagem acima. Continue naturalmente. NÃO repita a
             .maybeSingle();
 
           if (broadcastAiConfig?.system_prompt) {
-            conversationMessages[0].content = broadcastAiConfig.system_prompt + campaignCtx + strictBcastCtx + knowledgeContext;
-            console.log("Using dedicated broadcast AI config prompt with strict isolation");
+            conversationMessages[0].content = broadcastAiConfig.system_prompt + behaviorRules + campaignCtx + strictBcastCtx + knowledgeContext;
           } else {
-            // Even fallback AI config had no prompt — use general prompt BUT with strict context
             conversationMessages[0].content = conversationMessages[0].content.replace(companyContext, "") + campaignCtx + strictBcastCtx;
-            console.log("Fallback: stripped general company context, applied strict isolation");
           }
         } else {
-          // Priority 3: NO custom prompt exists — STILL enforce strict isolation
-          // Remove the general (mixed) company context and replace with strict one
           conversationMessages[0].content = conversationMessages[0].content.replace(companyContext, "") + campaignCtx + strictBcastCtx;
-          console.log(`No custom prompt found — enforced strict ${broadcastAudienceType.toUpperCase()} isolation on general prompt`);
         }
       }
     }
 
-    // --- AUDIENCE QUALIFICATION for organic leads (not from broadcasts) ---
-    // Driven by business_mode in the modular config:
-    // - "b2b" or "b2c": no question needed, audience is fixed
-    // - "hybrid": ask qualification question on first contact, detect from answer
+    // --- AUDIENCE QUALIFICATION for organic leads ---
     const isFromBroadcast = !!(matchedLead && (await supabaseAdmin
       .from("broadcast_leads")
       .select("id")
@@ -568,33 +561,25 @@ O lead está respondendo à mensagem acima. Continue naturalmente. NÃO repita a
 
     if (!isFromBroadcast) {
       if (businessMode === "b2b" || businessMode === "b2c") {
-        // Fixed mode: no question needed, just inject context
         if (!detectedAudience) {
           detectedAudience = businessMode;
-          // Save it so we don't re-check
           if (existingConv) {
             await supabaseAdmin
               .from("conversation_tracker")
               .update({ detected_audience: businessMode })
               .eq("id", existingConv.id);
           }
-          console.log(`Fixed business_mode=${businessMode}, no qualification needed`);
         }
       } else if (businessMode === "hybrid" && !detectedAudience) {
-        // Hybrid mode: ask qualification question on first contact
         const qualificationQuestion = modularCfg?.hybrid_qualification_question || 
           "Você está buscando para consumo pessoal ou para o seu estabelecimento/empresa?";
 
         if (customerMsgCount <= 1) {
-          // FIRST CONTACT: Inject the qualification question
           conversationMessages[0].content += `\n\nINSTRUÇÃO OBRIGATÓRIA PARA PRIMEIRO CONTATO:
 Após cumprimentar o lead, você DEVE fazer esta pergunta de qualificação de forma natural:
 "${qualificationQuestion}"
-NÃO pule esta pergunta. Ela é essencial para personalizar o atendimento.
-Inclua a pergunta de forma natural na sua resposta de boas-vindas.`;
-          console.log("Hybrid mode: first contact — injecting qualification question");
+NÃO pule esta pergunta.`;
         } else if (customerMsgCount === 2) {
-          // SECOND MESSAGE: Use AI to classify the answer
           const classifyResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
             method: "POST",
             headers: {
@@ -604,9 +589,9 @@ Inclua a pergunta de forma natural na sua resposta de boas-vindas.`;
             body: JSON.stringify({
               model: "google/gemini-2.5-flash-lite",
               messages: [
-                { role: "system", content: `Classify the user's response as either "b2b" or "b2c". Respond with ONLY "b2b" or "b2c", nothing else.
-B2B indicators: company, business, store, restaurant, bar, reseller, commerce, wholesale, CNPJ, commercial, partnership.
-B2C indicators: personal, party, barbecue, birthday, event, home, friends, family, wedding, celebration.
+                { role: "system", content: `Classify the user's response as either "b2b" or "b2c". Respond with ONLY "b2b" or "b2c".
+B2B indicators: company, business, store, restaurant, bar, reseller, wholesale, CNPJ, commercial.
+B2C indicators: personal, party, barbecue, birthday, event, home, friends, family.
 If unclear, respond "b2c".` },
                 { role: "user", content: messageText }
               ],
@@ -634,39 +619,33 @@ If unclear, respond "b2c".` },
       }
     }
 
-    // If we have a detected audience (from any source), inject audience context
+    // Inject audience context
     if (detectedAudience && !isFromBroadcast) {
       let audienceOverride = "";
       if (detectedAudience === "b2b") {
         audienceOverride = `\n\nCONTEXTO DE AUDIÊNCIA (DETECTADO):
-Este lead é um PARCEIRO DE NEGÓCIO (B2B). Adapte sua comunicação:
-- Foque em: ROI, volume, logística, parceria comercial, reposição, margem
-- Use linguagem profissional e dados concretos
-- Ofereça condições comerciais, volumes e prazos`;
+Este lead é um PARCEIRO DE NEGÓCIO (B2B). Foque em ROI, volume, parceria.`;
       } else {
         audienceOverride = `\n\nCONTEXTO DE AUDIÊNCIA (DETECTADO):
-Este lead é um CONSUMIDOR FINAL (B2C). Adapte sua comunicação:
-- Foque em: eventos pessoais, festas, churrascos, experiência, sabor, praticidade
-- PROIBIDO usar termos B2B: "PDV", "parceiros", "reposição", "volume comercial"
-- Linguagem leve, amigável e focada na experiência pessoal`;
+Este lead é um CONSUMIDOR FINAL (B2C). Foque em experiência, eventos, praticidade.
+PROIBIDO usar termos B2B: "PDV", "parceiros", "reposição".`;
       }
       conversationMessages[0].content += audienceOverride;
-      console.log(`Injecting audience context: ${detectedAudience}`);
     }
 
-    // ALWAYS ensure scheduling instructions are present (they may be lost during prompt replacement)
+    // Ensure scheduling instructions
     const schedulingInstructions = `\n\nCAPACIDADE DE AGENDAMENTO (SEMPRE ATIVO):
-Quando o lead quiser agendar, pergunte data e horário. Com data e hora confirmados, inclua no final da sua resposta (invisível ao lead):
+Quando o lead quiser agendar, pergunte data e horário. Com data e hora confirmados, inclua:
 [AGENDAR:YYYY-MM-DD:HH:MM:NOME_DO_LEAD]
 Para cancelar: [CANCELAR:TELEFONE_DO_LEAD]. Para verificar agenda: [VERIFICAR:YYYY-MM-DD]
-Esses comandos são processados automaticamente. NÃO mostre os comandos ao lead.
-FORMATO DE RESPOSTA: Divida em blocos curtos separados por ---BLOCO--- (linha isolada). Máximo 4 blocos.`;
+NÃO mostre os comandos ao lead.
+FORMATO: Divida em blocos curtos separados por ---BLOCO---. Máximo 4 blocos.`;
 
     if (!conversationMessages[0].content.includes("[AGENDAR:")) {
       conversationMessages[0].content += schedulingInstructions;
     }
 
-    // Add the current user message
+    // Add user message
     conversationMessages.push({
       role: "user",
       content: `[${pushName}]: ${messageText}`,
@@ -703,16 +682,13 @@ FORMATO DE RESPOSTA: Divida em blocos curtos separados por ---BLOCO--- (linha is
       });
     }
 
-    // Process scheduling commands embedded in AI response
-    // phone already declared above (line 396)
+    // Process scheduling commands
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
     const agendarMatch = reply.match(/\[AGENDAR:(\d{4}-\d{2}-\d{2}):(\d{2}:\d{2}):([^\]]+)\]/);
     const cancelarMatch = reply.match(/\[CANCELAR:([^\]]+)\]/);
-    const verificarMatch = reply.match(/\[VERIFICAR:(\d{4}-\d{2}-\d{2})\]/);
 
-    // Remove commands from visible reply
     reply = reply.replace(/\[AGENDAR:[^\]]+\]/g, "").replace(/\[CANCELAR:[^\]]+\]/g, "").replace(/\[VERIFICAR:[^\]]+\]/g, "").replace(/\[PERFIL:[^\]]+\]/g, "").trim();
 
     if (agendarMatch) {
@@ -732,10 +708,8 @@ FORMATO DE RESPOSTA: Divida em blocos curtos separados por ---BLOCO--- (linha is
         const aptResult = await aptResponse.json();
         console.log("Appointment result:", JSON.stringify(aptResult));
 
-        // After successful appointment: create/move CRM opportunity + update pipeline
         if (aptResult.success) {
           try {
-            // Find the lead
             const { data: crmLead } = await supabaseAdmin
               .from("leads_raw")
               .select("id")
@@ -744,7 +718,6 @@ FORMATO DE RESPOSTA: Divida em blocos curtos separados por ---BLOCO--- (linha is
               .maybeSingle();
 
             if (crmLead) {
-              // Find the "agendamento" stage (or similar)
               const { data: stages } = await supabaseAdmin
                 .from("crm_stages")
                 .select("id, name, stage_order")
@@ -757,11 +730,9 @@ FORMATO DE RESPOSTA: Divida em blocos curtos separados por ---BLOCO--- (linha is
                 s.name.toLowerCase().includes("reuniao") ||
                 s.name.toLowerCase().includes("qualificad")
               );
-              // Fallback: use the 3rd stage or last available
               const targetStage = agendamentoStage || (stages && stages.length >= 3 ? stages[2] : stages?.[stages.length - 1]);
 
               if (targetStage) {
-                // Check if opportunity already exists for this lead
                 const { data: existingOpp } = await supabaseAdmin
                   .from("opportunities")
                   .select("id")
@@ -770,42 +741,31 @@ FORMATO DE RESPOSTA: Divida em blocos curtos separados por ---BLOCO--- (linha is
                   .maybeSingle();
 
                 if (existingOpp) {
-                  // Move existing opportunity to agendamento stage
-                  await supabaseAdmin
-                    .from("opportunities")
-                    .update({
-                      stage_id: targetStage.id,
-                      notes: `Agendamento automático: ${agendarMatch[1]} às ${agendarMatch[2]}`,
-                      updated_at: new Date().toISOString(),
-                    })
-                    .eq("id", existingOpp.id);
-                  console.log(`Moved opportunity ${existingOpp.id} to stage "${targetStage.name}"`);
+                  await supabaseAdmin.from("opportunities").update({
+                    stage_id: targetStage.id,
+                    notes: `Agendamento automático: ${agendarMatch[1]} às ${agendarMatch[2]}`,
+                    updated_at: new Date().toISOString(),
+                  }).eq("id", existingOpp.id);
                 } else {
-                  // Create new opportunity
-                  await supabaseAdmin
-                    .from("opportunities")
-                    .insert({
-                      org_id: orgId,
-                      lead_id: crmLead.id,
-                      stage_id: targetStage.id,
-                      notes: `Agendamento automático via IA: ${agendarMatch[1]} às ${agendarMatch[2]}`,
-                      automation_status: "completed",
-                    });
-                  console.log(`Created new opportunity for lead ${crmLead.id} at stage "${targetStage.name}"`);
+                  await supabaseAdmin.from("opportunities").insert({
+                    org_id: orgId,
+                    lead_id: crmLead.id,
+                    stage_id: targetStage.id,
+                    notes: `Agendamento automático via IA: ${agendarMatch[1]} às ${agendarMatch[2]}`,
+                    automation_status: "completed",
+                  });
                 }
               }
 
-              // Update conversation tracker pipeline stage
               await supabaseAdmin
                 .from("conversation_tracker")
                 .update({ pipeline_stage_key: "agendamento" })
                 .eq("org_id", orgId)
                 .eq("instance_name", instanceName)
                 .eq("remote_jid", remoteJid);
-              console.log("Updated pipeline_stage_key to 'agendamento'");
             }
           } catch (crmErr) {
-            console.error("CRM/Pipeline update error (non-blocking):", crmErr);
+            console.error("CRM/Pipeline update error:", crmErr);
           }
         }
       } catch (e) { console.error("Scheduling error:", e); }
@@ -826,28 +786,21 @@ FORMATO DE RESPOSTA: Divida em blocos curtos separados por ---BLOCO--- (linha is
       } catch (e) { console.error("Cancel error:", e); }
     }
 
-    // Send reply via Evolution API (global credentials) — in short blocks
+    // Send reply via Evolution API in blocks
     const evolutionUrl = (Deno.env.get("EVOLUTION_API_URL") || "").replace(/\/$/, "");
     const evolutionKey = Deno.env.get("EVOLUTION_API_KEY") || "";
 
-    // Split reply into blocks for human-like delivery
     const blocks = reply.split(/---BLOCO---/i).map((b: string) => b.trim()).filter((b: string) => b.length > 0);
-    
-    // If no blocks marker found, split by double newline or send as single
     const messageParts = blocks.length > 1 ? blocks : 
       reply.split(/\n\n+/).map((b: string) => b.trim()).filter((b: string) => b.length > 0);
-    
-    // Ensure we have at least one message
     const finalParts = messageParts.length > 0 ? messageParts : [reply];
 
-    // Use modular delay config if available
     const blockCfg = modularCfg?.blocks || { delay_min_ms: 1000, delay_max_ms: 3000 };
     const delayMin = blockCfg.delay_min_ms || 1000;
     const delayMax = blockCfg.delay_max_ms || 3000;
 
     let sendSuccess = false;
     for (let i = 0; i < finalParts.length; i++) {
-      // Add typing delay between messages using configured range
       if (i > 0) {
         const baseDelay = delayMin + Math.random() * (delayMax - delayMin);
         const lengthBonus = Math.min(finalParts[i].length * 10, 1000);
@@ -875,7 +828,6 @@ FORMATO DE RESPOSTA: Divida em blocos curtos separados por ---BLOCO--- (linha is
     }
 
     if (sendSuccess) {
-      // Update conversation tracker with bot reply time
       await supabaseAdmin
         .from("conversation_tracker")
         .update({ last_bot_msg_at: new Date().toISOString() })
