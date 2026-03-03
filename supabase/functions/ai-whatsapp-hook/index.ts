@@ -78,33 +78,39 @@ serve(async (req) => {
     let scenarioKey = "organic_inbound"; // default
 
     // Check if lead came from a broadcast
-    const { data: matchedLead } = await supabaseAdmin
+    // Use .limit(1) instead of .maybeSingle() to handle duplicate phone numbers
+    const { data: matchedLeads } = await supabaseAdmin
       .from("leads_raw")
       .select("id, name")
       .eq("org_id", orgId)
       .or(`phone.ilike.%${phone}%,phone.ilike.%${phone.slice(-8)}%`)
-      .maybeSingle();
+      .limit(5);
+
+    const matchedLead = matchedLeads?.[0] || null;
 
     let broadcastContext = "";
     let broadcastMessage = "";
 
-    if (matchedLead) {
-      const { data: leadBroadcast } = await supabaseAdmin
+    if (matchedLeads && matchedLeads.length > 0) {
+      // Search across ALL matched leads for broadcast context
+      const leadIds = matchedLeads.map((l: any) => l.id);
+      const { data: leadBroadcasts } = await supabaseAdmin
         .from("broadcast_leads")
-        .select("message_sent, sent_at, broadcast:broadcasts(id, name, description, scenario_key)")
-        .eq("lead_id", matchedLead.id)
-        .eq("status", "sent")
-        .order("sent_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
+        .select("message_sent, sent_at, status, broadcast:broadcasts(id, name, description, scenario_key)")
+        .in("lead_id", leadIds)
+        .in("status", ["sent", "pending"])
+        .order("created_at", { ascending: false })
+        .limit(1);
 
-      if (leadBroadcast?.message_sent) {
-        broadcastMessage = leadBroadcast.message_sent;
+      const leadBroadcast = leadBroadcasts?.[0];
+
+      if (leadBroadcast) {
+        broadcastMessage = leadBroadcast.message_sent || "";
         const bcast = leadBroadcast.broadcast as any;
         scenarioKey = bcast?.scenario_key || "broadcast_own_base";
         broadcastContext = `\n\nCONTEXTO DA CAMPANHA: Conversa iniciada pelo disparo "${bcast?.name || ""}". ${bcast?.description ? `Objetivo: ${bcast.description}.` : ""}
-O lead está respondendo à mensagem acima. Continue naturalmente. NÃO repita a mensagem já enviada.`;
-        console.log(`Broadcast context: scenario_key=${scenarioKey}, campaign="${bcast?.name}"`);
+O lead está respondendo à mensagem enviada pelo disparo. Continue naturalmente. NÃO repita a mensagem já enviada.`;
+        console.log(`Broadcast context: scenario_key=${scenarioKey}, campaign="${bcast?.name}", broadcast_status=${leadBroadcast.status}`);
       }
     }
 
@@ -147,6 +153,11 @@ O lead está respondendo à mensagem acima. Continue naturalmente. NÃO repita a
 
     if (existingConv) {
       customerMsgCount = (existingConv.customer_msg_count || 0) + 1;
+      // If no broadcast was detected but tracker has a broadcast scenario, keep it
+      if (scenarioKey === "organic_inbound" && existingConv.scenario_key && existingConv.scenario_key !== "organic_inbound") {
+        scenarioKey = existingConv.scenario_key;
+        console.log(`Kept tracker scenario_key: ${scenarioKey}`);
+      }
       await supabaseAdmin.rpc("increment_customer_msg_count", { p_conv_id: existingConv.id });
       await supabaseAdmin.from("conversation_tracker").update({
         last_customer_msg_at: new Date().toISOString(),
