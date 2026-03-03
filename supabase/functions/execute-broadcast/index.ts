@@ -105,73 +105,56 @@ Deno.serve(async (req) => {
     }
     console.log(`Using instance: ${instanceName}`);
 
-    // Get company profile for AI context — STRICT model isolation
+    // Load scenario prompt from ai_scenarios (replaces ai_configs)
+    const scenarioKey = (broadcast as any).scenario_key || "broadcast_own_base";
+    let scenarioPrompt = "";
+
+    if (broadcast.ai_enabled) {
+      const { data: scenario } = await supabase
+        .from("ai_scenarios")
+        .select("system_prompt, behavior, temperature")
+        .eq("org_id", org_id)
+        .eq("scenario_key", scenarioKey)
+        .maybeSingle();
+
+      if (scenario?.system_prompt) {
+        scenarioPrompt = scenario.system_prompt;
+      }
+    }
+
+    // Get company profile for context
     let companyContext = "";
-    // Use audience_type from broadcast (set by user in wizard)
-    let businessMode = (broadcast as any).audience_type || "b2c";
-    let customModelPrompt = "";
     if (broadcast.ai_enabled) {
       const { data: company } = await supabase
         .from("company_profiles")
         .select("*")
         .eq("org_id", org_id)
         .maybeSingle();
-      
+
       if (company) {
         const cp = company as any;
-        const prefix = businessMode === "b2b" || businessMode === "b2c" ? businessMode : null;
-        // STRICT: use ONLY model-specific fields, no fallback to general
-        const targetAudience = prefix ? (cp[`${prefix}_target_audience`] || "") : (cp.target_audience || "");
-        const toneOfVoice = prefix ? (cp[`${prefix}_tone_of_voice`] || "") : (cp.tone_of_voice || "");
-        const differentials = prefix ? (cp[`${prefix}_differentials`] || "") : (cp.differentials || "");
-        const products = prefix ? (cp[`${prefix}_products_services`] || []) : (cp.products_services || []);
-
-        companyContext = `
-EMPRESA: ${cp.company_name || ""}
-SEGMENTO: ${cp.segment || ""}
-DESCRIÇÃO: ${cp.description || ""}
-PÚBLICO-ALVO: ${targetAudience}
-TOM DE VOZ: ${toneOfVoice}
-DIFERENCIAIS: ${differentials}
-PRODUTOS/SERVIÇOS: ${products.length > 0 ? JSON.stringify(products) : ""}
-[Modelo ${(prefix || "geral").toUpperCase()} EXCLUSIVO — NÃO use informações de outro modelo]`.trim();
-      }
-
-      // Get AI agent system prompt + modular config if configured
-      if (broadcast.ai_config_id) {
-        const { data: aiConfig } = await supabase
-          .from("ai_configs")
-          .select("system_prompt, config")
-          .eq("id", broadcast.ai_config_id)
-          .maybeSingle();
-        if (aiConfig?.system_prompt) {
-          companyContext += `\n\nINSTRUÇÕES DO AGENTE:\n${aiConfig.system_prompt.substring(0, 500)}`;
-        }
-        // Check modular config for explicit business mode override
-        const modCfg = aiConfig?.config as any;
-        if (modCfg?.modular?.business_mode) {
-          businessMode = modCfg.modular.business_mode;
-        }
-        // Use model-specific custom prompt if configured
-        if (businessMode === "b2b" && modCfg?.prompt_b2b) {
-          customModelPrompt = modCfg.prompt_b2b;
-        } else if (businessMode === "b2c" && modCfg?.prompt_b2c_broadcast) {
-          customModelPrompt = modCfg.prompt_b2c_broadcast;
-        }
+        companyContext = [
+          cp.company_name ? `EMPRESA: ${cp.company_name}` : "",
+          cp.segment ? `SEGMENTO: ${cp.segment}` : "",
+          cp.description ? `DESCRIÇÃO: ${cp.description}` : "",
+          cp.target_audience ? `PÚBLICO-ALVO: ${cp.target_audience}` : "",
+          cp.tone_of_voice ? `TOM DE VOZ: ${cp.tone_of_voice}` : "",
+          cp.differentials ? `DIFERENCIAIS: ${cp.differentials}` : "",
+          cp.products_services && (cp.products_services as any[]).length > 0 ? `PRODUTOS/SERVIÇOS: ${JSON.stringify(cp.products_services)}` : "",
+        ].filter(Boolean).join("\n");
       }
     }
 
-    // Build audience-specific instruction
-    let audienceInstruction = "";
-    if (businessMode === "b2b") {
-      audienceInstruction = `TIPO DE LEAD: Este é um lead B2B (empresa/estabelecimento). Foque EXCLUSIVAMENTE em: ROI, volume, logística, parceria comercial, reposição. Trate como um potencial parceiro de negócio. PROIBIDO usar termos B2C como consumo pessoal, festa, churrasco, aniversário.`;
-    } else {
-      audienceInstruction = `TIPO DE LEAD: Este é um CLIENTE FINAL (consumidor/pessoa física). Foque EXCLUSIVAMENTE em: eventos, aniversários, churrascos, festas, happy hours, consumo pessoal, experiência, sabor, praticidade. PROIBIDO falar como se fosse vender para restaurante/bar/empresa. PROIBIDO usar termos B2B como PDV, parceria comercial, reposição, volume comercial, CNPJ. Venda o PRODUTO diretamente para CONSUMO PESSOAL.`;
-    }
-    // Prepend custom model prompt if available
-    if (customModelPrompt) {
-      audienceInstruction = customModelPrompt + "\n\n" + audienceInstruction;
-    }
+    // Build final system prompt for AI generation
+    const fullSystemPrompt = [
+      scenarioPrompt,
+      companyContext ? `\n--- CONTEXTO DA EMPRESA ---\n${companyContext}` : "",
+      `\nREGRAS DE FORMATO:
+- Divida a mensagem em 2-3 blocos curtos (máximo 150 caracteres cada).
+- Separe cada bloco com ---BLOCO--- numa linha isolada.
+- NUNCA invente informações. Use APENAS dados fornecidos.
+- Escreva de forma NATURAL para WhatsApp.`,
+    ].filter(Boolean).join("\n");
 
     // Get pending broadcast leads
     const { data: bLeads } = await supabase
@@ -191,20 +174,14 @@ PRODUTOS/SERVIÇOS: ${products.length > 0 ? JSON.stringify(products) : ""}
 
     // Helper: send message in blocks with human-like delays
     const sendInBlocks = async (phone: string, fullMessage: string): Promise<boolean> => {
-      // Split by ---BLOCO--- marker first
       let blocks = fullMessage.split(/---BLOCO---/i).map(b => b.trim()).filter(b => b.length > 0);
-      
-      // If no blocks, split by double newlines
       if (blocks.length <= 1) {
         blocks = fullMessage.split(/\n\n+/).map(b => b.trim()).filter(b => b.length > 0);
       }
-      
-      // Ensure at least one block
       if (blocks.length === 0) blocks = [fullMessage];
-      
+
       let success = false;
       for (let i = 0; i < blocks.length; i++) {
-        // Human-like delay between blocks (1-3 seconds + length bonus)
         if (i > 0) {
           const baseDelay = 1000 + Math.random() * 2000;
           const lengthBonus = Math.min(blocks[i].length * 10, 1000);
@@ -217,10 +194,7 @@ PRODUTOS/SERVIÇOS: ${products.length > 0 ? JSON.stringify(products) : ""}
             "Content-Type": "application/json",
             apikey: EVOLUTION_API_KEY,
           },
-          body: JSON.stringify({
-            number: phone,
-            text: blocks[i],
-          }),
+          body: JSON.stringify({ number: phone, text: blocks[i] }),
         });
 
         if (sendResp.ok) {
@@ -241,8 +215,7 @@ PRODUTOS/SERVIÇOS: ${products.length > 0 ? JSON.stringify(products) : ""}
       const lead = (bl as any).lead;
       if (!lead?.phone) {
         await supabase.from("broadcast_leads").update({
-          status: "failed",
-          error_message: "Lead sem telefone",
+          status: "failed", error_message: "Lead sem telefone",
         }).eq("id", bl.id);
         failCount++;
         continue;
@@ -268,12 +241,12 @@ PRODUTOS/SERVIÇOS: ${products.length > 0 ? JSON.stringify(products) : ""}
           .replace(/\{telefone\}/gi, lead.phone || "");
       }
 
-      // If AI is enabled and no template, generate with AI
-      if (broadcast.ai_enabled && !messageText && LOVABLE_API_KEY) {
+      // If AI is enabled and no template, generate with AI using scenario prompt
+      if (broadcast.ai_enabled && !messageText && LOVABLE_API_KEY && fullSystemPrompt) {
         try {
           const leadFirstName = lead.name?.split(" ")[0] || "";
           const leadContext = leadFirstName ? `Lead: ${leadFirstName}` : "Lead sem nome identificado";
-          
+
           const aiResp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
             method: "POST",
             headers: {
@@ -283,21 +256,7 @@ PRODUTOS/SERVIÇOS: ${products.length > 0 ? JSON.stringify(products) : ""}
             body: JSON.stringify({
               model: "google/gemini-3-flash-preview",
               messages: [
-                { role: "system", content: `Você é um SDR expert que trabalha na empresa descrita abaixo.
-
-${audienceInstruction}
-
-REGRAS OBRIGATÓRIAS:
-- Use APENAS informações REAIS da empresa abaixo. NUNCA invente nomes de empresas, produtos ou dados.
-- Se não souber algo, NÃO mencione.
-- Escreva de forma NATURAL para WhatsApp.
-- Divida a mensagem em 2-3 blocos curtos (máximo 150 caracteres cada).
-- Separe cada bloco com ---BLOCO--- numa linha isolada.
-- O primeiro bloco deve ser uma saudação rápida e pessoal.
-- O segundo bloco deve apresentar o valor/produto.
-- O terceiro bloco (opcional) deve ter um CTA suave.
-
-${companyContext || "ATENÇÃO: Não há dados da empresa configurados. Escreva uma mensagem genérica e profissional sem inventar nenhum nome de empresa ou produto."}` },
+                { role: "system", content: fullSystemPrompt },
                 { role: "user", content: `Crie UMA mensagem de primeiro contato para: ${leadContext}. ${broadcast.description ? `Contexto da campanha: ${broadcast.description}` : ""}. Retorne APENAS os blocos da mensagem separados por ---BLOCO---, sem aspas ou formatação extra.` },
               ],
               temperature: 0.7,
@@ -306,7 +265,6 @@ ${companyContext || "ATENÇÃO: Não há dados da empresa configurados. Escreva 
           if (aiResp.ok) {
             const aiData = await aiResp.json();
             messageText = (aiData.choices?.[0]?.message?.content || "").trim();
-            // Remove quotes if AI wraps in quotes
             if (messageText.startsWith('"') && messageText.endsWith('"')) {
               messageText = messageText.slice(1, -1);
             }
@@ -320,8 +278,7 @@ ${companyContext || "ATENÇÃO: Não há dados da empresa configurados. Escreva 
 
       if (!messageText) {
         await supabase.from("broadcast_leads").update({
-          status: "failed",
-          error_message: "Sem mensagem para enviar",
+          status: "failed", error_message: "Sem mensagem para enviar",
         }).eq("id", bl.id);
         failCount++;
         continue;
@@ -333,7 +290,6 @@ ${companyContext || "ATENÇÃO: Não há dados da empresa configurados. Escreva 
         const success = await sendInBlocks(cleanPhone, messageText);
 
         if (success) {
-          // Store the full message (all blocks joined)
           const storedMsg = messageText.replace(/---BLOCO---/gi, "\n").trim();
           await supabase.from("broadcast_leads").update({
             status: "sent",
@@ -341,7 +297,7 @@ ${companyContext || "ATENÇÃO: Não há dados da empresa configurados. Escreva 
             message_sent: storedMsg,
           }).eq("id", bl.id);
 
-          // Create/update conversation_tracker so ai-whatsapp-hook can continue
+          // Create/update conversation_tracker with scenario_key
           const remoteJid = `${cleanPhone}@s.whatsapp.net`;
           const { data: existingConv } = await supabase
             .from("conversation_tracker")
@@ -360,21 +316,20 @@ ${companyContext || "ATENÇÃO: Não há dados da empresa configurados. Escreva 
               last_bot_msg_at: new Date().toISOString(),
               last_customer_msg_at: new Date().toISOString(),
               lead_id: bl.lead_id,
-              ai_config_id: broadcast.ai_config_id || null,
+              scenario_key: scenarioKey,
             });
           } else {
             await supabase.from("conversation_tracker").update({
               last_bot_msg_at: new Date().toISOString(),
               lead_id: bl.lead_id,
-              ai_config_id: broadcast.ai_config_id || null,
+              scenario_key: scenarioKey,
             }).eq("id", existingConv.id);
           }
 
           sentCount++;
         } else {
           await supabase.from("broadcast_leads").update({
-            status: "failed",
-            error_message: "API error: all blocks failed",
+            status: "failed", error_message: "API error: all blocks failed",
           }).eq("id", bl.id);
           failCount++;
         }

@@ -50,6 +50,7 @@ type Broadcast = {
   segment_date_to: string | null;
   ai_enabled: boolean;
   ai_config_id: string | null;
+  scenario_key: string | null;
   instance_name: string | null;
   message_template: string | null;
   follow_up_enabled: boolean;
@@ -71,13 +72,13 @@ type Broadcast = {
   updated_at: string;
 };
 
-type AiAgent = {
+type AiScenario = {
   id: string;
-  config_type: string;
-  instance_name: string | null;
+  scenario_key: string;
+  name: string;
+  description: string;
   enabled: boolean;
   system_prompt: string;
-  config: Record<string, any> | null;
 };
 
 type LeadRaw = {
@@ -100,6 +101,13 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; icon: any; b
   cancelled: { label: "Cancelado", color: "text-destructive", icon: X, bg: "bg-destructive/10" },
 };
 
+const SCENARIO_OPTIONS = [
+  { value: "outbound_prospecting", label: "Prospecção Outbound", icon: "🎯" },
+  { value: "broadcast_own_base", label: "Base Própria", icon: "📋" },
+  { value: "broadcast_whatsapp", label: "WhatsApp (Grupos)", icon: "💬" },
+  { value: "organic_inbound", label: "Atendimento Orgânico", icon: "📥" },
+];
+
 const SOURCE_OPTIONS = [
   { value: "web", label: "Prospecção Web" },
   { value: "whatsapp", label: "WhatsApp" },
@@ -120,7 +128,7 @@ export default function Broadcasts() {
   const orgId = profile?.org_id;
 
   const [broadcasts, setBroadcasts] = useState<Broadcast[]>([]);
-  const [agents, setAgents] = useState<AiAgent[]>([]);
+  const [scenarios, setScenarios] = useState<AiScenario[]>([]);
   const [instances, setInstances] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("all");
@@ -143,13 +151,13 @@ export default function Broadcasts() {
     if (!orgId) return;
     setLoading(true);
     try {
-      const [bRes, aRes, iRes] = await Promise.all([
+      const [bRes, sRes, iRes] = await Promise.all([
         supabase.from("broadcasts").select("*").eq("org_id", orgId).order("created_at", { ascending: false }),
-        supabase.from("ai_configs").select("id, config_type, instance_name, enabled, system_prompt, config").eq("org_id", orgId),
+        supabase.from("ai_scenarios").select("id, scenario_key, name, description, enabled, system_prompt").eq("org_id", orgId),
         supabase.from("integrations").select("config").eq("org_id", orgId).eq("service_name", "evolution").maybeSingle(),
       ]);
       setBroadcasts((bRes.data as any[]) || []);
-      setAgents((aRes.data as any[]) || []);
+      setScenarios((sRes.data as any[]) || []);
       if (iRes.data?.config && user) {
         const config = iRes.data.config as any;
         const byUser = config?.instances_by_user || {};
@@ -335,7 +343,7 @@ export default function Broadcasts() {
             const cfg = STATUS_CONFIG[broadcast.status] || STATUS_CONFIG.draft;
             const StatusIcon = cfg.icon;
             const progress = broadcast.total_leads > 0 ? (broadcast.sent_count / broadcast.total_leads) * 100 : 0;
-            const agentName = agents.find(a => a.id === broadcast.ai_config_id);
+            const scenarioLabel = SCENARIO_OPTIONS.find(s => s.value === broadcast.scenario_key);
 
             return (
               <div key={broadcast.id} className="border rounded-lg p-4 hover:bg-secondary/30 transition-colors group">
@@ -351,6 +359,11 @@ export default function Broadcasts() {
                       {broadcast.ai_enabled && (
                         <Badge variant="outline" className="text-[10px] gap-1 border-primary/30 text-primary">
                           <Brain className="h-3 w-3" />IA
+                        </Badge>
+                      )}
+                      {scenarioLabel && (
+                        <Badge variant="outline" className="text-[10px] gap-1">
+                          {scenarioLabel.icon} {scenarioLabel.label}
                         </Badge>
                       )}
                       <Badge variant="outline" className="text-[10px]">
@@ -461,7 +474,7 @@ export default function Broadcasts() {
         open={createOpen}
         onOpenChange={setCreateOpen}
         orgId={orgId || ""}
-        agents={agents}
+        scenarios={scenarios}
         instances={instances}
         onCreated={(b) => { setBroadcasts(prev => [b, ...prev]); setCreateOpen(false); }}
       />
@@ -473,7 +486,7 @@ export default function Broadcasts() {
         broadcast={selectedBroadcast}
         leads={detailLeads}
         loading={detailLoading}
-        agents={agents}
+        scenarios={scenarios}
       />
     </div>
   );
@@ -481,12 +494,12 @@ export default function Broadcasts() {
 
 // ---- CREATE CAMPAIGN DIALOG ----
 function CreateCampaignDialog({
-  open, onOpenChange, orgId, agents, instances, onCreated,
+  open, onOpenChange, orgId, scenarios, instances, onCreated,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
   orgId: string;
-  agents: AiAgent[];
+  scenarios: AiScenario[];
   instances: string[];
   onCreated: (b: Broadcast) => void;
 }) {
@@ -514,7 +527,7 @@ function CreateCampaignDialog({
   const [segmentDateFrom, setSegmentDateFrom] = useState("");
   const [segmentDateTo, setSegmentDateTo] = useState("");
   const [aiEnabled, setAiEnabled] = useState(false);
-  const [aiConfigId, setAiConfigId] = useState("");
+  const [scenarioKey, setScenarioKey] = useState("broadcast_own_base");
   const [instanceName, setInstanceName] = useState("");
   const [messageTemplate, setMessageTemplate] = useState("");
   const [followUpEnabled, setFollowUpEnabled] = useState(false);
@@ -522,16 +535,7 @@ function CreateCampaignDialog({
   const [followUpInterval, setFollowUpInterval] = useState(24);
   const [sendRate, setSendRate] = useState(5);
   const [delayBetween, setDelayBetween] = useState(10);
-  const [audienceType, setAudienceType] = useState<"b2c" | "b2b">("b2c");
   const [scheduledAt, setScheduledAt] = useState("");
-
-  // When agent changes, auto-set instance
-  useEffect(() => {
-    if (aiConfigId) {
-      const agent = agents.find(a => a.id === aiConfigId);
-      if (agent?.instance_name) setInstanceName(agent.instance_name);
-    }
-  }, [aiConfigId, agents]);
 
   // Count matching leads
   const countLeads = async () => {
@@ -596,66 +600,11 @@ function CreateCampaignDialog({
   const reset = () => {
     setStep(1); setName(""); setDescription(""); setType("manual"); setChannel("whatsapp");
     setSegmentSources([]); setSegmentStatuses([]); setSegmentTags(""); setSegmentDateFrom(""); setSegmentDateTo("");
-    setAiEnabled(false); setAiConfigId(""); setInstanceName(""); setMessageTemplate("");
+    setAiEnabled(false); setScenarioKey("broadcast_own_base"); setInstanceName(""); setMessageTemplate("");
     setFollowUpEnabled(false); setFollowUpCount(3); setFollowUpInterval(24);
     setSendRate(5); setDelayBetween(10); setScheduledAt(""); setLeadCount(null);
     setSelectionMode("segment"); setManualSelected(new Set()); setManualSearch(""); setManualLeads([]);
-    setAudienceType("b2c");
   };
-
-  // Dedicated prompt templates for broadcast audience types
-  const B2C_PROMPT = `Você é um atendente virtual via WhatsApp. Seu papel é atender CONSUMIDORES FINAIS (pessoas físicas).
-
-PÚBLICO: Exclusivamente consumidores finais para eventos pessoais, festas, churrascos, aniversários, confraternizações, happy hours e consumo pessoal.
-
-PROIBIDO (NUNCA faça isso):
-- Perguntar sobre negócio, estabelecimento, bar, restaurante, empresa do lead
-- Usar termos: "PDV", "parceiros", "reposição", "volume comercial", "ponto de venda", "giro"
-- Tratar o lead como empresa ou revendedor
-- Mencionar processo de vendas B2B
-
-COMO AGIR:
-- Linguagem leve, amigável e focada na experiência pessoal
-- Sugira produtos para a ocasião do cliente
-- Fale sobre sabores, quantidades para festas, harmonizações
-- Foque em benefícios pessoais, praticidade e experiência
-
-IMPORTANTE: Os dados da empresa abaixo podem conter termos B2B. IGNORE termos como "PDV", "reposição", "parceiros". Use APENAS nomes de produtos, preços e descrições.
-
-REGRAS ANTI-ALUCINAÇÃO:
-- NUNCA invente informações sobre o lead
-- Use APENAS informações fornecidas no contexto
-- É melhor ser genérico do que inventar dados
-
-FORMATO DE RESPOSTA:
-- Divida em blocos CURTOS (máx 200 chars cada)
-- Separe com ---BLOCO---
-- Máximo 4 blocos por resposta
-- Use emojis com moderação (1 por bloco)
-- Responda em português brasileiro`;
-
-  const B2B_PROMPT = `Você é um consultor comercial via WhatsApp. Seu papel é atender EMPRESAS e PARCEIROS DE NEGÓCIO (B2B).
-
-PÚBLICO: Exclusivamente empresas, bares, restaurantes, distribuidoras, revendedores e parceiros comerciais.
-
-COMO AGIR:
-- Foque em: ROI, volume, logística de entrega, parceria comercial, reposição, margem de lucro
-- Trate como um potencial parceiro de negócio
-- Use linguagem profissional e dados concretos
-- Ofereça condições comerciais, volumes e prazos
-- Pergunte sobre o estabelecimento para personalizar a proposta
-
-REGRAS ANTI-ALUCINAÇÃO:
-- NUNCA invente informações sobre o lead
-- Use APENAS informações fornecidas no contexto
-- É melhor ser genérico do que inventar dados
-
-FORMATO DE RESPOSTA:
-- Divida em blocos CURTOS (máx 200 chars cada)
-- Separe com ---BLOCO---
-- Máximo 4 blocos por resposta
-- Use emojis com moderação (1 por bloco)
-- Responda em português brasileiro`;
 
   const handleCreate = async () => {
     if (!name.trim()) { toast({ title: "Informe o nome", variant: "destructive" }); return; }
@@ -670,38 +619,6 @@ FORMATO DE RESPOSTA:
       const tags = segmentTags.split(",").map(t => t.trim()).filter(Boolean);
       const totalCount = selectionMode === "manual" ? manualSelected.size : (leadCount || 0);
 
-      // Auto-create dedicated AI config for the audience type
-      let finalAiConfigId = aiConfigId || null;
-      if (aiEnabled) {
-        const configType = `broadcast_${audienceType}`;
-        // Check if a dedicated config already exists for this audience type
-        const { data: existingConfig } = await supabase
-          .from("ai_configs")
-          .select("id")
-          .eq("org_id", orgId)
-          .eq("config_type", configType)
-          .maybeSingle();
-
-        if (existingConfig) {
-          finalAiConfigId = existingConfig.id;
-        } else {
-          // Create a new dedicated config
-          const prompt = audienceType === "b2c" ? B2C_PROMPT : B2B_PROMPT;
-          const { data: newConfig } = await supabase
-            .from("ai_configs")
-            .insert({
-              org_id: orgId,
-              config_type: configType,
-              system_prompt: prompt,
-              enabled: true,
-              temperature: 0.4,
-            })
-            .select("id")
-            .single();
-          if (newConfig) finalAiConfigId = newConfig.id;
-        }
-      }
-
       const payload = {
         org_id: orgId, name, description: description || null,
         status: scheduledAt ? "scheduled" : "draft", type, channel,
@@ -710,7 +627,7 @@ FORMATO DE RESPOSTA:
         segment_tags: selectionMode === "segment" ? tags : [],
         segment_date_from: selectionMode === "segment" ? (segmentDateFrom || null) : null,
         segment_date_to: selectionMode === "segment" ? (segmentDateTo || null) : null,
-        ai_enabled: aiEnabled, ai_config_id: finalAiConfigId, instance_name: instanceName || null, audience_type: audienceType,
+        ai_enabled: aiEnabled, scenario_key: scenarioKey, instance_name: instanceName || null,
         message_template: messageTemplate || null,
         follow_up_enabled: followUpEnabled, follow_up_count: followUpCount, follow_up_interval_hours: followUpInterval,
         send_rate_per_minute: sendRate, delay_between_messages: delayBetween,
@@ -756,6 +673,8 @@ FORMATO DE RESPOSTA:
 
   const toggleSource = (val: string) => setSegmentSources(prev => prev.includes(val) ? prev.filter(v => v !== val) : [...prev, val]);
   const toggleStatus = (val: string) => setSegmentStatuses(prev => prev.includes(val) ? prev.filter(v => v !== val) : [...prev, val]);
+
+  const selectedScenario = scenarios.find(s => s.scenario_key === scenarioKey);
 
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) reset(); onOpenChange(v); }}>
@@ -807,29 +726,6 @@ FORMATO DE RESPOSTA:
                   </SelectContent>
                 </Select>
               </div>
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-xs">Público-alvo *</Label>
-              <Select value={audienceType} onValueChange={(v: "b2c" | "b2b") => setAudienceType(v)}>
-                <SelectTrigger className="text-sm"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="b2c">
-                    <div className="flex items-center gap-2">
-                      <Users className="h-3 w-3" />
-                      <span>Consumidor Final (B2C)</span>
-                    </div>
-                  </SelectItem>
-                  <SelectItem value="b2b">
-                    <div className="flex items-center gap-2">
-                      <Target className="h-3 w-3" />
-                      <span>Empresa / Revenda (B2B)</span>
-                    </div>
-                  </SelectItem>
-                </SelectContent>
-              </Select>
-              <p className="text-[10px] text-muted-foreground">
-                {audienceType === "b2c" ? "Foco em eventos, aniversários, consumo pessoal" : "Foco em parceria comercial, reposição, volume"}
-              </p>
             </div>
             <div className="space-y-1.5">
               <Label className="text-xs">Agendamento (opcional)</Label>
@@ -994,7 +890,7 @@ FORMATO DE RESPOSTA:
           </div>
         )}
 
-        {/* Step 3: AI & Instance */}
+        {/* Step 3: Scenario & Instance */}
         {step === 3 && (
           <div className="space-y-4">
             <div className="border rounded-lg p-4">
@@ -1012,66 +908,42 @@ FORMATO DE RESPOSTA:
               </div>
             </div>
 
-            {aiEnabled && (() => {
-              const chatbotAgents = agents.filter(a => a.config_type === "chatbot" && a.enabled);
-              const smartAgent = chatbotAgents.find(a => (a.config as any)?.routing_mode === "smart");
-              const activeRoles = chatbotAgents
-                .map(a => (a.config as any)?.agent_role)
-                .filter(Boolean);
-
-              // Auto-select smart agent config if available
-              if (smartAgent && !aiConfigId) {
-                setTimeout(() => setAiConfigId(smartAgent.id), 0);
-              } else if (!smartAgent && chatbotAgents.length > 0 && !aiConfigId) {
-                setTimeout(() => setAiConfigId(chatbotAgents[0].id), 0);
-              }
-
-              return (
-                <div className="border rounded-lg p-4 bg-primary/5 space-y-2">
-                  <div className="flex items-center gap-2">
-                    <Sparkles className="h-4 w-4 text-primary" />
-                    <p className="text-sm font-medium">
-                      {smartAgent ? "Modo Inteligente Ativo" : "Agente de IA"}
-                    </p>
-                  </div>
-                  {smartAgent ? (
-                    <div className="space-y-2">
-                      <p className="text-[11px] text-muted-foreground leading-relaxed">
-                        A IA alternará automaticamente entre os agentes conforme o contexto da conversa, seguindo o fluxo: SDR → Closer → CS.
-                      </p>
-                      <div className="flex flex-wrap gap-1.5">
-                        {activeRoles.map((role: string) => (
-                          <Badge key={role} variant="secondary" className="text-[10px] gap-1 bg-primary/10 text-primary border-primary/20">
-                            {role === "SDR" && "🎯"}{role === "Closer" && "🤝"}{role === "Customer Success" && "🔄"}{role === "BDR" && "🔍"} {role}
-                          </Badge>
-                        ))}
-                      </div>
-                    </div>
-                  ) : chatbotAgents.length > 0 ? (
-                    <div className="space-y-1.5">
-                      <Label className="text-[10px] text-muted-foreground">Agente selecionado</Label>
-                      <Select value={aiConfigId} onValueChange={setAiConfigId}>
-                        <SelectTrigger className="text-sm"><SelectValue placeholder="Escolha um agente..." /></SelectTrigger>
-                        <SelectContent>
-                          {chatbotAgents.map(a => (
-                            <SelectItem key={a.id} value={a.id}>
-                              <div className="flex items-center gap-2">
-                                <Bot className="h-3 w-3" />
-                                <span>{(a.config as any)?.agent_role || a.instance_name || "Agente"}</span>
-                              </div>
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  ) : (
-                    <p className="text-[11px] text-muted-foreground">
-                      Nenhum agente ativo. Configure seus agentes na aba Agente IA.
-                    </p>
-                  )}
+            {aiEnabled && (
+              <div className="border rounded-lg p-4 bg-primary/5 space-y-3">
+                <div className="flex items-center gap-2">
+                  <Sparkles className="h-4 w-4 text-primary" />
+                  <p className="text-sm font-medium">Cenário de IA</p>
                 </div>
-              );
-            })()}
+                <p className="text-[11px] text-muted-foreground leading-relaxed">
+                  Selecione o cenário que define como a IA se comportará ao responder os leads desta campanha. Configure os prompts em "Meu Vendedor".
+                </p>
+                <Select value={scenarioKey} onValueChange={setScenarioKey}>
+                  <SelectTrigger className="text-sm"><SelectValue placeholder="Selecione o cenário..." /></SelectTrigger>
+                  <SelectContent>
+                    {SCENARIO_OPTIONS.map(opt => {
+                      const sc = scenarios.find(s => s.scenario_key === opt.value);
+                      return (
+                        <SelectItem key={opt.value} value={opt.value}>
+                          <div className="flex items-center gap-2">
+                            <span>{opt.icon}</span>
+                            <span>{opt.label}</span>
+                            {sc && !sc.enabled && <Badge variant="secondary" className="text-[9px] ml-1">Desativado</Badge>}
+                          </div>
+                        </SelectItem>
+                      );
+                    })}
+                  </SelectContent>
+                </Select>
+                {selectedScenario && (
+                  <div className="text-[10px] text-muted-foreground bg-secondary/50 rounded p-2">
+                    {selectedScenario.description}
+                    {!selectedScenario.system_prompt && (
+                      <p className="text-warning mt-1 font-medium">⚠️ Prompt ainda não configurado. Configure em "Meu Vendedor".</p>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
 
             <div className="space-y-1.5">
               <Label className="text-xs">Instância WhatsApp</Label>
@@ -1092,9 +964,6 @@ FORMATO DE RESPOSTA:
                   )}
                 </SelectContent>
               </Select>
-              {aiEnabled && aiConfigId && (
-                <p className="text-[10px] text-muted-foreground">Instância vinculada ao agente selecionado será usada automaticamente</p>
-              )}
             </div>
           </div>
         )}
@@ -1105,7 +974,7 @@ FORMATO DE RESPOSTA:
             <div className="space-y-1.5">
               <Label className="text-xs">Mensagem Inicial</Label>
               <Textarea
-                placeholder={aiEnabled ? "Deixe vazio para a IA gerar automaticamente com base no agente selecionado..." : "Olá {nome}, tudo bem? Vi que você..."}
+                placeholder={aiEnabled ? "Deixe vazio para a IA gerar automaticamente com base no cenário selecionado..." : "Olá {nome}, tudo bem? Vi que você..."}
                 value={messageTemplate}
                 onChange={e => setMessageTemplate(e.target.value)}
                 rows={5}
@@ -1201,14 +1070,14 @@ FORMATO DE RESPOSTA:
 
 // ---- DETAIL DIALOG ----
 function DetailDialog({
-  open, onOpenChange, broadcast, leads, loading, agents,
+  open, onOpenChange, broadcast, leads, loading, scenarios,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
   broadcast: Broadcast | null;
   leads: any[];
   loading: boolean;
-  agents: AiAgent[];
+  scenarios: AiScenario[];
 }) {
   const statusCounts = useMemo(() => {
     if (!broadcast) return {};
@@ -1219,7 +1088,7 @@ function DetailDialog({
 
   if (!broadcast) return null;
   const cfg = STATUS_CONFIG[broadcast.status] || STATUS_CONFIG.draft;
-  const agent = agents.find(a => a.id === broadcast.ai_config_id);
+  const scenarioLabel = SCENARIO_OPTIONS.find(s => s.value === broadcast.scenario_key);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -1259,7 +1128,7 @@ function DetailDialog({
             <span>Tipo: <strong className="text-foreground">{broadcast.type === "automated" ? "Automatizada" : "Manual"}</strong></span>
             <span>Canal: <strong className="text-foreground capitalize">{broadcast.channel}</strong></span>
             <span>Instância: <strong className="text-foreground">{broadcast.instance_name || "—"}</strong></span>
-            <span>Agente IA: <strong className="text-foreground">{agent?.instance_name || (broadcast.ai_enabled ? "Sim" : "Não")}</strong></span>
+            <span>Cenário IA: <strong className="text-foreground">{scenarioLabel ? `${scenarioLabel.icon} ${scenarioLabel.label}` : (broadcast.ai_enabled ? "Sim" : "Não")}</strong></span>
             <span>Follow-up: <strong className="text-foreground">{broadcast.follow_up_enabled ? `${broadcast.follow_up_count}x a cada ${broadcast.follow_up_interval_hours}h` : "Desativado"}</strong></span>
             <span>Cadência: <strong className="text-foreground">{broadcast.send_rate_per_minute}/min • {broadcast.delay_between_messages}s</strong></span>
           </div>
