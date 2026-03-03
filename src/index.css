@@ -45,15 +45,14 @@
 
     --radius: 0.625rem;
 
-    /* Sidebar — elevated with subtle teal tint */
-    --sidebar-background: 192 30% 16%;
-    --sidebar-foreground: 192 15% 75%;
-    --sidebar-primary: 185 80% 50%;
+    --sidebar-background: 200 30% 96%;
+    --sidebar-foreground: 215 18% 42%;
+    --sidebar-primary: 185 85% 32%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 192 25% 22%;
-    --sidebar-accent-foreground: 0 0% 95%;
-    --sidebar-border: 192 20% 22%;
-    --sidebar-ring: 185 80% 50%;
+    --sidebar-accent: 185 40% 90%;
+    --sidebar-accent-foreground: 215 30% 12%;
+    --sidebar-border: 200 25% 82%;
+    --sidebar-ring: 185 85% 32%;
 
     --chart-1: 185 85% 32%;
     --chart-2: 152 68% 34%;
