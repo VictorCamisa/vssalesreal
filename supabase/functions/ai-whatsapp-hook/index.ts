@@ -119,11 +119,20 @@ O lead está respondendo à mensagem acima. Continue naturalmente. NÃO repita a
 
     console.log(`Using scenario: ${scenario.scenario_key} (${scenario.name})`);
 
-    // ---- Behavior settings ----
+    // ---- Behavior settings (read ALL from user config) ----
     const behavior = scenario.behavior as any || {};
     const maxMessages = behavior.max_messages ?? 15;
     const delaySeconds = behavior.delay_seconds ?? 5;
     const contextWindow = behavior.context_window ?? 20;
+    const splitMessages = behavior.split_messages !== false;
+    const maxCharsPerBlock = behavior.max_chars_per_block ?? 200;
+    const useEmoji = behavior.use_emoji !== false;
+    const activeEngagement = behavior.active_engagement !== false;
+    const hidePrices = behavior.hide_prices === true;
+    const greetingMessage = behavior.greeting_message || "";
+    const farewellMessage = behavior.farewell_message || "";
+    const outOfHoursMessage = behavior.out_of_hours_message || "";
+    const handoffKeywords: string[] = behavior.handoff_keywords || [];
 
     // ---- Track conversation ----
     const { data: existingConv } = await supabaseAdmin
@@ -250,30 +259,53 @@ O lead está respondendo à mensagem acima. Continue naturalmente. NÃO repita a
       }
     }
 
+    // ---- Handoff keyword check ----
+    if (handoffKeywords.length > 0) {
+      const lowerMsg = messageText.toLowerCase();
+      const triggered = handoffKeywords.some((kw: string) => lowerMsg.includes(kw.toLowerCase()));
+      if (triggered) {
+        console.log(`Handoff keyword triggered: "${messageText}"`);
+        // Don't auto-reply, let human handle
+        return new Response(JSON.stringify({ ignored: true, reason: "handoff_keyword_triggered" }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+    }
+
+    // ---- Greeting message for first contact ----
+    if (customerMsgCount === 1 && greetingMessage) {
+      // Will be prepended to AI response below
+    }
+
     // ---- Build system prompt ----
-    // The scenario system_prompt is the SINGLE SOURCE OF TRUTH
-    const behaviorRules = `\n\nCONFIGURAÇÕES DE COMPORTAMENTO (OBRIGATÓRIO):
-- Máximo de mensagens nesta conversa: ${maxMessages} (após isso, encaminhe para atendente humano)
-- Você já enviou ~${botMsgCount} mensagens nesta conversa
+    // The scenario system_prompt is the SINGLE SOURCE OF TRUTH configured by the user
+    // We ONLY append technical rules that the user cannot control (format, scheduling commands)
+    const behaviorParts: string[] = [];
+    behaviorParts.push(`\nCONFIGURAÇÕES TÉCNICAS (aplicadas automaticamente):`);
+    behaviorParts.push(`- Máximo de mensagens nesta conversa: ${maxMessages} (após isso, encaminhe para atendente humano)`);
+    behaviorParts.push(`- Você já enviou ~${botMsgCount} mensagens nesta conversa`);
 
-FORMATO DE RESPOSTA (CRÍTICO):
-- Divida sua resposta em blocos CURTOS de no máximo 200 caracteres cada
-- Separe cada bloco com ---BLOCO--- (numa linha isolada)
-- Máximo 4 blocos por resposta
-- Cada bloco deve ser uma mensagem independente e natural
-- NÃO envie paredes de texto
+    if (splitMessages) {
+      behaviorParts.push(`\nFORMATO DE RESPOSTA:`);
+      behaviorParts.push(`- Divida sua resposta em blocos de no máximo ${maxCharsPerBlock} caracteres cada`);
+      behaviorParts.push(`- Separe cada bloco com ---BLOCO--- (numa linha isolada)`);
+      behaviorParts.push(`- Máximo 4 blocos por resposta`);
+    } else {
+      behaviorParts.push(`\nFORMATO DE RESPOSTA:`);
+      behaviorParts.push(`- Responda em uma única mensagem fluida e natural`);
+      behaviorParts.push(`- Máximo 600 caracteres por resposta`);
+    }
 
-REGRA DE ENGAJAMENTO:
-- A ÚLTIMA mensagem DEVE terminar com uma PERGUNTA ABERTA ou convite para responder
-- NUNCA encerre uma resposta de forma fechada
+    if (!useEmoji) behaviorParts.push(`- NÃO use emojis na resposta`);
+    if (activeEngagement) behaviorParts.push(`- A ÚLTIMA mensagem DEVE terminar com uma PERGUNTA ABERTA ou convite para responder`);
+    if (hidePrices) behaviorParts.push(`- NUNCA mencione preços ou valores. Se perguntarem, diga que precisa entender melhor a necessidade primeiro ou encaminhe para atendente`);
 
-CAPACIDADE DE AGENDAMENTO:
-Quando o lead quiser agendar, pergunte data e horário. Com data e hora, inclua: [AGENDAR:YYYY-MM-DD:HH:MM:NOME_DO_LEAD]
-Para cancelar: [CANCELAR:TELEFONE_DO_LEAD]. NÃO mostre os comandos ao lead.
+    behaviorParts.push(`\nCAPACIDADE DE AGENDAMENTO:`);
+    behaviorParts.push(`Quando o lead quiser agendar, pergunte data e horário. Com data e hora, inclua: [AGENDAR:YYYY-MM-DD:HH:MM:NOME_DO_LEAD]`);
+    behaviorParts.push(`Para cancelar: [CANCELAR:TELEFONE_DO_LEAD]. NÃO mostre os comandos ao lead.`);
+    behaviorParts.push(`\nResponda SEMPRE em português brasileiro.`);
 
-Responda SEMPRE em português brasileiro.`;
+    const behaviorRules = behaviorParts.join("\n");
 
-    const systemPrompt = scenario.system_prompt + behaviorRules + broadcastContext + companyContext + knowledgeContext;
+    const systemPrompt = scenario.system_prompt + "\n" + behaviorRules + broadcastContext + companyContext + knowledgeContext;
 
     // ---- Build conversation messages ----
     const conversationMessages: { role: string; content: string }[] = [
@@ -313,7 +345,7 @@ Responda SEMPRE em português brasileiro.`;
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY not configured");
 
-    const temperature = Math.min(Number(scenario.temperature) || 0.7, 0.5);
+    const temperature = Number(scenario.temperature) || 0.7;
 
     const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
@@ -382,13 +414,29 @@ Responda SEMPRE em português brasileiro.`;
       } catch (e) { console.error("Cancel error:", e); }
     }
 
-    // ---- Send reply via Evolution API in blocks ----
+    // ---- Send reply via Evolution API ----
     const evolutionUrl = (Deno.env.get("EVOLUTION_API_URL") || "").replace(/\/$/, "");
     const evolutionKey = Deno.env.get("EVOLUTION_API_KEY") || "";
 
-    const blocks = reply.split(/---BLOCO---/i).map((b: string) => b.trim()).filter((b: string) => b.length > 0);
-    const messageParts = blocks.length > 1 ? blocks : reply.split(/\n\n+/).map((b: string) => b.trim()).filter((b: string) => b.length > 0);
-    const finalParts = messageParts.length > 0 ? messageParts : [reply];
+    // Prepend greeting message on first contact
+    let greetingBlock: string | null = null;
+    if (customerMsgCount === 1 && greetingMessage) {
+      const cp = companyProfile as any;
+      greetingBlock = greetingMessage.replace(/\{empresa\}/gi, cp?.company_name || "");
+    }
+
+    let finalParts: string[];
+    if (splitMessages) {
+      const blocks = reply.split(/---BLOCO---/i).map((b: string) => b.trim()).filter((b: string) => b.length > 0);
+      finalParts = blocks.length > 1 ? blocks : reply.split(/\n\n+/).map((b: string) => b.trim()).filter((b: string) => b.length > 0);
+      if (finalParts.length === 0) finalParts = [reply];
+    } else {
+      // Single message mode — send as one block
+      finalParts = [reply.replace(/---BLOCO---/gi, "\n").trim()];
+    }
+
+    // Prepend greeting
+    if (greetingBlock) finalParts.unshift(greetingBlock);
 
     let sendSuccess = false;
     for (let i = 0; i < finalParts.length; i++) {
