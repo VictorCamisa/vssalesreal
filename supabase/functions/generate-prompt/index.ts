@@ -23,50 +23,40 @@ serve(async (req) => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) throw new Error("Not authenticated");
 
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("org_id")
-      .eq("user_id", user.id)
-      .single();
+    const { data: profile } = await supabase.from("profiles").select("org_id").eq("user_id", user.id).single();
     if (!profile?.org_id) throw new Error("No org");
 
-    const { user_description, prompt_type } = await req.json();
-    if (!user_description || !prompt_type) throw new Error("Missing user_description or prompt_type");
+    const { user_description, scenario_key } = await req.json();
+    if (!user_description || !scenario_key) throw new Error("Missing user_description or scenario_key");
 
-    // Fetch company data
-    const { data: company } = await supabase
-      .from("company_profiles")
-      .select("*")
-      .eq("org_id", profile.org_id)
-      .maybeSingle();
+    const { data: company } = await supabase.from("company_profiles").select("*").eq("org_id", profile.org_id).maybeSingle();
 
-    // Build context about the company
-    const prefix = prompt_type === "b2b" ? "b2b" : "b2c";
     const companyCtx = company ? `
 DADOS DA EMPRESA:
 - Nome: ${company.company_name || "Não informado"}
 - Segmento: ${company.segment || "Não informado"}
 - Descrição: ${company.description || "Não informado"}
-- Tom de Voz (${prefix.toUpperCase()}): ${company[`${prefix}_tone_of_voice`] || company.tone_of_voice || "Não informado"}
-- Público-Alvo (${prefix.toUpperCase()}): ${company[`${prefix}_target_audience`] || company.target_audience || "Não informado"}
-- Diferenciais (${prefix.toUpperCase()}): ${company[`${prefix}_differentials`] || company.differentials || "Não informado"}
-- Processo de Vendas (${prefix.toUpperCase()}): ${company[`${prefix}_sales_process`] || company.sales_process || "Não informado"}
-- Ticket Médio (${prefix.toUpperCase()}): ${company[`${prefix}_avg_ticket`] || company.avg_ticket || "Não informado"}
-- Produtos: ${JSON.stringify((company[`${prefix}_products_services`] || company.products_services || []).slice(0, 10))}
-- Objeções: ${JSON.stringify((company[`${prefix}_objections_faq`] || company.objections_faq || []).slice(0, 10))}
+- Tom de Voz: ${company.tone_of_voice || "Não informado"}
+- Público-Alvo: ${company.target_audience || "Não informado"}
+- Diferenciais: ${company.differentials || "Não informado"}
+- Processo de Vendas: ${company.sales_process || "Não informado"}
+- Ticket Médio: ${company.avg_ticket || "Não informado"}
+- Produtos: ${JSON.stringify((company.products_services || []).slice(0, 10))}
+- Objeções: ${JSON.stringify((company.objections_faq || []).slice(0, 10))}
 ` : "Dados da empresa não encontrados.";
 
-    const typeLabels: Record<string, string> = {
-      b2b: "B2B (vendas para empresas)",
-      b2c_broadcast: "B2C Disparo (consumidor final que respondeu a uma campanha de marketing)",
-      b2c_organic: "B2C Qualificativo (consumidor final que chegou organicamente)",
+    const scenarioLabels: Record<string, string> = {
+      outbound_prospecting: "Prospecção Outbound — abordagem de empresas raspadas. Tom B2B, qualificação e agendamento de reuniões.",
+      broadcast_own_base: "Disparo Base Própria — mensagem para leads frios da base do usuário. Tom personalizado.",
+      broadcast_whatsapp: "Disparo WhatsApp (Grupos) — abordagem de leads extraídos de grupos. Apresentação e qualificação.",
+      organic_inbound: "Atendimento Orgânico — leads que chamam no WhatsApp espontaneamente. Receptivo e qualificação.",
     };
 
     const systemPrompt = `Você é um especialista em criação de prompts de sistema para agentes de vendas por WhatsApp.
 
 Seu trabalho é gerar um prompt de sistema COMPLETO, PROFISSIONAL e PRONTO PARA USO baseado na descrição do usuário e nos dados da empresa.
 
-TIPO DE PROMPT: ${typeLabels[prompt_type] || prompt_type}
+CENÁRIO: ${scenarioLabels[scenario_key] || scenario_key}
 
 ${companyCtx}
 
@@ -75,13 +65,12 @@ REGRAS OBRIGATÓRIAS DO PROMPT GERADO:
 2. Deve incluir REGRAS claras e objetivas para o agente
 3. Deve definir o tom de voz e personalidade
 4. Deve incluir instruções sobre o que NUNCA fazer
-5. Deve ser específico para o tipo "${typeLabels[prompt_type]}"
-6. ${prompt_type === "b2b" ? "NUNCA mencione festas, churrascos, consumo pessoal. Foco em ROI, dados, cases." : ""}
-7. ${prompt_type.startsWith("b2c") ? "NUNCA mencione PDV, revenda, estabelecimento comercial. Foco em consumo pessoal." : ""}
-8. Deve usar os dados REAIS da empresa fornecidos acima (produtos, preços, diferenciais)
-9. O prompt deve ter entre 500 e 1500 caracteres — conciso mas completo
-10. NÃO coloque explicações antes ou depois do prompt. Retorne APENAS o prompt pronto.
-11. O prompt deve começar com "Você é..." definindo o papel do agente
+5. Deve ser específico para o cenário "${scenarioLabels[scenario_key] || scenario_key}"
+6. Deve usar os dados REAIS da empresa fornecidos acima (produtos, preços, diferenciais)
+7. O prompt deve ter entre 500 e 1500 caracteres — conciso mas completo
+8. NÃO coloque explicações antes ou depois do prompt. Retorne APENAS o prompt pronto.
+9. O prompt deve começar com "Você é..." definindo o papel do agente
+10. NÃO inclua instruções de formato de resposta (blocos, emojis) — isso é injetado automaticamente
 
 IMPORTANTE: Retorne SOMENTE o prompt final, sem comentários, sem explicações, sem blocos de código.`;
 
@@ -90,16 +79,10 @@ IMPORTANTE: Retorne SOMENTE o prompt final, sem comentários, sem explicações,
 
     const aiResp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
-      headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
-        "Content-Type": "application/json",
-      },
+      headers: { Authorization: `Bearer ${LOVABLE_API_KEY}`, "Content-Type": "application/json" },
       body: JSON.stringify({
         model: "google/gemini-2.5-flash",
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: user_description },
-        ],
+        messages: [{ role: "system", content: systemPrompt }, { role: "user", content: user_description }],
         stream: false,
       }),
     });
