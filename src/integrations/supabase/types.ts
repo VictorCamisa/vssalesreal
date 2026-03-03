@@ -157,6 +157,56 @@ export type Database = {
         }
         Relationships: []
       }
+      ai_scenarios: {
+        Row: {
+          behavior: Json | null
+          created_at: string
+          description: string
+          enabled: boolean | null
+          id: string
+          name: string
+          org_id: string
+          scenario_key: string
+          system_prompt: string
+          temperature: number | null
+          updated_at: string
+        }
+        Insert: {
+          behavior?: Json | null
+          created_at?: string
+          description?: string
+          enabled?: boolean | null
+          id?: string
+          name: string
+          org_id: string
+          scenario_key: string
+          system_prompt?: string
+          temperature?: number | null
+          updated_at?: string
+        }
+        Update: {
+          behavior?: Json | null
+          created_at?: string
+          description?: string
+          enabled?: boolean | null
+          id?: string
+          name?: string
+          org_id?: string
+          scenario_key?: string
+          system_prompt?: string
+          temperature?: number | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_scenarios_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       appointments: {
         Row: {
           cancelled_reason: string | null
@@ -320,6 +370,7 @@ export type Database = {
           org_id: string
           read_count: number | null
           replied_count: number | null
+          scenario_key: string | null
           scheduled_at: string | null
           segment_custom_filter: Json | null
           segment_date_from: string | null
@@ -359,6 +410,7 @@ export type Database = {
           org_id: string
           read_count?: number | null
           replied_count?: number | null
+          scenario_key?: string | null
           scheduled_at?: string | null
           segment_custom_filter?: Json | null
           segment_date_from?: string | null
@@ -398,6 +450,7 @@ export type Database = {
           org_id?: string
           read_count?: number | null
           replied_count?: number | null
+          scenario_key?: string | null
           scheduled_at?: string | null
           segment_custom_filter?: Json | null
           segment_date_from?: string | null
@@ -643,6 +696,7 @@ export type Database = {
           pipeline_stage_key: string | null
           push_name: string | null
           remote_jid: string
+          scenario_key: string | null
           updated_at: string
         }
         Insert: {
@@ -661,6 +715,7 @@ export type Database = {
           pipeline_stage_key?: string | null
           push_name?: string | null
           remote_jid: string
+          scenario_key?: string | null
           updated_at?: string
         }
         Update: {
@@ -679,6 +734,7 @@ export type Database = {
           pipeline_stage_key?: string | null
           push_name?: string | null
           remote_jid?: string
+          scenario_key?: string | null
           updated_at?: string
         }
         Relationships: [
