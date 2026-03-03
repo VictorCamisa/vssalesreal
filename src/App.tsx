@@ -61,7 +61,7 @@ function AppRoutes() {
         <Route path="/crm" element={<CRM />} />
         <Route path="/ai" element={<AIPage />} />
         <Route path="/company" element={<CompanyProfile />} />
-        <Route path="/my-seller" element={<MySeller />} />
+        
         <Route path="/appointments" element={<Appointments />} />
       </Route>
       <Route path="/site" element={<Landing />} />

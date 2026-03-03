@@ -29,7 +29,6 @@ const toolsNav = [
   { title: "CRM Pipeline", url: "/crm", icon: Kanban },
   { title: "Agendamentos", url: "/appointments", icon: Calendar },
   { title: "Agente IA", url: "/ai", icon: Brain },
-  { title: "Meu Vendedor", url: "/my-seller", icon: UserCheck },
   { title: "Empresa", url: "/company", icon: Building2 },
 ];
 
