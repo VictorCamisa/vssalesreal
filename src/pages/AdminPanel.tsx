@@ -149,6 +149,10 @@ export default function AdminPanel() {
   const [savingCompany, setSavingCompany] = useState(false);
   const [loadingCompany, setLoadingCompany] = useState(false);
   const [deletingUser, setDeletingUser] = useState<string | null>(null);
+  const [showCreateUser, setShowCreateUser] = useState(false);
+  const [newUserForm, setNewUserForm] = useState({ email: "", full_name: "", password: "" });
+  const [creatingNewUser, setCreatingNewUser] = useState(false);
+  const [newUserCredentials, setNewUserCredentials] = useState<{ email: string; password: string } | null>(null);
   const [activityLogs, setActivityLogs] = useState<any[]>([]);
   const [logsLoading, setLogsLoading] = useState(false);
   const [logUserFilter, setLogUserFilter] = useState<string>("all");
@@ -449,6 +453,35 @@ export default function AdminPanel() {
   };
 
   // Metrics
+  const createNewUser = async () => {
+    if (!newUserForm.email) {
+      toast({ title: "Email obrigatório", variant: "destructive" });
+      return;
+    }
+    setCreatingNewUser(true);
+    try {
+      const session = (await supabase.auth.getSession()).data.session;
+      const { data, error: fnError } = await supabase.functions.invoke("admin-create-user", {
+        headers: { Authorization: `Bearer ${session?.access_token}` },
+        body: {
+          email: newUserForm.email,
+          full_name: newUserForm.full_name || undefined,
+          temp_password: newUserForm.password || undefined,
+        },
+      });
+      if (fnError || data?.error) {
+        toast({ title: "Erro ao criar usuário", description: data?.error || fnError?.message, variant: "destructive" });
+      } else {
+        setNewUserCredentials({ email: data.email, password: data.temp_password });
+        toast({ title: "✅ Usuário criado!", description: `${data.email} criado com sucesso.` });
+        loadData();
+      }
+    } catch (err: any) {
+      toast({ title: "Erro", description: err.message, variant: "destructive" });
+    }
+    setCreatingNewUser(false);
+  };
+
   const totalUsers = users.length;
   const usersWithOrg = users.filter(u => u.org_id).length;
   const totalSales = checkoutLeads.length;
@@ -943,7 +976,95 @@ export default function AdminPanel() {
                 <div className="space-y-4">
                   <div className="flex items-center justify-between">
                     <p className="text-xs text-gray-500">{filteredUsers.length} usuários encontrados</p>
+                    <button
+                      onClick={() => { setShowCreateUser(true); setNewUserForm({ email: "", full_name: "", password: "" }); setNewUserCredentials(null); }}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#00D4FF]/10 text-[#00D4FF] text-[11px] font-semibold hover:bg-[#00D4FF]/20 transition-colors border border-[#00D4FF]/20"
+                    >
+                      <UserPlus className="h-3.5 w-3.5" /> Criar Usuário
+                    </button>
                   </div>
+
+                  {/* Create User Modal */}
+                  {showCreateUser && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => setShowCreateUser(false)}>
+                      <div className="bg-[#0d0d18] border border-[#1a1a2e] rounded-2xl p-6 w-full max-w-md shadow-2xl" onClick={e => e.stopPropagation()}>
+                        <div className="flex items-center justify-between mb-5">
+                          <h3 className="text-sm font-semibold text-white flex items-center gap-2"><UserPlus className="h-4 w-4 text-[#00D4FF]" /> Criar Novo Usuário</h3>
+                          <button onClick={() => setShowCreateUser(false)} className="text-gray-500 hover:text-white"><X className="h-4 w-4" /></button>
+                        </div>
+
+                        {newUserCredentials ? (
+                          <div className="space-y-4">
+                            <div className="bg-[#00FF88]/5 border border-[#00FF88]/20 rounded-xl p-4 text-center">
+                              <CheckCircle2 className="h-8 w-8 text-[#00FF88] mx-auto mb-2" />
+                              <p className="text-sm font-semibold text-white mb-1">Usuário criado com sucesso!</p>
+                              <p className="text-[11px] text-gray-400">Copie as credenciais abaixo e envie ao usuário.</p>
+                            </div>
+                            <div className="space-y-2">
+                              <div className="flex items-center justify-between bg-[#0A0A14] rounded-lg p-3 border border-[#1a1a2e]">
+                                <div>
+                                  <p className="text-[10px] text-gray-500 uppercase">Email</p>
+                                  <p className="text-xs text-white font-mono">{newUserCredentials.email}</p>
+                                </div>
+                                <button onClick={() => copyToClipboard(newUserCredentials.email)} className="text-gray-500 hover:text-[#00D4FF]"><Copy className="h-3.5 w-3.5" /></button>
+                              </div>
+                              <div className="flex items-center justify-between bg-[#0A0A14] rounded-lg p-3 border border-[#1a1a2e]">
+                                <div>
+                                  <p className="text-[10px] text-gray-500 uppercase">Senha Temporária</p>
+                                  <p className="text-xs text-white font-mono">{newUserCredentials.password}</p>
+                                </div>
+                                <button onClick={() => copyToClipboard(newUserCredentials.password)} className="text-gray-500 hover:text-[#00D4FF]"><Copy className="h-3.5 w-3.5" /></button>
+                              </div>
+                            </div>
+                            <button onClick={() => setShowCreateUser(false)} className="w-full py-2.5 rounded-lg bg-[#00D4FF]/10 text-[#00D4FF] text-xs font-semibold hover:bg-[#00D4FF]/20 transition-colors">
+                              Fechar
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="space-y-3">
+                            <div>
+                              <label className="text-[10px] uppercase text-gray-500 mb-1 block">Nome completo</label>
+                              <input
+                                type="text"
+                                value={newUserForm.full_name}
+                                onChange={e => setNewUserForm(f => ({ ...f, full_name: e.target.value }))}
+                                placeholder="Ex: João Silva"
+                                className="w-full h-9 px-3 rounded-lg bg-[#0A0A14] border border-[#1a1a2e] text-xs text-white placeholder:text-gray-700 focus:outline-none focus:border-[#00D4FF]/30"
+                              />
+                            </div>
+                            <div>
+                              <label className="text-[10px] uppercase text-gray-500 mb-1 block">Email *</label>
+                              <input
+                                type="email"
+                                value={newUserForm.email}
+                                onChange={e => setNewUserForm(f => ({ ...f, email: e.target.value }))}
+                                placeholder="usuario@empresa.com"
+                                className="w-full h-9 px-3 rounded-lg bg-[#0A0A14] border border-[#1a1a2e] text-xs text-white placeholder:text-gray-700 focus:outline-none focus:border-[#00D4FF]/30"
+                              />
+                            </div>
+                            <div>
+                              <label className="text-[10px] uppercase text-gray-500 mb-1 block">Senha (opcional — auto-gerada se vazio)</label>
+                              <input
+                                type="text"
+                                value={newUserForm.password}
+                                onChange={e => setNewUserForm(f => ({ ...f, password: e.target.value }))}
+                                placeholder="Deixe vazio para gerar automaticamente"
+                                className="w-full h-9 px-3 rounded-lg bg-[#0A0A14] border border-[#1a1a2e] text-xs text-white placeholder:text-gray-700 focus:outline-none focus:border-[#00D4FF]/30"
+                              />
+                            </div>
+                            <button
+                              onClick={createNewUser}
+                              disabled={creatingNewUser || !newUserForm.email}
+                              className="w-full py-2.5 rounded-lg bg-gradient-to-r from-[#0057FF] to-[#00D4FF] text-white text-xs font-semibold hover:opacity-90 transition-opacity disabled:opacity-50 flex items-center justify-center gap-2"
+                            >
+                              {creatingNewUser ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <UserPlus className="h-3.5 w-3.5" />}
+                              {creatingNewUser ? "Criando..." : "Criar Usuário"}
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
                   <div className="rounded-xl border border-[#1a1a2e] overflow-hidden">
                     <table className="w-full">
                       <thead>
