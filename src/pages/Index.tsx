@@ -158,8 +158,8 @@ export default function Index() {
   return (
     <div className="space-y-5 max-w-6xl">
       {/* Welcome Banner */}
-      <div className="glass-card p-4 sm:p-5 relative overflow-hidden">
-        <div className="absolute inset-0 gradient-primary opacity-[0.04]" />
+      <div className="glass-card p-4 sm:p-5 relative overflow-hidden gradient-banner">
+        <div className="absolute inset-0 gradient-primary opacity-[0.06] dark:opacity-[0.04]" />
         <div className="relative flex items-center justify-between">
           <div>
             <h1 className="text-lg sm:text-xl font-semibold tracking-tight">

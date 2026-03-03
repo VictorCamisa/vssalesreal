@@ -6,59 +6,60 @@
 
 @layer base {
   :root {
-    /* VS Sales — BOLD, VIVID light palette (synced with Business OS) */
-    --background: 210 25% 97%;
-    --foreground: 220 30% 8%;
+    /* VS Sales — VIBRANT light palette with depth */
+    --background: 200 30% 96%;
+    --foreground: 215 35% 12%;
 
     --card: 0 0% 100%;
-    --card-foreground: 220 30% 8%;
+    --card-foreground: 215 35% 12%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 220 30% 8%;
+    --popover-foreground: 215 35% 12%;
 
-    /* VS Brand — vibrant teal */
-    --primary: 190 80% 38%;
+    /* VS Brand — rich, saturated teal */
+    --primary: 185 85% 32%;
     --primary-foreground: 0 0% 100%;
-    --primary-glow: 190 80% 52%;
+    --primary-glow: 185 80% 45%;
 
-    --secondary: 210 20% 94%;
-    --secondary-foreground: 220 25% 15%;
+    --secondary: 200 35% 92%;
+    --secondary-foreground: 215 30% 18%;
 
-    --muted: 210 18% 92%;
-    --muted-foreground: 220 12% 35%;
+    --muted: 200 25% 90%;
+    --muted-foreground: 215 18% 42%;
 
-    --accent: 190 30% 92%;
-    --accent-foreground: 220 25% 10%;
+    --accent: 185 40% 90%;
+    --accent-foreground: 215 30% 12%;
 
-    --destructive: 0 85% 52%;
+    --destructive: 0 80% 55%;
     --destructive-foreground: 0 0% 100%;
 
-    --success: 152 72% 30%;
+    --success: 152 68% 34%;
     --success-foreground: 0 0% 100%;
 
-    --warning: 38 95% 42%;
+    --warning: 38 92% 45%;
     --warning-foreground: 0 0% 100%;
 
-    --border: 215 20% 78%;
-    --input: 215 18% 80%;
-    --ring: 190 80% 38%;
+    --border: 200 25% 82%;
+    --input: 200 22% 84%;
+    --ring: 185 85% 32%;
 
     --radius: 0.625rem;
 
-    --sidebar-background: 210 30% 98%;
-    --sidebar-foreground: 220 20% 20%;
-    --sidebar-primary: 190 80% 38%;
+    /* Sidebar — elevated with subtle teal tint */
+    --sidebar-background: 192 30% 16%;
+    --sidebar-foreground: 192 15% 75%;
+    --sidebar-primary: 185 80% 50%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 190 25% 93%;
-    --sidebar-accent-foreground: 220 25% 10%;
-    --sidebar-border: 215 20% 82%;
-    --sidebar-ring: 190 80% 38%;
+    --sidebar-accent: 192 25% 22%;
+    --sidebar-accent-foreground: 0 0% 95%;
+    --sidebar-border: 192 20% 22%;
+    --sidebar-ring: 185 80% 50%;
 
-    --chart-1: 190 80% 38%;
-    --chart-2: 152 72% 30%;
-    --chart-3: 38 95% 42%;
-    --chart-4: 262 83% 58%;
-    --chart-5: 0 85% 52%;
+    --chart-1: 185 85% 32%;
+    --chart-2: 152 68% 34%;
+    --chart-3: 38 92% 45%;
+    --chart-4: 262 78% 58%;
+    --chart-5: 0 80% 55%;
 
     font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', 'Inter', system-ui, sans-serif;
   }
@@ -150,19 +151,22 @@
   .gradient-primary {
     background: linear-gradient(135deg, hsl(var(--primary)), hsl(var(--primary-glow)));
   }
+  .gradient-banner {
+    background: linear-gradient(135deg, hsl(185 85% 32% / 0.08), hsl(185 80% 45% / 0.04), hsl(152 68% 34% / 0.06));
+  }
 }
 
 @layer components {
   .glass-card {
-    @apply bg-card rounded-xl border-2 border-border shadow-card;
+    @apply bg-card rounded-xl border border-border/60 shadow-card;
   }
 
   .glass {
-    @apply bg-card/95 backdrop-blur-xl border-2 border-border;
+    @apply bg-card/95 backdrop-blur-xl border border-border/60;
   }
 
   .stat-card {
-    @apply glass-card p-3 sm:p-4 transition-all duration-200 hover:shadow-md hover:border-border;
+    @apply glass-card p-3 sm:p-4 transition-all duration-200 hover:shadow-elevated hover:border-primary/20;
   }
 
   .page-header {

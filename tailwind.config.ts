@@ -79,10 +79,10 @@ export default {
         sm: "calc(var(--radius) - 4px)",
       },
       boxShadow: {
-        soft: "0 1px 4px 0 rgba(0, 0, 0, 0.08), 0 1px 2px -1px rgba(0, 0, 0, 0.06)",
-        card: "0 2px 8px -1px rgba(0, 0, 0, 0.1), 0 1px 4px -1px rgba(0, 0, 0, 0.06)",
-        elevated: "0 8px 24px -6px rgba(0, 0, 0, 0.14), 0 2px 8px -2px rgba(0, 0, 0, 0.08)",
-        nav: "0 1px 2px 0 rgba(0, 0, 0, 0.1)",
+        soft: "0 1px 4px 0 rgba(0, 40, 70, 0.06), 0 1px 2px -1px rgba(0, 40, 70, 0.04)",
+        card: "0 2px 12px -2px rgba(0, 40, 70, 0.08), 0 1px 4px -1px rgba(0, 40, 70, 0.04)",
+        elevated: "0 8px 28px -6px rgba(0, 40, 70, 0.12), 0 2px 10px -2px rgba(0, 40, 70, 0.06)",
+        nav: "0 1px 3px 0 rgba(0, 40, 70, 0.08)",
       },
       keyframes: {
         "accordion-down": {

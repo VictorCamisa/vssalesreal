@@ -41,7 +41,7 @@ export function AppSidebar() {
               to={item.url}
               end={item.url === "/"}
               className="flex items-center gap-2.5 px-2.5 rounded-lg text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-all duration-150 text-[13px]"
-              activeClassName="bg-primary/10 text-primary font-medium !text-primary"
+              activeClassName="bg-sidebar-primary/15 text-sidebar-primary font-medium !text-sidebar-primary"
             >
               <item.icon className="h-[15px] w-[15px] shrink-0" />
               <span>{item.title}</span>
