@@ -156,7 +156,7 @@ export default function Index() {
   };
 
   return (
-    <div className="space-y-5 max-w-6xl">
+    <div className="space-y-5">
       {/* Welcome Banner */}
       <div className="glass-card p-4 sm:p-5 relative overflow-hidden gradient-banner">
         <div className="absolute inset-0 gradient-primary opacity-[0.06] dark:opacity-[0.04]" />
