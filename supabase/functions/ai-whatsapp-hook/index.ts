@@ -144,11 +144,9 @@ O lead está respondendo à mensagem acima. Continue naturalmente. NÃO repita a
       .maybeSingle();
 
     let customerMsgCount = 0;
-    let botMsgCount = 0;
 
     if (existingConv) {
       customerMsgCount = (existingConv.customer_msg_count || 0) + 1;
-      botMsgCount = customerMsgCount;
       await supabaseAdmin.rpc("increment_customer_msg_count", { p_conv_id: existingConv.id });
       await supabaseAdmin.from("conversation_tracker").update({
         last_customer_msg_at: new Date().toISOString(),
@@ -170,9 +168,18 @@ O lead está respondendo à mensagem acima. Continue naturalmente. NÃO repita a
       });
     }
 
-    // ---- Max messages limit ----
-    if (botMsgCount >= maxMessages) {
-      console.log(`Max messages reached (${botMsgCount}/${maxMessages})`);
+    // ---- Count actual bot messages for limit check ----
+    const { count: botMsgCount } = await supabaseAdmin
+      .from("chat_messages")
+      .select("id", { count: "exact", head: true })
+      .eq("org_id", orgId)
+      .eq("instance_name", instanceName)
+      .eq("remote_jid", remoteJid)
+      .eq("from_me", true);
+
+    const actualBotCount = botMsgCount || 0;
+    if (actualBotCount >= maxMessages) {
+      console.log(`Max messages reached (${actualBotCount}/${maxMessages})`);
       return new Response(JSON.stringify({ ignored: true, reason: "max_messages_reached" }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
@@ -281,7 +288,7 @@ O lead está respondendo à mensagem acima. Continue naturalmente. NÃO repita a
     const behaviorParts: string[] = [];
     behaviorParts.push(`\nCONFIGURAÇÕES TÉCNICAS (aplicadas automaticamente):`);
     behaviorParts.push(`- Máximo de mensagens nesta conversa: ${maxMessages} (após isso, encaminhe para atendente humano)`);
-    behaviorParts.push(`- Você já enviou ~${botMsgCount} mensagens nesta conversa`);
+    behaviorParts.push(`- Você já enviou ~${actualBotCount} mensagens nesta conversa`);
 
     if (splitMessages) {
       behaviorParts.push(`\nFORMATO DE RESPOSTA:`);
