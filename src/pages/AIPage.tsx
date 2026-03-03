@@ -1931,9 +1931,6 @@ export default function AIPage() {
           <TabsTrigger value="control" className="rounded-lg text-xs data-[state=active]:bg-primary/10 data-[state=active]:text-primary py-2 px-3">
             <Zap className="h-3.5 w-3.5 mr-1.5" />Controle
           </TabsTrigger>
-          <TabsTrigger value="chatbot" className="rounded-lg text-xs data-[state=active]:bg-primary/10 data-[state=active]:text-primary py-2 px-3">
-            <Bot className="h-3.5 w-3.5 mr-1.5" />Chatbot
-          </TabsTrigger>
           <TabsTrigger value="assistant" className="rounded-lg text-xs data-[state=active]:bg-primary/10 data-[state=active]:text-primary py-2 px-3">
             <Brain className="h-3.5 w-3.5 mr-1.5" />Assistente
           </TabsTrigger>
@@ -1949,7 +1946,6 @@ export default function AIPage() {
         </TabsList>
 
         <TabsContent value="control" className="mt-4"><ControlTab orgId={orgId} /></TabsContent>
-        <TabsContent value="chatbot" className="mt-4"><ChatbotTab orgId={orgId} /></TabsContent>
         <TabsContent value="assistant" className="mt-4"><AssistantTab orgId={orgId} /></TabsContent>
         <TabsContent value="knowledge" className="mt-4"><KnowledgeBaseTab orgId={orgId} /></TabsContent>
         <TabsContent value="messages" className="mt-4"><MessagesTab orgId={orgId} /></TabsContent>
