@@ -6,6 +6,7 @@ import {
   Loader2, CheckCircle2, Sparkles, Send
 } from "lucide-react";
 import vsLogo from "@/assets/vs-sales-logo.png";
+import kayronLogo from "@/assets/kayron-logo-full-light.png";
 
 interface FormData {
   company_name: string;
@@ -132,9 +133,9 @@ export default function CompanyForm() {
           <p className="text-sm text-gray-400 mb-2">
             Seus dados foram recebidos e estão sendo processados pela nossa IA para otimizar o perfil da sua empresa.
           </p>
-          <div className="flex items-center justify-center gap-2 text-[10px] text-[#00D4FF] mt-6">
-            <Sparkles className="h-3.5 w-3.5" />
-            Powered by VS SALES — Inteligência Artificial
+          <div className="flex flex-col items-center gap-2 mt-6">
+            <img src={kayronLogo} alt="Kayron Agency" className="h-5 opacity-60" />
+            <p className="text-[10px] text-gray-500">Uma colaboração entre <span className="text-gray-400 font-medium">Kayron Agency</span> & <span className="text-gray-400 font-medium">VS Labs</span></p>
           </div>
         </div>
       </div>
@@ -159,7 +160,7 @@ export default function CompanyForm() {
       <div className="border-b border-[#1a1a2e] bg-[#0A0A14]/80 backdrop-blur-sm sticky top-0 z-10">
         <div className="max-w-2xl mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <img src={vsLogo} alt="VS SALES" className="h-7" />
+            <img src={kayronLogo} alt="Kayron Agency" className="h-7" />
             <div>
               <p className="text-sm font-semibold">Perfil da Empresa</p>
               <p className="text-[10px] text-gray-500">Preencha para configurar sua IA de vendas</p>
@@ -413,6 +414,20 @@ export default function CompanyForm() {
               )}
             </button>
           )}
+        </div>
+      </div>
+
+      {/* Footer */}
+      <div className="max-w-2xl mx-auto px-4 py-6 mt-4 border-t border-[#1a1a2e]">
+        <div className="flex flex-col items-center gap-3">
+          <div className="flex items-center gap-3">
+            <img src={kayronLogo} alt="Kayron Agency" className="h-5 opacity-60" />
+            <span className="text-[10px] text-gray-600">&</span>
+            <img src={vsLogo} alt="VS Labs" className="h-5 opacity-60" />
+          </div>
+          <p className="text-[10px] text-gray-500 text-center">
+            Uma colaboração entre <span className="text-gray-400 font-medium">Kayron Agency</span> & <span className="text-gray-400 font-medium">VS Labs</span>
+          </p>
         </div>
       </div>
     </div>
