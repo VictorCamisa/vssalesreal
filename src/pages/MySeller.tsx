@@ -481,10 +481,55 @@ export default function MySeller() {
                       <ChevronDown className="h-3 w-3 text-muted-foreground" />
                     </button>
                   </CollapsibleTrigger>
-                  <CollapsibleContent className="pt-3 space-y-4">
+                  <CollapsibleContent className="pt-3 space-y-5">
+                    {/* ---- Toggles ---- */}
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="flex items-center justify-between border rounded-lg p-3 bg-secondary/20">
+                        <div>
+                          <Label className="text-xs font-medium">Usar Emojis</Label>
+                          <p className="text-[10px] text-muted-foreground">Agente usa emojis nas respostas</p>
+                        </div>
+                        <Switch
+                          checked={scenario.behavior?.use_emoji ?? true}
+                          onCheckedChange={(v) => updateScenario(scenario.id, "behavior", { ...scenario.behavior, use_emoji: v })}
+                        />
+                      </div>
+                      <div className="flex items-center justify-between border rounded-lg p-3 bg-secondary/20">
+                        <div>
+                          <Label className="text-xs font-medium">Quebrar em Blocos</Label>
+                          <p className="text-[10px] text-muted-foreground">Divide respostas longas em mensagens menores</p>
+                        </div>
+                        <Switch
+                          checked={scenario.behavior?.split_messages ?? true}
+                          onCheckedChange={(v) => updateScenario(scenario.id, "behavior", { ...scenario.behavior, split_messages: v })}
+                        />
+                      </div>
+                      <div className="flex items-center justify-between border rounded-lg p-3 bg-secondary/20">
+                        <div>
+                          <Label className="text-xs font-medium">Engajamento Ativo</Label>
+                          <p className="text-[10px] text-muted-foreground">Sempre termina com pergunta/gancho</p>
+                        </div>
+                        <Switch
+                          checked={scenario.behavior?.active_engagement ?? true}
+                          onCheckedChange={(v) => updateScenario(scenario.id, "behavior", { ...scenario.behavior, active_engagement: v })}
+                        />
+                      </div>
+                      <div className="flex items-center justify-between border rounded-lg p-3 bg-secondary/20">
+                        <div>
+                          <Label className="text-xs font-medium">Ocultar Preços</Label>
+                          <p className="text-[10px] text-muted-foreground">Omite valores e prioriza agendamento</p>
+                        </div>
+                        <Switch
+                          checked={scenario.behavior?.hide_prices ?? false}
+                          onCheckedChange={(v) => updateScenario(scenario.id, "behavior", { ...scenario.behavior, hide_prices: v })}
+                        />
+                      </div>
+                    </div>
+
+                    {/* ---- Sliders ---- */}
                     <div className="space-y-2">
                       <div className="flex items-center justify-between">
-                        <Label className="text-xs">Máx. mensagens</Label>
+                        <Label className="text-xs">Máx. mensagens na conversa</Label>
                         <span className="text-sm font-bold text-primary">{scenario.behavior?.max_messages ?? 15}</span>
                       </div>
                       <Slider
@@ -492,6 +537,20 @@ export default function MySeller() {
                         onValueChange={([v]) => updateScenario(scenario.id, "behavior", { ...scenario.behavior, max_messages: v })}
                         min={3} max={50} step={1}
                       />
+                    </div>
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <Label className="text-xs">Máx. caracteres por bloco</Label>
+                        <span className="text-sm font-bold text-primary">{scenario.behavior?.max_chars_per_block ?? 500}</span>
+                      </div>
+                      <Slider
+                        value={[scenario.behavior?.max_chars_per_block ?? 500]}
+                        onValueChange={([v]) => updateScenario(scenario.id, "behavior", { ...scenario.behavior, max_chars_per_block: v })}
+                        min={100} max={2000} step={50}
+                      />
+                      <div className="flex justify-between text-[9px] text-muted-foreground">
+                        <span>Curto</span><span>Longo</span>
+                      </div>
                     </div>
                     <div className="space-y-2">
                       <div className="flex items-center justify-between">
@@ -516,6 +575,52 @@ export default function MySeller() {
                       />
                       <div className="flex justify-between text-[9px] text-muted-foreground">
                         <span>Preciso</span><span>Criativo</span>
+                      </div>
+                    </div>
+
+                    {/* ---- Text fields ---- */}
+                    <div className="space-y-3 border-t pt-4">
+                      <Label className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Mensagens Padrão</Label>
+                      <div className="space-y-1">
+                        <Label className="text-xs">Saudação inicial</Label>
+                        <Textarea
+                          value={scenario.behavior?.greeting_message || ""}
+                          onChange={(e) => updateScenario(scenario.id, "behavior", { ...scenario.behavior, greeting_message: e.target.value })}
+                          placeholder="Ex: Olá! 👋 Tudo bem? Sou o assistente da {empresa}..."
+                          rows={2}
+                          className="text-sm resize-none"
+                        />
+                        <p className="text-[10px] text-muted-foreground">Use {"{empresa}"} para injetar o nome. Deixe vazio para gerar automaticamente.</p>
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-xs">Mensagem de encerramento</Label>
+                        <Textarea
+                          value={scenario.behavior?.farewell_message || ""}
+                          onChange={(e) => updateScenario(scenario.id, "behavior", { ...scenario.behavior, farewell_message: e.target.value })}
+                          placeholder="Ex: Foi um prazer conversar! Qualquer dúvida, estou por aqui 😊"
+                          rows={2}
+                          className="text-sm resize-none"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-xs">Mensagem fora do horário</Label>
+                        <Textarea
+                          value={scenario.behavior?.out_of_hours_message || ""}
+                          onChange={(e) => updateScenario(scenario.id, "behavior", { ...scenario.behavior, out_of_hours_message: e.target.value })}
+                          placeholder="Ex: Olá! Estamos fora do horário de atendimento. Retornaremos em breve!"
+                          rows={2}
+                          className="text-sm resize-none"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-xs">Palavras-chave para transferir (handoff)</Label>
+                        <Input
+                          value={scenario.behavior?.handoff_keywords?.join(", ") || ""}
+                          onChange={(e) => updateScenario(scenario.id, "behavior", { ...scenario.behavior, handoff_keywords: e.target.value.split(",").map((s: string) => s.trim()).filter(Boolean) })}
+                          placeholder="Ex: humano, atendente, gerente, cancelar"
+                          className="text-sm h-9"
+                        />
+                        <p className="text-[10px] text-muted-foreground">Separe por vírgula. Ao detectar, a IA transfere para atendimento humano.</p>
                       </div>
                     </div>
                   </CollapsibleContent>
