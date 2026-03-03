@@ -227,7 +227,7 @@ export default function CRM() {
     if (!profile?.org_id) return;
     setHandoffSending(true);
 
-    // Get Evolution instance
+    // Get Evolution instance - check user-specific first, then global
     const { data: integration } = await supabase
       .from("integrations")
       .select("config")
@@ -235,7 +235,10 @@ export default function CRM() {
       .eq("service_name", "evolution")
       .single();
 
-    const instanceName = (integration?.config as any)?.instanceName;
+    const cfg = integration?.config as any;
+    const userId = (await supabase.auth.getUser()).data.user?.id;
+    const userInstances = userId && cfg?.instances_by_user?.[userId];
+    const instanceName = userInstances?.[0] || cfg?.instances?.[0] || cfg?.instanceName;
     if (!instanceName) {
       toast({ title: "Instância WhatsApp não configurada", variant: "destructive" });
       setHandoffSending(false);
