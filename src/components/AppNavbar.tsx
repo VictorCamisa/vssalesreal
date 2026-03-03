@@ -43,7 +43,7 @@ export function AppNavbar() {
   return (
     <>
       <nav className="sticky top-0 z-50 w-full border-b border-border/50 bg-card/80 backdrop-blur-xl supports-[backdrop-filter]:bg-card/60">
-        <div className="mx-auto flex h-14 max-w-[1440px] items-center px-4 gap-1">
+        <div className="flex h-14 items-center px-4 sm:px-6 lg:px-8 gap-1">
           {/* Logo */}
           <NavLink to="/" className="flex items-center gap-2 mr-6 shrink-0">
             <img src={vsLogo} alt="VS SALES" className="h-7 w-auto" />
