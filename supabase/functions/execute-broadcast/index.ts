@@ -291,11 +291,27 @@ Deno.serve(async (req) => {
 
         if (success) {
           const storedMsg = messageText.replace(/---BLOCO---/gi, "\n").trim();
+          const sentAt = new Date().toISOString();
           await supabase.from("broadcast_leads").update({
             status: "sent",
-            sent_at: new Date().toISOString(),
+            sent_at: sentAt,
             message_sent: storedMsg,
           }).eq("id", bl.id);
+
+          // Save broadcast message to chat_messages so the webhook has full history
+          const remoteJidMsg = `${cleanPhone}@s.whatsapp.net`;
+          try {
+            await supabase.from("chat_messages").insert({
+              org_id: org_id,
+              instance_name: instanceName!,
+              remote_jid: remoteJidMsg,
+              from_me: true,
+              message_text: storedMsg,
+              push_name: null,
+              message_id: `broadcast_${broadcast_id}_${bl.id}`,
+              timestamp: sentAt,
+            });
+          } catch (e) { console.error("Save broadcast chat_message error:", e); }
 
           // Create/update conversation_tracker with scenario_key
           const remoteJid = `${cleanPhone}@s.whatsapp.net`;
