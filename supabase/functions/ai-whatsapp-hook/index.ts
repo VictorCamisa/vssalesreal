@@ -136,6 +136,7 @@ O lead está respondendo à mensagem enviada pelo disparo. Continue naturalmente
     const delaySeconds = behavior.delay_seconds ?? 5;
     const contextWindow = behavior.context_window ?? 20;
     const splitMessages = behavior.split_messages !== false;
+    const maxBlocks = behavior.max_blocks ?? 3;
     const maxCharsPerBlock = behavior.max_chars_per_block ?? 200;
     const useEmoji = behavior.use_emoji !== false;
     const activeEngagement = behavior.active_engagement !== false;
@@ -359,9 +360,9 @@ O lead está respondendo à mensagem enviada pelo disparo. Continue naturalmente
 
     if (splitMessages) {
       behaviorParts.push(`\nFORMATO DE RESPOSTA:`);
-      behaviorParts.push(`- Divida sua resposta em NO MÁXIMO 3 blocos curtos (${maxCharsPerBlock} chars cada)`);
+      behaviorParts.push(`- Divida sua resposta em NO MÁXIMO ${maxBlocks} blocos curtos (${maxCharsPerBlock} chars cada)`);
       behaviorParts.push(`- Separe cada bloco com ---BLOCO--- (numa linha isolada)`);
-      behaviorParts.push(`- NUNCA envie mais de 3 blocos. Se precisar de mais, condense a informação`);
+      behaviorParts.push(`- NUNCA envie mais de ${maxBlocks} blocos. Se precisar de mais, condense a informação`);
     } else {
       behaviorParts.push(`\nFORMATO DE RESPOSTA:`);
       behaviorParts.push(`- Responda em uma única mensagem fluida e natural`);
@@ -499,7 +500,7 @@ O lead está respondendo à mensagem enviada pelo disparo. Continue naturalmente
       greetingBlock = greetingMessage.replace(/\{empresa\}/gi, cp?.company_name || "");
     }
 
-    const MAX_BLOCKS = 3; // Hard cap: never send more than 3 blocks
+    const MAX_BLOCKS = maxBlocks; // Use user-configured max blocks
     let finalParts: string[];
     if (splitMessages) {
       const blocks = reply.split(/---BLOCO---/i).map((b: string) => b.trim()).filter((b: string) => b.length > 0);
