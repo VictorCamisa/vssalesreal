@@ -359,9 +359,9 @@ O lead está respondendo à mensagem enviada pelo disparo. Continue naturalmente
 
     if (splitMessages) {
       behaviorParts.push(`\nFORMATO DE RESPOSTA:`);
-      behaviorParts.push(`- Divida sua resposta em blocos de no máximo ${maxCharsPerBlock} caracteres cada`);
+      behaviorParts.push(`- Divida sua resposta em NO MÁXIMO 3 blocos curtos (${maxCharsPerBlock} chars cada)`);
       behaviorParts.push(`- Separe cada bloco com ---BLOCO--- (numa linha isolada)`);
-      behaviorParts.push(`- Máximo 4 blocos por resposta`);
+      behaviorParts.push(`- NUNCA envie mais de 3 blocos. Se precisar de mais, condense a informação`);
     } else {
       behaviorParts.push(`\nFORMATO DE RESPOSTA:`);
       behaviorParts.push(`- Responda em uma única mensagem fluida e natural`);
@@ -499,13 +499,14 @@ O lead está respondendo à mensagem enviada pelo disparo. Continue naturalmente
       greetingBlock = greetingMessage.replace(/\{empresa\}/gi, cp?.company_name || "");
     }
 
+    const MAX_BLOCKS = 3; // Hard cap: never send more than 3 blocks
     let finalParts: string[];
     if (splitMessages) {
       const blocks = reply.split(/---BLOCO---/i).map((b: string) => b.trim()).filter((b: string) => b.length > 0);
-      finalParts = blocks.length > 1 ? blocks : reply.split(/\n\n+/).map((b: string) => b.trim()).filter((b: string) => b.length > 0);
+      // Only use ---BLOCO--- split, do NOT fallback to \n\n to avoid over-fragmentation
+      finalParts = blocks.length > 1 ? blocks.slice(0, MAX_BLOCKS) : [reply.replace(/---BLOCO---/gi, "\n").trim()];
       if (finalParts.length === 0) finalParts = [reply];
     } else {
-      // Single message mode — send as one block
       finalParts = [reply.replace(/---BLOCO---/gi, "\n").trim()];
     }
 
@@ -515,9 +516,9 @@ O lead está respondendo à mensagem enviada pelo disparo. Continue naturalmente
     let sendSuccess = false;
     for (let i = 0; i < finalParts.length; i++) {
       if (i > 0) {
-        const baseDelay = 1000 + Math.random() * 2000;
-        const lengthBonus = Math.min(finalParts[i].length * 10, 1000);
-        await new Promise(resolve => setTimeout(resolve, Math.min(baseDelay + lengthBonus, 4000)));
+        const baseDelay = 2000 + Math.random() * 3000;
+        const lengthBonus = Math.min(finalParts[i].length * 15, 2000);
+        await new Promise(resolve => setTimeout(resolve, Math.min(baseDelay + lengthBonus, 6000)));
       }
 
       const sendResponse = await fetch(`${evolutionUrl}/message/sendText/${instanceName}`, {
