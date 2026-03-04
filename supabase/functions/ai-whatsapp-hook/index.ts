@@ -378,6 +378,28 @@ O lead está respondendo à mensagem enviada pelo disparo. Continue naturalmente
     behaviorParts.push(`Para cancelar: [CANCELAR:TELEFONE_DO_LEAD]. NÃO mostre os comandos ao lead.`);
     behaviorParts.push(`\nResponda SEMPRE em português brasileiro.`);
 
+    // ---- Anti-repetition: scan bot history for already-mentioned topics ----
+    // Check if bot already mentioned specific products/topics so it doesn't keep repeating
+    const { data: botHistory } = await supabaseAdmin
+      .from("chat_messages")
+      .select("message_text")
+      .eq("org_id", orgId)
+      .eq("instance_name", instanceName)
+      .eq("remote_jid", remoteJid)
+      .eq("from_me", true)
+      .order("timestamp", { ascending: false })
+      .limit(20);
+
+    if (botHistory && botHistory.length > 0) {
+      const allBotText = botHistory.map((m: any) => m.message_text).join(" ").toLowerCase();
+      // Generic anti-repetition rule
+      behaviorParts.push(`\nREGRA ANTI-REPETIÇÃO (OBRIGATÓRIA):`);
+      behaviorParts.push(`- NÃO repita informações, produtos ou argumentos que você JÁ mencionou em mensagens anteriores`);
+      behaviorParts.push(`- Se você já apresentou um produto/serviço como gatilho, NÃO fale dele novamente a menos que o CLIENTE pergunte especificamente`);
+      behaviorParts.push(`- Varie seus argumentos e abordagens a cada mensagem`);
+      behaviorParts.push(`- Se já ofereceu algo, siga em frente para o próximo passo da conversa`);
+    }
+
     const behaviorRules = behaviorParts.join("\n");
 
     const systemPrompt = scenario.system_prompt + "\n" + behaviorRules + broadcastContext + companyContext + knowledgeContext;
