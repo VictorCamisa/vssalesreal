@@ -204,9 +204,26 @@ O lead está respondendo à mensagem enviada pelo disparo. Continue naturalmente
       return new Response(JSON.stringify({ ignored: true, reason: "max_messages_reached" }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-    // ---- Response delay ----
-    if (delaySeconds > 0) {
-      await new Promise(resolve => setTimeout(resolve, delaySeconds * 1000));
+    // ---- Debounce: wait then check if newer messages arrived ----
+    const debounceMs = Math.max((delaySeconds || 3) * 1000, 3000); // minimum 3s debounce
+    const debounceStart = new Date().toISOString();
+    await new Promise(resolve => setTimeout(resolve, debounceMs));
+
+    // After waiting, check if a NEWER customer message arrived during the debounce window
+    // If yes, abort — the newer invocation will process all messages together
+    const { data: newerMsgs } = await supabaseAdmin
+      .from("chat_messages")
+      .select("id")
+      .eq("org_id", orgId)
+      .eq("instance_name", instanceName)
+      .eq("remote_jid", remoteJid)
+      .eq("from_me", false)
+      .gt("timestamp", debounceStart)
+      .limit(1);
+
+    if (newerMsgs && newerMsgs.length > 0) {
+      console.log(`Debounce: newer message detected, skipping this invocation (letting latest handle it)`);
+      return new Response(JSON.stringify({ debounced: true, reason: "newer_message_arrived" }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
     // ---- Fetch company profile ----
