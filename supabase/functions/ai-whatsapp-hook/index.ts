@@ -35,13 +35,15 @@ serve(async (req) => {
     // ---- Helper: save message ----
     const saveMessage = async (orgId: string, instName: string, jid: string, fromMe: boolean, text: string, pName?: string, msgId?: string) => {
       try {
+        const finalMsgId = msgId || `msg_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
         await supabaseAdmin.from("chat_messages").insert({
           org_id: orgId, instance_name: instName, remote_jid: jid, from_me: fromMe,
           message_text: text, push_name: pName || null,
-          message_id: msgId || `msg_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+          message_id: finalMsgId,
           timestamp: new Date().toISOString(),
         });
-      } catch (e) { console.error("saveMessage error:", e); }
+        return finalMsgId;
+      } catch (e) { console.error("saveMessage error:", e); return null; }
     };
 
     // ---- Find org via instance ----
@@ -205,7 +207,6 @@ O lead está respondendo à mensagem enviada pelo disparo. Continue naturalmente
     }
 
     // ---- Smart Debounce: adapt wait time based on lead's message frequency ----
-    // Check how many messages the lead sent in the last 30 seconds
     const thirtySecsAgo = new Date(Date.now() - 30000).toISOString();
     const { count: recentMsgCount } = await supabaseAdmin
       .from("chat_messages")
@@ -214,35 +215,33 @@ O lead está respondendo à mensagem enviada pelo disparo. Continue naturalmente
       .eq("instance_name", instanceName)
       .eq("remote_jid", remoteJid)
       .eq("from_me", false)
-      .gt("timestamp", thirtySecsAgo);
+      .gt("created_at", thirtySecsAgo);
 
-    // Adaptive debounce: more recent messages = longer wait
-    // 1 msg: 5s base, 2 msgs: 8s, 3+ msgs: 12s
     const recentCount = recentMsgCount || 1;
     const adaptiveDelay = recentCount <= 1 ? 5000 : recentCount === 2 ? 8000 : 12000;
-    // Also respect user-configured delay as minimum
     const debounceMs = Math.max(adaptiveDelay, (delaySeconds || 3) * 1000);
     
-    console.log(`Smart debounce: ${recentCount} msgs in last 30s → waiting ${debounceMs}ms`);
-    const debounceStart = new Date().toISOString();
+    const currentMsgId = messageData.key?.id || null;
+    console.log(`Smart debounce: ${recentCount} msgs in last 30s → waiting ${debounceMs}ms (msg: ${currentMsgId})`);
     await new Promise(resolve => setTimeout(resolve, debounceMs));
 
-    // After waiting, check if a NEWER customer message arrived during the debounce window
-    // If yes, abort — the newer invocation will handle all messages together
-    const { data: newerMsgs } = await supabaseAdmin
+    // After waiting, check if THIS message is the LATEST customer message using DB-generated created_at
+    const { data: latestMsg } = await supabaseAdmin
       .from("chat_messages")
-      .select("id")
+      .select("message_id")
       .eq("org_id", orgId)
       .eq("instance_name", instanceName)
       .eq("remote_jid", remoteJid)
       .eq("from_me", false)
-      .gt("timestamp", debounceStart)
-      .limit(1);
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
 
-    if (newerMsgs && newerMsgs.length > 0) {
-      console.log(`Debounce: newer message detected, skipping (latest invocation will process all)`);
-      return new Response(JSON.stringify({ debounced: true, reason: "newer_message_arrived" }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    if (latestMsg && currentMsgId && latestMsg.message_id !== currentMsgId) {
+      console.log(`Debounce: msg ${currentMsgId} is NOT latest (${latestMsg.message_id}), skipping`);
+      return new Response(JSON.stringify({ debounced: true, reason: "not_latest_message" }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
+    console.log(`Debounce: msg ${currentMsgId} IS the latest, proceeding with AI`);
 
     // ---- Fetch company profile ----
     const { data: companyProfile } = await supabaseAdmin
