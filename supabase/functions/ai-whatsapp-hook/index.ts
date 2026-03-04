@@ -427,13 +427,17 @@ O lead está respondendo à mensagem enviada pelo disparo. Continue naturalmente
     const behaviorRules = behaviorParts.join("\n");
 
     // CRITICAL: Anti-hallucination prefix goes BEFORE everything else so the model sees it first
-    const antiHallucinationPrefix = `=== REGRA NÚMERO 1 (ACIMA DE TUDO) ===
-Você é um vendedor que SÓ pode falar sobre o que está EXPLICITAMENTE descrito abaixo.
-- Se um produto, serviço, equipamento ou detalhe técnico NÃO aparece nos dados abaixo, ele NÃO EXISTE para você.
-- NUNCA pergunte sobre coisas que você não sabe se a empresa oferece (ex: "precisa de cilindros?", "quer suporte técnico?").
-- NUNCA suponha que a empresa tem algo. Se não está escrito, NÃO EXISTE.
-- Se o cliente perguntar algo que você não tem informação, diga: "Vou verificar isso com a equipe e te retorno!"
-- Suas perguntas devem ser APENAS sobre: quantidade, data, horário, local, forma de pagamento.
+    const antiHallucinationPrefix = `=== REGRA NÚMERO 1 (ACIMA DE TUDO — INVIOLÁVEL) ===
+Você é um vendedor que SÓ pode falar sobre o que está EXPLICITAMENTE descrito neste prompt.
+PROIBIÇÕES ABSOLUTAS:
+- Se um produto, serviço, equipamento, processo ou detalhe técnico NÃO aparece LITERALMENTE nos dados abaixo, ele NÃO EXISTE. Ponto final.
+- NUNCA mencione: instalação, cilindros, suporte técnico, manutenção, assistência, chopeira (a não ser que esteja ESCRITO nos dados abaixo).
+- NUNCA ofereça coisas que não estão nos dados. NUNCA pergunte se o cliente quer algo que não está nos dados.
+- NUNCA invente processos, equipamentos ou serviços. Se não está escrito, FINJA QUE NÃO EXISTE.
+- Se o cliente perguntar algo fora dos dados, responda EXATAMENTE: "Vou verificar isso com a equipe e te retorno!"
+- Suas perguntas devem ser APENAS sobre: quantidade, data, horário, local de entrega, forma de pagamento.
+- NUNCA repita informações que você já disse em mensagens anteriores.
+- Cada resposta deve ter NO MÁXIMO 2-3 frases curtas.
 === FIM DA REGRA NÚMERO 1 ===
 
 `;
@@ -486,7 +490,9 @@ Você é um vendedor que SÓ pode falar sobre o que está EXPLICITAMENTE descrit
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY not configured");
 
-    const temperature = Number(scenario.temperature) || 0.7;
+    // Cap temperature at 0.4 max to reduce hallucination
+    const rawTemp = Number(scenario.temperature) || 0.7;
+    const temperature = Math.min(rawTemp, 0.4);
 
     const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
@@ -504,6 +510,24 @@ Você é um vendedor que SÓ pode falar sobre o que está EXPLICITAMENTE descrit
     if (!reply) {
       return new Response(JSON.stringify({ error: "Empty AI response" }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
+
+    // POST-PROCESSING: Remove hallucinated terms that are NOT in the scenario prompt
+    const scenarioPromptLower = (scenario.system_prompt || "").toLowerCase();
+    const hallucinationPatterns = [
+      { pattern: /instala[çc][ãa]o\s+(d[aeo]s?\s+)?chopeiras?/gi, term: "instalação" },
+      { pattern: /cilindros?\s*(extras?)?/gi, term: "cilindro" },
+      { pattern: /suporte\s+t[ée]cnico/gi, term: "suporte técnico" },
+      { pattern: /manuten[çc][ãa]o/gi, term: "manutenção" },
+      { pattern: /assist[êe]ncia/gi, term: "assistência" },
+    ];
+    for (const hp of hallucinationPatterns) {
+      if (!scenarioPromptLower.includes(hp.term)) {
+        // Remove sentences containing hallucinated terms
+        reply = reply.replace(new RegExp(`[^.!?]*${hp.pattern.source}[^.!?]*[.!?]?`, "gi"), "").trim();
+      }
+    }
+    // Clean up double spaces/newlines left by removals
+    reply = reply.replace(/\n{3,}/g, "\n\n").replace(/  +/g, " ").trim();
 
     // ---- Process scheduling commands ----
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
