@@ -76,6 +76,7 @@ serve(async (req) => {
     // ---- Determine scenario ----
     const phone = remoteJid.replace("@s.whatsapp.net", "");
     let scenarioKey = "organic_inbound"; // default
+    let detectedAudience = ""; // b2b or b2c from broadcast
 
     // Check if lead came from a broadcast
     // Use .limit(1) instead of .maybeSingle() to handle duplicate phone numbers
@@ -96,7 +97,7 @@ serve(async (req) => {
       const leadIds = matchedLeads.map((l: any) => l.id);
       const { data: leadBroadcasts } = await supabaseAdmin
         .from("broadcast_leads")
-        .select("message_sent, sent_at, status, broadcast:broadcasts(id, name, description, scenario_key)")
+        .select("message_sent, sent_at, status, broadcast:broadcasts(id, name, description, scenario_key, audience_type)")
         .in("lead_id", leadIds)
         .in("status", ["sent", "pending"])
         .order("created_at", { ascending: false })
@@ -108,9 +109,11 @@ serve(async (req) => {
         broadcastMessage = leadBroadcast.message_sent || "";
         const bcast = leadBroadcast.broadcast as any;
         scenarioKey = bcast?.scenario_key || "broadcast_own_base";
+        detectedAudience = bcast?.audience_type || "";
         broadcastContext = `\n\nCONTEXTO DA CAMPANHA: Conversa iniciada pelo disparo "${bcast?.name || ""}". ${bcast?.description ? `Objetivo: ${bcast.description}.` : ""}
+PÚBLICO-ALVO DESTA CAMPANHA: ${detectedAudience === "b2b" ? "B2B (empresas)" : detectedAudience === "b2c" ? "B2C (consumidor final)" : "não especificado"}.
 O lead está respondendo à mensagem enviada pelo disparo. Continue naturalmente. NÃO repita a mensagem já enviada.`;
-        console.log(`Broadcast context: scenario_key=${scenarioKey}, campaign="${bcast?.name}", broadcast_status=${leadBroadcast.status}`);
+        console.log(`Broadcast context: scenario_key=${scenarioKey}, audience=${detectedAudience}, campaign="${bcast?.name}", broadcast_status=${leadBroadcast.status}`);
       }
     }
 
@@ -143,7 +146,7 @@ O lead está respondendo à mensagem enviada pelo disparo. Continue naturalmente
     // ---- Track conversation ----
     const { data: existingConv } = await supabaseAdmin
       .from("conversation_tracker")
-      .select("id, customer_msg_count, scenario_key")
+      .select("id, customer_msg_count, scenario_key, detected_audience")
       .eq("org_id", orgId)
       .eq("instance_name", instanceName)
       .eq("remote_jid", remoteJid)
@@ -158,6 +161,11 @@ O lead está respondendo à mensagem enviada pelo disparo. Continue naturalmente
         scenarioKey = existingConv.scenario_key;
         console.log(`Kept tracker scenario_key: ${scenarioKey}`);
       }
+      // Keep detected audience from tracker if not set by current broadcast
+      if (!detectedAudience && existingConv.detected_audience) {
+        detectedAudience = existingConv.detected_audience;
+        console.log(`Kept tracker detected_audience: ${detectedAudience}`);
+      }
       await supabaseAdmin.rpc("increment_customer_msg_count", { p_conv_id: existingConv.id });
       await supabaseAdmin.from("conversation_tracker").update({
         last_customer_msg_at: new Date().toISOString(),
@@ -165,6 +173,7 @@ O lead está respondendo à mensagem enviada pelo disparo. Continue naturalmente
         last_follow_up_step: 0,
         follow_up_paused: false,
         scenario_key: scenarioKey,
+        detected_audience: detectedAudience || undefined,
       }).eq("id", existingConv.id);
     } else {
       customerMsgCount = 1;
@@ -176,6 +185,7 @@ O lead está respondendo à mensagem enviada pelo disparo. Continue naturalmente
         last_customer_msg_at: new Date().toISOString(),
         lead_id: matchedLead?.id || null,
         scenario_key: scenarioKey,
+        detected_audience: detectedAudience || null,
       });
     }
 
@@ -209,19 +219,31 @@ O lead está respondendo à mensagem enviada pelo disparo. Continue naturalmente
     let companyContext = "";
     if (companyProfile) {
       const cp = companyProfile as any;
+      const isB2B = detectedAudience === "b2b";
+      const isB2C = detectedAudience === "b2c";
       const parts: string[] = [];
       if (cp.company_name) parts.push(`Empresa: ${cp.company_name}`);
       if (cp.segment) parts.push(`Segmento: ${cp.segment}`);
       if (cp.description) parts.push(`Sobre: ${cp.description}`);
-      if (cp.target_audience) parts.push(`Público-alvo: ${cp.target_audience}`);
-      if (cp.differentials) parts.push(`Diferenciais: ${cp.differentials}`);
-      if (cp.tone_of_voice) parts.push(`Tom de voz: ${cp.tone_of_voice}`);
-      if (cp.sales_process) parts.push(`Processo: ${cp.sales_process}`);
-      const products = cp.products_services || [];
+
+      // Use audience-specific fields when available, fallback to generic
+      const targetAudience = (isB2B ? cp.b2b_target_audience : isB2C ? cp.b2c_target_audience : null) || cp.target_audience;
+      const differentials = (isB2B ? cp.b2b_differentials : isB2C ? cp.b2c_differentials : null) || cp.differentials;
+      const toneOfVoice = (isB2B ? cp.b2b_tone_of_voice : isB2C ? cp.b2c_tone_of_voice : null) || cp.tone_of_voice;
+      const salesProcess = (isB2B ? cp.b2b_sales_process : isB2C ? cp.b2c_sales_process : null) || cp.sales_process;
+      const avgTicket = (isB2B ? cp.b2b_avg_ticket : isB2C ? cp.b2c_avg_ticket : null) || cp.avg_ticket;
+      const products = (isB2B ? cp.b2b_products_services : isB2C ? cp.b2c_products_services : null) || cp.products_services || [];
+      const faqs = (isB2B ? cp.b2b_objections_faq : isB2C ? cp.b2c_objections_faq : null) || cp.objections_faq || [];
+
+      if (detectedAudience) parts.push(`PÚBLICO DESTA CONVERSA: ${isB2B ? "B2B (empresas)" : "B2C (consumidor final)"}`);
+      if (targetAudience) parts.push(`Público-alvo: ${targetAudience}`);
+      if (differentials) parts.push(`Diferenciais: ${differentials}`);
+      if (toneOfVoice) parts.push(`Tom de voz: ${toneOfVoice}`);
+      if (salesProcess) parts.push(`Processo: ${salesProcess}`);
+      if (avgTicket) parts.push(`Ticket médio: ${avgTicket}`);
       if (products.length > 0) {
         parts.push("Produtos:\n" + products.map((p: any) => `- ${p.name}${p.price ? ` (${p.price})` : ""}: ${p.description}`).join("\n"));
       }
-      const faqs = cp.objections_faq || [];
       if (faqs.length > 0) {
         parts.push("Objeções:\n" + faqs.map((f: any) => `Q: ${f.question}\nR: ${f.answer}`).join("\n"));
       }
