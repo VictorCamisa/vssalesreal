@@ -436,18 +436,24 @@ PROIBIÇÕES ABSOLUTAS:
 - NUNCA invente processos, equipamentos ou serviços. Se não está escrito, FINJA QUE NÃO EXISTE.
 - Se o cliente perguntar algo fora dos dados, responda EXATAMENTE: "Vou verificar isso com a equipe e te retorno!"
 - Suas perguntas devem ser APENAS sobre: quantidade, data, horário, local de entrega, forma de pagamento.
-- NUNCA repita informações que você já disse em mensagens anteriores.
-- Cada resposta deve ter NO MÁXIMO 2-3 frases curtas.
+- NUNCA repita informações que você já disse em mensagens anteriores. O cliente JÁ LIDA essas mensagens.
+- Cada resposta deve ter NO MÁXIMO 1-2 frases curtas e objetivas.
+- NUNCA use aspas duplas na resposta. Não coloque sua resposta entre aspas.
+- NUNCA comece a resposta repetindo a saudação do disparo. O cliente JÁ recebeu a saudação. Vá direto ao ponto.
+${!useEmoji ? "- NUNCA use emojis. ZERO emojis. Nenhum emoji de qualquer tipo." : ""}
 === FIM DA REGRA NÚMERO 1 ===
 
 `;
 
     const antiRepetitionReminder = `
 
-=== LEMBRETE FINAL ===
+=== LEMBRETE FINAL (RELEIA ANTES DE RESPONDER) ===
 - NÃO invente NADA. Só fale do que está nos dados acima.
-- NÃO repita produtos/serviços já mencionados.
+- NÃO repita produtos/serviços já mencionados nas mensagens anteriores.
+- NÃO re-apresente a empresa. O cliente JÁ sabe quem você é.
 - Perguntas devem ser sobre LOGÍSTICA (quando, onde, quanto), NUNCA oferecendo coisas que não estão na base.
+- Responda de forma CURTA e DIRETA. Máximo 1-2 frases.
+${!useEmoji ? "- ZERO EMOJIS. Remova qualquer emoji antes de enviar." : ""}
 ===`;
 
     const systemPrompt = antiHallucinationPrefix + scenario.system_prompt + "\n" + behaviorRules + broadcastContext + companyContext + knowledgeContext + antiRepetitionReminder;
@@ -522,10 +528,26 @@ PROIBIÇÕES ABSOLUTAS:
     ];
     for (const hp of hallucinationPatterns) {
       if (!scenarioPromptLower.includes(hp.term)) {
-        // Remove sentences containing hallucinated terms
         reply = reply.replace(new RegExp(`[^.!?]*${hp.pattern.source}[^.!?]*[.!?]?`, "gi"), "").trim();
       }
     }
+
+    // POST-PROCESSING: Strip emojis if disabled
+    if (!useEmoji) {
+      reply = reply.replace(/[\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{1F000}-\u{1F02F}\u{1F0A0}-\u{1F0FF}\u{1F100}-\u{1F64F}\u{1F680}-\u{1F6FF}\u{1FA00}-\u{1FA6F}\u{1FA70}-\u{1FAFF}\u{FE00}-\u{FE0F}\u{200D}\u{20E3}\u{E0020}-\u{E007F}]/gu, "").trim();
+    }
+
+    // POST-PROCESSING: Remove wrapping quotes (AI sometimes quotes the entire response)
+    reply = reply.replace(/^[""](.*)[""]$/s, "$1").trim();
+
+    // POST-PROCESSING: Replace [Nome] placeholders with actual push_name
+    const customerName = pushName || matchedLead?.name || "";
+    if (customerName) {
+      reply = reply.replace(/\[Nome\]/gi, customerName);
+    } else {
+      reply = reply.replace(/\[Nome\]\s*/gi, "");
+    }
+
     // Clean up double spaces/newlines left by removals
     reply = reply.replace(/\n{3,}/g, "\n\n").replace(/  +/g, " ").trim();
 
@@ -587,7 +609,14 @@ PROIBIÇÕES ABSOLUTAS:
     let greetingBlock: string | null = null;
     if (customerMsgCount === 1 && greetingMessage) {
       const cp = companyProfile as any;
-      greetingBlock = greetingMessage.replace(/\{empresa\}/gi, cp?.company_name || "");
+      greetingBlock = greetingMessage
+        .replace(/\{empresa\}/gi, cp?.company_name || "")
+        .replace(/\[Nome\]/gi, customerName || "")
+        .replace(/\{nome\}/gi, customerName || "");
+      // Strip emojis from greeting if disabled
+      if (!useEmoji) {
+        greetingBlock = greetingBlock.replace(/[\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{1F000}-\u{1F02F}\u{1F0A0}-\u{1F0FF}\u{1F100}-\u{1F64F}\u{1F680}-\u{1F6FF}\u{1FA00}-\u{1FA6F}\u{1FA70}-\u{1FAFF}\u{FE00}-\u{FE0F}\u{200D}\u{20E3}\u{E0020}-\u{E007F}]/gu, "").trim();
+      }
     }
 
     const MAX_BLOCKS = maxBlocks; // Use user-configured max blocks
