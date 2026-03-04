@@ -540,6 +540,20 @@ export default function MySeller() {
                     </div>
                     <div className="space-y-2">
                       <div className="flex items-center justify-between">
+                        <Label className="text-xs">Máx. blocos por resposta</Label>
+                        <span className="text-sm font-bold text-primary">{scenario.behavior?.max_blocks ?? 3}</span>
+                      </div>
+                      <Slider
+                        value={[scenario.behavior?.max_blocks ?? 3]}
+                        onValueChange={([v]) => updateScenario(scenario.id, "behavior", { ...scenario.behavior, max_blocks: v })}
+                        min={1} max={5} step={1}
+                      />
+                      <div className="flex justify-between text-[9px] text-muted-foreground">
+                        <span>1 bloco</span><span>5 blocos</span>
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
                         <Label className="text-xs">Máx. caracteres por bloco</Label>
                         <span className="text-sm font-bold text-primary">{scenario.behavior?.max_chars_per_block ?? 500}</span>
                       </div>
