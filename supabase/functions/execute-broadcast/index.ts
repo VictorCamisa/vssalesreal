@@ -108,6 +108,10 @@ Deno.serve(async (req) => {
     // Load scenario prompt from ai_scenarios (replaces ai_configs)
     const scenarioKey = (broadcast as any).scenario_key || "broadcast_own_base";
     let scenarioPrompt = "";
+    let maxBlocks = 2;
+    let maxCharsPerBlock = 200;
+    let useEmoji = true;
+    let scenarioTemperature = 0.4;
 
     if (broadcast.ai_enabled) {
       const { data: scenario } = await supabase
@@ -119,6 +123,13 @@ Deno.serve(async (req) => {
 
       if (scenario?.system_prompt) {
         scenarioPrompt = scenario.system_prompt;
+      }
+      if (scenario) {
+        const beh = (scenario.behavior || {}) as any;
+        maxBlocks = Number(beh.max_blocks) || 2;
+        maxCharsPerBlock = Number(beh.max_chars_per_block) || 200;
+        useEmoji = beh.use_emoji !== false;
+        scenarioTemperature = Math.min(Number(scenario.temperature) || 0.7, 0.4);
       }
     }
 
@@ -145,15 +156,40 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Build final system prompt for AI generation
+    // Load knowledge base for the org
+    let knowledgeContext = "";
+    if (broadcast.ai_enabled) {
+      const { data: docs } = await supabase
+        .from("ai_knowledge_docs")
+        .select("title, content, summary")
+        .eq("org_id", org_id)
+        .limit(10);
+      if (docs && docs.length > 0) {
+        knowledgeContext = "\n--- BASE DE CONHECIMENTO (ÚNICA FONTE DE VERDADE) ---\n" +
+          docs.map((d: any) => `[${d.title}]: ${d.content || d.summary || ""}`).join("\n") +
+          "\n--- FIM DA BASE ---";
+      }
+    }
+
+    // Build final system prompt for AI generation with anti-hallucination
+    const antiHallucinationRule = `=== REGRA NÚMERO 1 (INVIOLÁVEL) ===
+- NUNCA invente produtos, serviços ou processos. Se não está escrito abaixo, NÃO EXISTE.
+- Se o dado não está na base de conhecimento, NÃO mencione.
+- Suas respostas devem ser CURTAS e baseadas EXCLUSIVAMENTE nos dados fornecidos.
+${!useEmoji ? "- NUNCA use emojis. ZERO emojis." : ""}
+=== FIM DA REGRA ===\n`;
+
     const fullSystemPrompt = [
+      antiHallucinationRule,
       scenarioPrompt,
       companyContext ? `\n--- CONTEXTO DA EMPRESA ---\n${companyContext}` : "",
+      knowledgeContext,
       `\nREGRAS DE FORMATO:
-- Divida a mensagem em 2-3 blocos curtos (máximo 150 caracteres cada).
+- Divida a mensagem em EXATAMENTE ${maxBlocks} blocos curtos (máximo ${maxCharsPerBlock} caracteres cada).
 - Separe cada bloco com ---BLOCO--- numa linha isolada.
-- NUNCA invente informações. Use APENAS dados fornecidos.
-- Escreva de forma NATURAL para WhatsApp.`,
+- NUNCA invente informações. Use APENAS dados fornecidos acima.
+- Escreva de forma NATURAL para WhatsApp.
+- NÃO coloque a resposta entre aspas.`,
     ].filter(Boolean).join("\n");
 
     // Get pending broadcast leads
@@ -179,6 +215,19 @@ Deno.serve(async (req) => {
         blocks = fullMessage.split(/\n\n+/).map(b => b.trim()).filter(b => b.length > 0);
       }
       if (blocks.length === 0) blocks = [fullMessage];
+
+      // HARD CAP: respect max_blocks from scenario
+      blocks = blocks.slice(0, maxBlocks);
+
+      // HARD CAP: truncate each block
+      blocks = blocks.map(block => {
+        if (block.length > maxCharsPerBlock) {
+          const cut = block.substring(0, maxCharsPerBlock);
+          const lastSpace = cut.lastIndexOf(" ");
+          return lastSpace > maxCharsPerBlock * 0.7 ? cut.substring(0, lastSpace) : cut;
+        }
+        return block;
+      });
 
       let success = false;
       for (let i = 0; i < blocks.length; i++) {
@@ -257,16 +306,25 @@ Deno.serve(async (req) => {
               model: "google/gemini-3-flash-preview",
               messages: [
                 { role: "system", content: fullSystemPrompt },
-                { role: "user", content: `Crie UMA mensagem de primeiro contato para: ${leadContext}. ${broadcast.description ? `Contexto da campanha: ${broadcast.description}` : ""}. Retorne APENAS os blocos da mensagem separados por ---BLOCO---, sem aspas ou formatação extra.` },
+                { role: "user", content: `Crie UMA mensagem de primeiro contato para: ${leadContext}. ${broadcast.description ? `Contexto da campanha: ${broadcast.description}` : ""}. Use EXATAMENTE ${maxBlocks} blocos. Retorne APENAS os blocos separados por ---BLOCO---, sem aspas.` },
               ],
-              temperature: 0.7,
+              temperature: scenarioTemperature,
             }),
           });
           if (aiResp.ok) {
             const aiData = await aiResp.json();
             messageText = (aiData.choices?.[0]?.message?.content || "").trim();
-            if (messageText.startsWith('"') && messageText.endsWith('"')) {
-              messageText = messageText.slice(1, -1);
+            // Remove wrapping quotes
+            messageText = messageText.replace(/^[""](.*)[""]$/s, "$1").trim();
+            // Strip emojis if disabled
+            if (!useEmoji) {
+              messageText = messageText.replace(/[\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{1F000}-\u{1F02F}\u{1F0A0}-\u{1F0FF}\u{1F100}-\u{1F64F}\u{1F680}-\u{1F6FF}\u{1FA00}-\u{1FA6F}\u{1FA70}-\u{1FAFF}\u{FE00}-\u{FE0F}\u{200D}\u{20E3}\u{E0020}-\u{E007F}]/gu, "").trim();
+            }
+            // Replace name placeholders
+            if (leadFirstName) {
+              messageText = messageText.replace(/\[Nome\]/gi, leadFirstName);
+            } else {
+              messageText = messageText.replace(/\[Nome\]\s*/gi, "");
             }
           } else {
             await aiResp.text();
