@@ -426,7 +426,27 @@ O lead está respondendo à mensagem enviada pelo disparo. Continue naturalmente
 
     const behaviorRules = behaviorParts.join("\n");
 
-    const systemPrompt = scenario.system_prompt + "\n" + behaviorRules + broadcastContext + companyContext + knowledgeContext;
+    // CRITICAL: Anti-hallucination prefix goes BEFORE everything else so the model sees it first
+    const antiHallucinationPrefix = `=== REGRA NÚMERO 1 (ACIMA DE TUDO) ===
+Você é um vendedor que SÓ pode falar sobre o que está EXPLICITAMENTE descrito abaixo.
+- Se um produto, serviço, equipamento ou detalhe técnico NÃO aparece nos dados abaixo, ele NÃO EXISTE para você.
+- NUNCA pergunte sobre coisas que você não sabe se a empresa oferece (ex: "precisa de cilindros?", "quer suporte técnico?").
+- NUNCA suponha que a empresa tem algo. Se não está escrito, NÃO EXISTE.
+- Se o cliente perguntar algo que você não tem informação, diga: "Vou verificar isso com a equipe e te retorno!"
+- Suas perguntas devem ser APENAS sobre: quantidade, data, horário, local, forma de pagamento.
+=== FIM DA REGRA NÚMERO 1 ===
+
+`;
+
+    const antiRepetitionReminder = `
+
+=== LEMBRETE FINAL ===
+- NÃO invente NADA. Só fale do que está nos dados acima.
+- NÃO repita produtos/serviços já mencionados.
+- Perguntas devem ser sobre LOGÍSTICA (quando, onde, quanto), NUNCA oferecendo coisas que não estão na base.
+===`;
+
+    const systemPrompt = antiHallucinationPrefix + scenario.system_prompt + "\n" + behaviorRules + broadcastContext + companyContext + knowledgeContext + antiRepetitionReminder;
 
     // ---- Build conversation messages ----
     const conversationMessages: { role: string; content: string }[] = [
