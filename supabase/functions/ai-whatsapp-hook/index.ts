@@ -204,13 +204,31 @@ O lead está respondendo à mensagem enviada pelo disparo. Continue naturalmente
       return new Response(JSON.stringify({ ignored: true, reason: "max_messages_reached" }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-    // ---- Debounce: wait then check if newer messages arrived ----
-    const debounceMs = Math.max((delaySeconds || 3) * 1000, 3000); // minimum 3s debounce
+    // ---- Smart Debounce: adapt wait time based on lead's message frequency ----
+    // Check how many messages the lead sent in the last 30 seconds
+    const thirtySecsAgo = new Date(Date.now() - 30000).toISOString();
+    const { count: recentMsgCount } = await supabaseAdmin
+      .from("chat_messages")
+      .select("id", { count: "exact", head: true })
+      .eq("org_id", orgId)
+      .eq("instance_name", instanceName)
+      .eq("remote_jid", remoteJid)
+      .eq("from_me", false)
+      .gt("timestamp", thirtySecsAgo);
+
+    // Adaptive debounce: more recent messages = longer wait
+    // 1 msg: 5s base, 2 msgs: 8s, 3+ msgs: 12s
+    const recentCount = recentMsgCount || 1;
+    const adaptiveDelay = recentCount <= 1 ? 5000 : recentCount === 2 ? 8000 : 12000;
+    // Also respect user-configured delay as minimum
+    const debounceMs = Math.max(adaptiveDelay, (delaySeconds || 3) * 1000);
+    
+    console.log(`Smart debounce: ${recentCount} msgs in last 30s → waiting ${debounceMs}ms`);
     const debounceStart = new Date().toISOString();
     await new Promise(resolve => setTimeout(resolve, debounceMs));
 
     // After waiting, check if a NEWER customer message arrived during the debounce window
-    // If yes, abort — the newer invocation will process all messages together
+    // If yes, abort — the newer invocation will handle all messages together
     const { data: newerMsgs } = await supabaseAdmin
       .from("chat_messages")
       .select("id")
@@ -222,7 +240,7 @@ O lead está respondendo à mensagem enviada pelo disparo. Continue naturalmente
       .limit(1);
 
     if (newerMsgs && newerMsgs.length > 0) {
-      console.log(`Debounce: newer message detected, skipping this invocation (letting latest handle it)`);
+      console.log(`Debounce: newer message detected, skipping (latest invocation will process all)`);
       return new Response(JSON.stringify({ debounced: true, reason: "newer_message_arrived" }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
