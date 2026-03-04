@@ -386,7 +386,6 @@ O lead está respondendo à mensagem enviada pelo disparo. Continue naturalmente
     behaviorParts.push(`- Perguntas ao cliente devem ser sobre NECESSIDADES dele, NUNCA oferecer coisas que você não sabe se a empresa tem`);
 
     // ---- Anti-repetition: scan bot history for already-mentioned topics ----
-    // Check if bot already mentioned specific products/topics so it doesn't keep repeating
     const { data: botHistory } = await supabaseAdmin
       .from("chat_messages")
       .select("message_text")
@@ -399,12 +398,30 @@ O lead está respondendo à mensagem enviada pelo disparo. Continue naturalmente
 
     if (botHistory && botHistory.length > 0) {
       const allBotText = botHistory.map((m: any) => m.message_text).join(" ").toLowerCase();
-      // Generic anti-repetition rule
-      behaviorParts.push(`\nREGRA ANTI-REPETIÇÃO (OBRIGATÓRIA):`);
-      behaviorParts.push(`- NÃO repita informações, produtos ou argumentos que você JÁ mencionou em mensagens anteriores`);
-      behaviorParts.push(`- Se você já apresentou um produto/serviço como gatilho, NÃO fale dele novamente a menos que o CLIENTE pergunte especificamente`);
-      behaviorParts.push(`- Varie seus argumentos e abordagens a cada mensagem`);
-      behaviorParts.push(`- Se já ofereceu algo, siga em frente para o próximo passo da conversa`);
+      
+      // Extract specific product/topic mentions to explicitly ban them
+      const productPatterns = [
+        /chopp?\s+de\s+vinho/gi,
+        /chopp?\s+pilsen/gi,
+        /sem\s+gl[úu]ten/gi,
+        /artesanal/gi,
+        /frota\s+pr[óo]pria/gi,
+        /carro[\-\s]chefe/gi,
+      ];
+      const mentionedTopics = new Set<string>();
+      for (const pattern of productPatterns) {
+        const matches = allBotText.match(pattern);
+        if (matches) {
+          for (const m of matches) mentionedTopics.add(m.trim().toLowerCase());
+        }
+      }
+
+      behaviorParts.push(`\nREGRA ANTI-REPETIÇÃO (MÁXIMA PRIORIDADE - INVIOLÁVEL):`);
+      behaviorParts.push(`- Você JÁ mencionou os seguintes tópicos/produtos em mensagens anteriores: [${[...mentionedTopics].join(", ") || "nenhum detectado"}]`);
+      behaviorParts.push(`- É TERMINANTEMENTE PROIBIDO mencionar esses tópicos novamente, A MENOS QUE o cliente PERGUNTE DIRETAMENTE sobre eles`);
+      behaviorParts.push(`- Se o cliente perguntar "só tem esses?", "tem IPA?", etc: responda de forma DIRETA e CURTA (ex: "No momento trabalhamos com esses, sim!") SEM listar os produtos de novo`);
+      behaviorParts.push(`- NUNCA re-descreva produtos que você já apresentou. O cliente já sabe. Siga em frente na conversa`);
+      behaviorParts.push(`- Foque em AVANÇAR a conversa: pergunte sobre necessidades, quantidade, data, logística — NÃO repita catálogo`);
     }
 
     const behaviorRules = behaviorParts.join("\n");
@@ -533,7 +550,29 @@ O lead está respondendo à mensagem enviada pelo disparo. Continue naturalmente
     let finalParts: string[];
     if (splitMessages) {
       const blocks = reply.split(/---BLOCO---/i).map((b: string) => b.trim()).filter((b: string) => b.length > 0);
-      finalParts = blocks.length > 1 ? blocks.slice(0, MAX_BLOCKS) : [reply.replace(/---BLOCO---/gi, "\n").trim()];
+      if (blocks.length > 1) {
+        finalParts = blocks.slice(0, MAX_BLOCKS);
+      } else {
+        // AI didn't split — force-split by sentences if reply is too long
+        const cleanReply = reply.replace(/---BLOCO---/gi, "").trim();
+        if (cleanReply.length > maxCharsPerBlock) {
+          const sentences = cleanReply.split(/(?<=[.!?])\s+/);
+          const chunks: string[] = [];
+          let current = "";
+          for (const s of sentences) {
+            if ((current + " " + s).trim().length > maxCharsPerBlock && current) {
+              chunks.push(current.trim());
+              current = s;
+            } else {
+              current = current ? current + " " + s : s;
+            }
+          }
+          if (current.trim()) chunks.push(current.trim());
+          finalParts = chunks.slice(0, MAX_BLOCKS);
+        } else {
+          finalParts = [cleanReply];
+        }
+      }
       if (finalParts.length === 0) finalParts = [reply];
     } else {
       finalParts = [reply.replace(/---BLOCO---/gi, "\n").trim()];
