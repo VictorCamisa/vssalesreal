@@ -1731,15 +1731,14 @@ function ControlTab({ orgId }: { orgId: string }) {
   const [loadingMetrics, setLoadingMetrics] = useState(true);
   const { toast } = useToast();
 
-  // Load real global AI enabled state from ai_configs
+  // Load real global AI enabled state from ai_scenarios
   useEffect(() => {
     if (!orgId) return;
     (async () => {
       const { data } = await supabase
-        .from("ai_configs")
+        .from("ai_scenarios" as any)
         .select("enabled")
         .eq("org_id", orgId)
-        .eq("config_type", "chatbot")
         .eq("enabled", true)
         .limit(1);
       setAiEnabled((data?.length || 0) > 0);
@@ -1799,17 +1798,16 @@ function ControlTab({ orgId }: { orgId: string }) {
 
   const toggleGlobalAI = async (enabled: boolean) => {
     setAiEnabled(enabled);
-    // Toggle all chatbot configs for this org
+    // Toggle all scenarios for this org
     const { error } = await supabase
-      .from("ai_configs")
+      .from("ai_scenarios" as any)
       .update({ enabled })
-      .eq("org_id", orgId)
-      .eq("config_type", "chatbot");
+      .eq("org_id", orgId);
     if (error) {
       toast({ title: "Erro ao atualizar", description: error.message, variant: "destructive" });
       setAiEnabled(!enabled);
     } else {
-      toast({ title: enabled ? "IA ativada!" : "IA desativada", description: enabled ? "Todos os agentes chatbot foram ativados." : "Todos os agentes chatbot foram pausados." });
+      toast({ title: enabled ? "IA ativada!" : "IA desativada", description: enabled ? "Todos os cenários de IA foram ativados." : "Todos os cenários de IA foram pausados." });
     }
   };
 
