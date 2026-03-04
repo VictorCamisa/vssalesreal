@@ -504,15 +504,29 @@ O lead está respondendo à mensagem enviada pelo disparo. Continue naturalmente
     let finalParts: string[];
     if (splitMessages) {
       const blocks = reply.split(/---BLOCO---/i).map((b: string) => b.trim()).filter((b: string) => b.length > 0);
-      // Only use ---BLOCO--- split, do NOT fallback to \n\n to avoid over-fragmentation
       finalParts = blocks.length > 1 ? blocks.slice(0, MAX_BLOCKS) : [reply.replace(/---BLOCO---/gi, "\n").trim()];
       if (finalParts.length === 0) finalParts = [reply];
     } else {
       finalParts = [reply.replace(/---BLOCO---/gi, "\n").trim()];
     }
 
-    // Prepend greeting
-    if (greetingBlock) finalParts.unshift(greetingBlock);
+    // Prepend greeting — but TOTAL must still respect MAX_BLOCKS
+    if (greetingBlock) {
+      finalParts.unshift(greetingBlock);
+    }
+    // HARD CAP: never exceed MAX_BLOCKS total (including greeting)
+    finalParts = finalParts.slice(0, MAX_BLOCKS);
+
+    // HARD CAP: truncate each block to max chars
+    finalParts = finalParts.map((block) => {
+      if (block.length > maxCharsPerBlock) {
+        // Cut at last space before limit to avoid breaking words
+        const cut = block.substring(0, maxCharsPerBlock);
+        const lastSpace = cut.lastIndexOf(" ");
+        return lastSpace > maxCharsPerBlock * 0.7 ? cut.substring(0, lastSpace) : cut;
+      }
+      return block;
+    });
 
     let sendSuccess = false;
     for (let i = 0; i < finalParts.length; i++) {
