@@ -14,7 +14,8 @@ export default {
     },
     extend: {
       fontFamily: {
-        sans: ["-apple-system", "BlinkMacSystemFont", "'SF Pro Display'", "'SF Pro Text'", "Inter", "system-ui", "sans-serif"],
+        sans: ["'Space Grotesk'", "system-ui", "sans-serif"],
+        mono: ["'JetBrains Mono'", "monospace"],
       },
       fontSize: {
         '2xs': ['0.6875rem', { lineHeight: '1rem' }],
@@ -73,16 +74,19 @@ export default {
         },
       },
       borderRadius: {
+        "2xl": "1rem",
         xl: "calc(var(--radius) + 4px)",
         lg: "var(--radius)",
         md: "calc(var(--radius) - 2px)",
         sm: "calc(var(--radius) - 4px)",
       },
       boxShadow: {
-        soft: "0 1px 4px 0 rgba(0, 40, 70, 0.06), 0 1px 2px -1px rgba(0, 40, 70, 0.04)",
-        card: "0 2px 12px -2px rgba(0, 40, 70, 0.08), 0 1px 4px -1px rgba(0, 40, 70, 0.04)",
-        elevated: "0 8px 28px -6px rgba(0, 40, 70, 0.12), 0 2px 10px -2px rgba(0, 40, 70, 0.06)",
-        nav: "0 1px 3px 0 rgba(0, 40, 70, 0.08)",
+        soft: "0 1px 4px 0 rgba(0, 20, 40, 0.06)",
+        card: "0 2px 12px -2px rgba(0, 20, 40, 0.08)",
+        elevated: "0 8px 30px -6px rgba(0, 20, 40, 0.12)",
+        nav: "0 1px 3px 0 rgba(0, 20, 40, 0.08)",
+        glow: "0 0 20px -5px hsl(var(--primary) / 0.15)",
+        "glow-lg": "0 0 40px -8px hsl(var(--primary) / 0.2)",
       },
       keyframes: {
         "accordion-down": {
