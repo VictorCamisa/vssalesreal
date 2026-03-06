@@ -2,7 +2,7 @@ import { Outlet, useLocation } from "react-router-dom";
 import { AppNavbar } from "@/components/AppNavbar";
 import { AppSidebar } from "@/components/AppSidebar";
 import { ModuleNavbar } from "@/components/ModuleNavbar";
-import { SidebarProvider } from "@/components/ui/sidebar";
+import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { findCurrentModule } from "@/lib/navigation";
 
 export function AppLayout() {
@@ -11,13 +11,13 @@ export function AppLayout() {
   const isDashboard = pathname === "/";
 
   return (
-    <SidebarProvider>
+    <SidebarProvider defaultOpen={false}>
       <div className="flex min-h-screen w-full bg-background">
-        {/* Sidebar only on dashboard */}
+        {/* Sidebar available on dashboard */}
         {isDashboard && <AppSidebar />}
 
         <div className="flex-1 flex flex-col min-w-0">
-          {/* Module navbar when inside a module, global navbar on dashboard */}
+          {/* Navbar */}
           {currentModule ? (
             <ModuleNavbar module={currentModule} currentPath={pathname} />
           ) : (
