@@ -1,5 +1,6 @@
 import { NavLink } from "@/components/NavLink";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { SidebarTrigger } from "@/components/ui/sidebar";
 import type { ModuleGroup } from "@/lib/navigation";
 
 interface Props {
@@ -10,7 +11,8 @@ interface Props {
 export function ModuleNavbar({ module, currentPath }: Props) {
   return (
     <header className="sticky top-0 z-40 w-full border-b border-border bg-background/95 backdrop-blur-sm">
-      <div className="flex items-center h-12 px-5">
+      <div className="flex items-center h-12 px-3">
+        <SidebarTrigger className="mr-2" />
         {/* Module label */}
         <div className="flex items-center gap-2 shrink-0 mr-5">
           <module.icon className="h-4.5 w-4.5 text-primary" />
