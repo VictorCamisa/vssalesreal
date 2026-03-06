@@ -188,51 +188,161 @@ export default function Landing() {
       </nav>
 
       {/* ═══ 1. HERO ═══ */}
-      <section className="relative min-h-screen flex items-center justify-center pt-14 overflow-hidden">
+      <section className="relative min-h-screen flex items-center pt-14 overflow-hidden">
         <ParticleCanvas />
         <div className="absolute inset-0 opacity-[0.03]" style={{
           backgroundImage: "linear-gradient(rgba(0,212,255,1) 1px, transparent 1px), linear-gradient(90deg, rgba(0,212,255,1) 1px, transparent 1px)",
           backgroundSize: "80px 80px",
         }} />
 
-        <div className="relative z-10 max-w-4xl mx-auto px-4 sm:px-5 text-center">
-          <HeroLine delay={200}>
-            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-[#00D4FF]/20 bg-[#00D4FF]/5 text-[10px] text-[#00D4FF] font-medium mb-6 sm:mb-8 tracking-wider uppercase">
-              <Sparkles className="h-3 w-3" /> Powered by VS Soluções Labs
+        <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 w-full grid lg:grid-cols-2 gap-8 lg:gap-12 items-center py-16 sm:py-20">
+          {/* Left — Copy */}
+          <div>
+            <HeroLine delay={200}>
+              <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-[#00D4FF]/20 bg-[#00D4FF]/5 text-[10px] text-[#00D4FF] font-medium mb-5 tracking-wider uppercase">
+                <Sparkles className="h-3 w-3" /> Powered by VS Soluções Labs
+              </div>
+            </HeroLine>
+
+            <h1 style={{ fontFamily: "'Bebas Neue', sans-serif" }} className="text-3xl sm:text-5xl md:text-6xl lg:text-7xl leading-[0.9] tracking-tight mb-4 sm:mb-5">
+              <HeroLine delay={400}>Sua equipe</HeroLine>
+              <HeroLine delay={550}>comercial inteira.</HeroLine>
+              <HeroLine delay={750} className="bg-gradient-to-r from-[#00D4FF] to-[#0057FF] bg-clip-text text-transparent">Só que é IA.</HeroLine>
+            </h1>
+
+            <HeroLine delay={1000}>
+              <p className="text-gray-400 max-w-md text-sm sm:text-base leading-relaxed mb-5 sm:mb-6">
+                SDR, BDR e Closer autônomos que prospectam, qualificam e fecham — 24/7, por {formattedLowest}/mês.
+              </p>
+            </HeroLine>
+
+            <HeroLine delay={1200}>
+              <div className="flex flex-col sm:flex-row items-start gap-3 mb-5">
+                <a
+                  href="#acesso"
+                  className="group flex items-center gap-2 px-6 py-3 rounded-lg bg-gradient-to-r from-[#00D4FF] to-[#0057FF] font-semibold text-sm hover:shadow-[0_0_30px_rgba(0,212,255,0.4)] transition-all duration-300 hover:scale-[1.03]"
+                >
+                  Testar grátis por 7 dias
+                  <ArrowRight className="h-4 w-4 group-hover:translate-x-1 transition-transform duration-300" />
+                </a>
+                <a href="#como-funciona" className="flex items-center gap-2 px-5 py-3 rounded-lg border border-white/10 text-sm text-gray-400 hover:text-white hover:border-white/20 transition-all">
+                  Como funciona?
+                </a>
+              </div>
+            </HeroLine>
+
+            <HeroLine delay={1400}>
+              <div className="flex items-center gap-4 text-[10px] text-gray-600">
+                <span className="flex items-center gap-1"><CheckCircle2 className="h-3 w-3 text-[#00D4FF]/60" />Sem cartão</span>
+                <span className="flex items-center gap-1"><CheckCircle2 className="h-3 w-3 text-[#00D4FF]/60" />Setup &lt; 48h</span>
+                <span className="flex items-center gap-1"><CheckCircle2 className="h-3 w-3 text-[#00D4FF]/60" />Cancele quando quiser</span>
+              </div>
+            </HeroLine>
+          </div>
+
+          {/* Right — Dashboard Visual */}
+          <HeroLine delay={800}>
+            <div className="relative">
+              {/* Glow behind */}
+              <div className="absolute -inset-4 bg-[#00D4FF]/[0.04] rounded-3xl blur-2xl" />
+              
+              <div className="relative rounded-2xl border border-[#00D4FF]/15 bg-[#0b0e14]/90 p-1 overflow-hidden backdrop-blur-sm"
+                style={{ boxShadow: "0 0 60px rgba(0,212,255,0.06)" }}>
+                <div className="rounded-xl bg-[#0b0e14] p-3 sm:p-4">
+                  {/* Browser chrome */}
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-1.5">
+                      <div className="h-2.5 w-2.5 rounded-full bg-red-500/50" />
+                      <div className="h-2.5 w-2.5 rounded-full bg-yellow-500/50" />
+                      <div className="h-2.5 w-2.5 rounded-full bg-green-500/50" />
+                    </div>
+                    <span className="text-[8px] text-gray-600 font-mono">app.vssales.com.br</span>
+                  </div>
+
+                  {/* KPI row */}
+                  <div className="grid grid-cols-3 gap-2 mb-3">
+                    {[
+                      { label: "Leads Hoje", val: "47", change: "+12%", color: "#00D4FF" },
+                      { label: "Pipeline", val: "R$ 234k", change: "+8%", color: "#0057FF" },
+                      { label: "Conversão", val: "23%", change: "+5pp", color: "#00D4FF" },
+                    ].map(m => (
+                      <div key={m.label} className="rounded-lg border border-[#1a1a2e] bg-[#0d0d18] p-2.5">
+                        <p className="text-[8px] text-gray-500 uppercase tracking-wider">{m.label}</p>
+                        <div className="flex items-baseline gap-1.5 mt-1">
+                          <p className="text-base font-bold text-white" style={{ fontFamily: "'Bebas Neue', sans-serif" }}>{m.val}</p>
+                          <p className="text-[8px] font-medium" style={{ color: m.color }}>{m.change}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Chart area */}
+                  <div className="rounded-lg border border-[#1a1a2e] bg-[#0d0d18] p-3 mb-3">
+                    <div className="flex items-center justify-between mb-2">
+                      <p className="text-[8px] text-gray-500 uppercase tracking-wider">Leads últimos 7 dias</p>
+                      <p className="text-[8px] text-[#00D4FF]">+34%</p>
+                    </div>
+                    <div className="flex items-end gap-1 h-16">
+                      {[30, 45, 35, 60, 50, 75, 65].map((h, i) => (
+                        <div key={i} className="flex-1 rounded-t" style={{
+                          height: `${h}%`,
+                          background: i === 6 ? "linear-gradient(to top, #00D4FF, #0057FF)" : "linear-gradient(to top, #00D4FF20, #0057FF30)",
+                        }} />
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Pipeline mini */}
+                  <div className="flex items-center gap-1.5">
+                    {[
+                      { label: "Novo", count: 23, color: "#00D4FF" },
+                      { label: "Qualificado", count: 15, color: "#0057FF" },
+                      { label: "Proposta", count: 8, color: "#0070FF" },
+                      { label: "Fechado", count: 4, color: "#00D4FF" },
+                    ].map(s => (
+                      <div key={s.label} className="flex-1 rounded-lg border border-[#1a1a2e] bg-[#0d0d18] p-2 text-center">
+                        <p className="text-[7px] text-gray-600 uppercase">{s.label}</p>
+                        <p className="text-sm font-bold mt-0.5" style={{ color: s.color, fontFamily: "'Bebas Neue', sans-serif" }}>{s.count}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* Floating notification */}
+              <div className="absolute -bottom-3 -left-3 sm:-left-6 rounded-xl border border-[#00D4FF]/20 bg-[#0d0d18]/95 backdrop-blur-sm p-3 shadow-xl max-w-[200px]"
+                style={{ animation: "float 3s ease-in-out infinite" }}>
+                <div className="flex items-center gap-2">
+                  <div className="h-7 w-7 rounded-lg bg-[#00D4FF]/10 flex items-center justify-center">
+                    <MessageCircle className="h-3.5 w-3.5 text-[#00D4FF]" />
+                  </div>
+                  <div>
+                    <p className="text-[9px] font-medium text-white">Novo lead qualificado</p>
+                    <p className="text-[8px] text-gray-500">Score: 87% • Agora</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Floating badge top-right */}
+              <div className="absolute -top-2 -right-2 sm:-right-4 rounded-lg border border-[#0057FF]/20 bg-[#0d0d18]/95 backdrop-blur-sm px-3 py-2 shadow-xl"
+                style={{ animation: "float 3s ease-in-out infinite 1.5s" }}>
+                <div className="flex items-center gap-2">
+                  <CalendarCheck className="h-3.5 w-3.5 text-[#0057FF]" />
+                  <div>
+                    <p className="text-[9px] font-medium text-white">Reunião agendada</p>
+                    <p className="text-[8px] text-gray-500">Automático • 14:30</p>
+                  </div>
+                </div>
+              </div>
             </div>
-          </HeroLine>
-
-          <h1 style={{ fontFamily: "'Bebas Neue', sans-serif" }} className="text-4xl sm:text-7xl md:text-8xl lg:text-9xl leading-[0.9] tracking-tight mb-5 sm:mb-6">
-            <HeroLine delay={400}>Sua equipe comercial</HeroLine>
-            <HeroLine delay={600}>inteira.</HeroLine>
-            <HeroLine delay={900} className="bg-gradient-to-r from-[#00D4FF] to-[#0057FF] bg-clip-text text-transparent">Só que é IA.</HeroLine>
-          </h1>
-
-          <HeroLine delay={1200}>
-            <p className="text-gray-400 max-w-xl mx-auto text-sm sm:text-base md:text-lg leading-relaxed mb-6 sm:mb-8 px-2">
-              SDR, BDR e Closer autônomos. 24/7. Por {formattedLowest}/mês.
-            </p>
-          </HeroLine>
-
-          <HeroLine delay={1500}>
-            <div className="flex flex-col sm:flex-row items-center justify-center gap-3 mb-8 sm:mb-12 px-2">
-              <a
-                href="#acesso"
-                className="group flex items-center gap-2 px-6 sm:px-8 py-3.5 rounded-lg bg-gradient-to-r from-[#00D4FF] to-[#0057FF] font-semibold text-sm hover:shadow-[0_0_30px_rgba(0,212,255,0.4)] transition-all duration-300 hover:scale-[1.03] w-full sm:w-auto justify-center"
-              >
-                Testar grátis por 7 dias
-                <ArrowRight className="h-4 w-4 group-hover:translate-x-1 transition-transform duration-300" />
-              </a>
-            </div>
-          </HeroLine>
-
-          <HeroLine delay={1800}>
-            <p className="text-[10px] text-gray-600">Sem cartão de crédito • Setup em menos de 48h • Cancele quando quiser</p>
           </HeroLine>
         </div>
 
         <div className="absolute bottom-0 left-0 right-0 h-32 bg-gradient-to-t from-[#0A0A0F] to-transparent" />
       </section>
+
+
+
 
       {/* ═══ 2. BARRA DE CREDIBILIDADE ═══ */}
       <section className="py-8 sm:py-12 border-b border-[#1a1a2e]/50">
@@ -308,62 +418,19 @@ export default function Landing() {
             </p>
           </Reveal>
 
-          {/* Dashboard mockup visual */}
-          <Reveal delay={200}>
-            <div className="relative max-w-4xl mx-auto rounded-2xl border border-[#00D4FF]/20 bg-[#0d0d18]/80 p-1 overflow-hidden"
-              style={{ boxShadow: "0 0 80px rgba(0,212,255,0.08)" }}>
-              <div className="rounded-xl bg-[#0b0e14] p-4 sm:p-6">
-                {/* Fake dashboard header */}
-                <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center gap-2">
-                    <div className="h-3 w-3 rounded-full bg-red-500/60" />
-                    <div className="h-3 w-3 rounded-full bg-yellow-500/60" />
-                    <div className="h-3 w-3 rounded-full bg-green-500/60" />
-                  </div>
-                  <span className="text-[9px] text-gray-600 font-mono">app.vssales.com.br/dashboard</span>
-                </div>
-                {/* Fake metrics grid */}
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
-                  {[
-                    { label: "Leads Hoje", val: "47", change: "+12%", color: "#00D4FF" },
-                    { label: "Pipeline", val: "R$ 234k", change: "+8%", color: "#0057FF" },
-                    { label: "Conversão", val: "23%", change: "+5%", color: "#00D4FF" },
-                    { label: "Agendamentos", val: "12", change: "+3", color: "#0057FF" },
-                  ].map(m => (
-                    <div key={m.label} className="rounded-lg border border-[#1a1a2e] bg-[#0d0d18] p-3">
-                      <p className="text-[9px] text-gray-500 uppercase tracking-wider">{m.label}</p>
-                      <p className="text-lg font-bold text-white mt-1" style={{ fontFamily: "'Bebas Neue', sans-serif" }}>{m.val}</p>
-                      <p className="text-[9px] font-medium mt-0.5" style={{ color: m.color }}>{m.change}</p>
-                    </div>
-                  ))}
-                </div>
-                {/* Fake chart bars */}
-                <div className="flex items-end gap-1.5 h-20 px-2">
-                  {[40, 55, 35, 70, 60, 80, 45, 90, 65, 75, 50, 85].map((h, i) => (
-                    <div key={i} className="flex-1 rounded-t transition-all duration-700" style={{
-                      height: `${h}%`,
-                      background: `linear-gradient(to top, #00D4FF40, #0057FF60)`,
-                    }} />
-                  ))}
-                </div>
-              </div>
-              {/* Glow overlay */}
-              <div className="absolute inset-0 bg-gradient-to-t from-[#00D4FF]/[0.03] to-transparent pointer-events-none rounded-2xl" />
-            </div>
-          </Reveal>
-
-          {/* Quick features under mockup */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-8 max-w-4xl mx-auto">
+          {/* Feature highlights — 2x2 grid with larger cards */}
+          <div className="grid sm:grid-cols-2 gap-4 max-w-4xl mx-auto">
             {[
-              { icon: BotMessageSquare, label: "IA Vendedora 24/7" },
-              { icon: MessageCircle, label: "WhatsApp Nativo" },
-              { icon: BarChart3, label: "CRM Automático" },
-              { icon: CalendarCheck, label: "Agenda Inteligente" },
+              { icon: BotMessageSquare, title: "IA Vendedora 24/7", desc: "Três agentes autônomos (SDR, BDR, Closer) que nunca dormem, nunca tiram férias e nunca pedem aumento.", color: "#00D4FF" },
+              { icon: MessageCircle, title: "WhatsApp como canal principal", desc: "Integração nativa com WhatsApp. Abordagem personalizada, follow-up automático e conversas que convertem.", color: "#0057FF" },
+              { icon: BarChart3, title: "CRM que se atualiza sozinho", desc: "Pipeline em tempo real, alimentado pela IA. Sem digitação manual, sem dado desatualizado.", color: "#00D4FF" },
+              { icon: Brain, title: "IA que aprende seu negócio", desc: "Treine com seus documentos, FAQs e tom de voz. Ela vende exatamente como você venderia.", color: "#0057FF" },
             ].map((f, i) => (
-              <Reveal key={f.label} delay={i * 80}>
-                <div className="flex items-center gap-2 p-3 rounded-lg border border-[#1a1a2e] bg-[#0d0d18]/60">
-                  <f.icon className="h-4 w-4 text-[#00D4FF]" />
-                  <span className="text-xs text-gray-300">{f.label}</span>
+              <Reveal key={f.title} delay={i * 100}>
+                <div className="group p-5 sm:p-6 rounded-xl border border-[#1a1a2e] bg-[#0d0d18]/60 hover:border-[#00D4FF]/15 transition-all duration-300">
+                  <f.icon className="h-6 w-6 mb-3" style={{ color: f.color }} />
+                  <h3 className="text-sm font-semibold text-white mb-1.5">{f.title}</h3>
+                  <p className="text-xs text-gray-500 leading-relaxed">{f.desc}</p>
                 </div>
               </Reveal>
             ))}
@@ -747,9 +814,13 @@ export default function Landing() {
         </div>
       </footer>
 
-      {/* Smooth scroll */}
+      {/* Animations */}
       <style>{`
         html { scroll-behavior: smooth; }
+        @keyframes float {
+          0%, 100% { transform: translateY(0px); }
+          50% { transform: translateY(-6px); }
+        }
       `}</style>
     </div>
   );
