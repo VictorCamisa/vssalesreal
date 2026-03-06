@@ -404,12 +404,12 @@ export default function CRM() {
 
   return (
     <TooltipProvider>
-      <div className="space-y-5 h-full flex flex-col">
+      <div className="space-y-5 h-full flex flex-col w-full">
         {/* ─── Header ─── */}
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
            <div className="flex items-center gap-3">
             <div>
-              <h1 className="page-title">Pipeline de Vendas</h1>
+              <h1 className="text-2xl font-bold tracking-tight">Pipeline de Vendas</h1>
               <p className="page-description">
                 {opportunities.length} {opportunities.length === 1 ? "oportunidade" : "oportunidades"} ativas
               </p>

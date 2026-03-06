@@ -330,12 +330,12 @@ export default function Leads() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 w-full">
       {/* Header */}
        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="page-title">Leads</h1>
-          <p className="page-description">Triagem e qualificação — {leads.length} leads</p>
+          <h1 className="text-2xl font-bold tracking-tight">Leads</h1>
+          <p className="text-sm text-muted-foreground mt-1">Triagem e qualificação — {leads.length} leads</p>
         </div>
         <div className="flex items-center gap-2">
           <label className="cursor-pointer">
@@ -356,19 +356,19 @@ export default function Leads() {
       {/* Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {[
-          { label: "Total", value: leads.length, icon: Users, color: "text-primary" },
-          { label: "Prospectados", value: prospectedCount, icon: Target, color: "text-chart-4" },
-          { label: "Enriquecidos", value: enrichedCount, icon: Sparkles, color: "text-primary" },
-          { label: "Em Comercial", value: convertedCount, icon: Zap, color: "text-success" },
+          { label: "Total", value: leads.length, icon: Users, color: "text-primary", bg: "bg-primary/10" },
+          { label: "Prospectados", value: prospectedCount, icon: Target, color: "text-chart-4", bg: "bg-chart-4/10" },
+          { label: "Enriquecidos", value: enrichedCount, icon: Sparkles, color: "text-primary", bg: "bg-primary/10" },
+          { label: "Em Comercial", value: convertedCount, icon: Zap, color: "text-success", bg: "bg-success/10" },
         ].map(m => (
-          <div key={m.label} className="glass rounded-xl p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">{m.label}</p>
-                <p className="text-2xl font-bold mt-1">{m.value}</p>
+          <div key={m.label} className="glass-card p-5 hover:shadow-card transition-shadow">
+            <div className="flex items-center justify-between mb-3">
+              <div className={`flex h-10 w-10 items-center justify-center rounded-xl ${m.bg}`}>
+                <m.icon className={`h-5 w-5 ${m.color}`} />
               </div>
-              <m.icon className={`h-5 w-5 ${m.color}`} />
             </div>
+            <p className="text-sm text-muted-foreground font-medium">{m.label}</p>
+            <p className="text-3xl font-bold mt-1 tracking-tight">{m.value}</p>
           </div>
         ))}
       </div>

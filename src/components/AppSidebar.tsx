@@ -25,18 +25,22 @@ export function AppSidebar() {
 
   return (
     <Sidebar collapsible="icon" className="border-r border-border bg-sidebar-background">
-      {/* Header */}
+      {/* Header with full logo */}
       <SidebarHeader className={`${collapsed ? "px-2 pt-3 pb-2" : "px-4 pt-4 pb-3"}`}>
         <div className={`flex items-center ${collapsed ? "justify-center" : "gap-3"}`}>
-          <div className="shrink-0">
+          {collapsed ? (
             <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary shadow-lg shadow-primary/30">
-              <img src={vsLogo} alt="VS" className="h-4 w-4 brightness-[10]" />
+              <img src={vsLogo} alt="VS" className="h-5 w-5 brightness-[10]" />
             </div>
-          </div>
-          {!collapsed && (
-            <div className="flex-1 min-w-0">
-              <p className="text-[15px] font-bold text-foreground tracking-tight leading-none">VS Sales</p>
-              <p className="text-xs text-muted-foreground mt-0.5">Plataforma de vendas</p>
+          ) : (
+            <div className="flex items-center gap-3">
+              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary shadow-lg shadow-primary/30 shrink-0">
+                <img src={vsLogo} alt="VS" className="h-5 w-5 brightness-[10]" />
+              </div>
+              <div>
+                <p className="text-base font-bold text-foreground tracking-tight leading-none">VS Sales</p>
+                <p className="text-xs text-muted-foreground mt-0.5">Plataforma de vendas</p>
+              </div>
             </div>
           )}
         </div>
@@ -49,10 +53,10 @@ export function AppSidebar() {
             <NavLink
               to={dashboardItem.url}
               end
-              className={`flex items-center ${collapsed ? "justify-center px-0 py-2.5" : "gap-3 px-3 py-2.5"} rounded-lg text-sm text-muted-foreground hover:text-foreground hover:bg-accent transition-all font-medium mb-2`}
+              className={`flex items-center ${collapsed ? "justify-center px-0 py-3" : "gap-3 px-3 py-2.5"} rounded-lg text-sm text-muted-foreground hover:text-foreground hover:bg-accent transition-all font-medium mb-2`}
               activeClassName="!bg-primary/10 !text-primary"
             >
-              <LayoutDashboard className="h-[18px] w-[18px] shrink-0" />
+              <LayoutDashboard className={`${collapsed ? "h-5 w-5" : "h-[18px] w-[18px]"} shrink-0`} />
               {!collapsed && <span>Dashboard</span>}
             </NavLink>
           </TooltipTrigger>
@@ -75,6 +79,18 @@ export function AppSidebar() {
                   </p>
                 )}
 
+                {/* Collapsed: show group icon as separator */}
+                {collapsed && (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <div className="flex justify-center py-1.5 my-1">
+                        <div className={`h-0.5 w-5 rounded-full ${groupActive ? "bg-primary/50" : "bg-border"}`} />
+                      </div>
+                    </TooltipTrigger>
+                    <TooltipContent side="right">{group.label}</TooltipContent>
+                  </Tooltip>
+                )}
+
                 <div className="space-y-0.5">
                   {group.items.map((item) => {
                     const active = isActive(item.url);
@@ -83,14 +99,14 @@ export function AppSidebar() {
                         <TooltipTrigger asChild>
                           <NavLink
                             to={item.url}
-                            className={`flex items-center ${collapsed ? "justify-center px-0 py-2.5" : "gap-3 px-3 py-2.5"} rounded-lg text-sm transition-all font-medium ${
+                            className={`flex items-center ${collapsed ? "justify-center px-0 py-3" : "gap-3 px-3 py-2.5"} rounded-lg text-sm transition-all font-medium ${
                               active
                                 ? "bg-primary/10 text-primary border border-primary/20"
                                 : "text-foreground/70 hover:text-foreground hover:bg-accent border border-transparent"
                             }`}
                             activeClassName=""
                           >
-                            <item.icon className={`h-[18px] w-[18px] shrink-0 ${active ? "text-primary" : ""}`} />
+                            <item.icon className={`${collapsed ? "h-5 w-5" : "h-[18px] w-[18px]"} shrink-0 ${active ? "text-primary" : ""}`} />
                             {!collapsed && <span>{item.title}</span>}
                           </NavLink>
                         </TooltipTrigger>
