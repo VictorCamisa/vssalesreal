@@ -171,7 +171,7 @@ IMPORTANTE:
         if (!error) results.push("Documento de regras salvo na base de conhecimento");
       }
 
-      // 2. Apply prompt adjustments to scenarios
+      // 2. Apply prompt adjustments to scenarios (explicit from AI)
       if (apply_prompt_adjustments !== false && analysisData.prompt_adjustments?.length) {
         for (const adj of analysisData.prompt_adjustments) {
           const { data: scenario } = await supabase
@@ -190,6 +190,37 @@ IMPORTANTE:
             }
             await supabase.from("ai_scenarios").update({ system_prompt: newPrompt }).eq("id", scenario.id);
             results.push(`Prompt do cenário "${adj.scenario_key}" atualizado`);
+          }
+        }
+      }
+
+      // 3. Always inject rules summary into ALL enabled scenarios' prompts
+      if (apply_prompt_adjustments !== false && analysisData.rules?.length) {
+        const rulesBlock = `\n\n## REGRAS DE REVISÃO (${new Date().toLocaleDateString("pt-BR")})\n${analysisData.rules.map((r: string) => `- ${r}`).join("\n")}`;
+        
+        // Also inject model responses if available
+        let responsesBlock = "";
+        if (analysisData.model_responses?.length) {
+          responsesBlock = `\n\n## RESPOSTAS MODELO\n${analysisData.model_responses.map((mr: any) => `- ${mr.situation} → ${mr.response}`).join("\n")}`;
+        }
+
+        const injection = rulesBlock + responsesBlock;
+
+        const { data: enabledScenarios } = await supabase
+          .from("ai_scenarios")
+          .select("id, scenario_key, system_prompt")
+          .eq("org_id", orgId)
+          .eq("enabled", true);
+
+        if (enabledScenarios?.length) {
+          // Skip scenarios already updated by explicit prompt_adjustments
+          const alreadyUpdated = new Set((analysisData.prompt_adjustments || []).map((a: any) => a.scenario_key));
+          
+          for (const sc of enabledScenarios) {
+            if (alreadyUpdated.has(sc.scenario_key)) continue;
+            const newPrompt = (sc.system_prompt || "") + injection;
+            await supabase.from("ai_scenarios").update({ system_prompt: newPrompt }).eq("id", sc.id);
+            results.push(`Regras injetadas no cenário "${sc.scenario_key}"`);
           }
         }
       }
