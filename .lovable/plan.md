@@ -1,128 +1,79 @@
 
 
-## Diagnóstico do Problema
+# Reconstrução Completa da Landing Page — VS SALES
 
-Após analisar o código em profundidade (`ai-whatsapp-hook` tem 917 linhas com ~15 branches condicionais de prompt, `MySeller.tsx` com 1543 linhas, `AIPage.tsx` com 1960 linhas), o problema é claro:
+## Diagnóstico
 
-**O sistema tem múltiplas fontes de prompt que competem entre si:**
-- `system_prompt` no `ai_configs`
-- `config.prompt_b2b`, `config.prompt_b2c_broadcast`, `config.prompt_b2c_organic` dentro do JSONB
-- `config.modular` com sub-campos (tone, blocks, golden_rules, objections, ctas, b2b_context, b2c_context)
-- Smart routing que tenta escolher entre configs
-- Detecção de audience (hybrid/b2b/b2c) que substitui o prompt inteiro em runtime
+A landing page atual tem uma estrutura funcional, mas apresenta problemas críticos de copywriting, persuasão e design que a enfraquecem como ferramenta de conversão:
 
-O webhook tem tantos `if/else` que, dependendo do caminho, o prompt final pode ser completamente diferente do que o usuário configurou. Contexto vaza entre B2B e B2C, e cada novo cenário adiciona mais complexidade.
+1. **Copy genérica** — frases como "Prospecção. Qualificação. Fechamento." não comunicam valor real. Falta dor, urgência e diferenciação.
+2. **Seções repetitivas** — há dois comparativos (seção 2 e seção 5) que dizem quase a mesma coisa.
+3. **Prova social fraca** — um depoimento fictício de "Carlos Mendes" não convence ninguém.
+4. **Números inventados** — "12.400 leads qualificados" e "97% satisfação" sem contexto parecem falsos.
+5. **Falta de seções-chave** — não há: demonstração visual do produto, seção "Para quem é", garantia, ecossistema VS.
+6. **CTA disperso** — muitos CTAs competindo entre si sem hierarquia clara.
+7. **Cor inconsistente** — usa verde (#00FF88) em vários elementos quando a marca é azul.
 
----
+## Plano de Reconstrução
 
-## Proposta: Arquitetura de "Cenários Fixos"
-
-Simplificar para **4 cenários claros**, cada um com **1 prompt completo e isolado** por organização. Sem sobreposição, sem branches dinâmicos.
+### Estrutura de seções (nova ordem narrativa)
 
 ```text
-┌─────────────────────────────────────────────────┐
-│          CONFIGURAÇÃO DO USUÁRIO (1 vez)         │
-│                                                   │
-│  Cenário 1: PROSPECÇÃO OUTBOUND                   │
-│  → Prompt fixo para empresas raspadas             │
-│  → Tom B2B, qualificação, agendamento             │
-│                                                   │
-│  Cenário 2: DISPARO BASE PRÓPRIA                  │
-│  → Prompt fixo para leads frios da base           │
-│  → Tom depende do público do usuário              │
-│                                                   │
-│  Cenário 3: DISPARO WHATSAPP (grupos)             │
-│  → Prompt fixo para leads de grupos               │
-│  → Abordagem fria, apresentação                   │
-│                                                   │
-│  Cenário 4: ATENDIMENTO ORGÂNICO                  │
-│  → Prompt fixo para quem chama no WhatsApp        │
-│  → Receptivo, atendimento, qualificação           │
-└─────────────────────────────────────────────────┘
-
-Webhook recebe mensagem
-  → Identifica cenário (via broadcast_leads ou orgânico)
-  → Usa O PROMPT EXATO daquele cenário
-  → Injeta contexto da empresa + base de conhecimento
-  → Fim. Sem branches adicionais.
+1. HERO — Headline de impacto + sub-headline com dor + CTA único forte
+2. BARRA DE CREDIBILIDADE — "Powered by VS Soluções Labs" + tecnologias
+3. O PROBLEMA — 4 cards de dor do gestor comercial (melhor copy)
+4. A SOLUÇÃO — O que é o VS SALES (com mockup/screenshot do dashboard)
+5. COMO FUNCIONA — 6 etapas do pipeline (mantido, refinado)
+6. PARA QUEM É — 3 perfis ideais (Startups, PMEs, Agências)
+7. DIFERENCIAIS — Grid de features com ícones e descrições curtas
+8. COMPARATIVO ÚNICO — Tabela Time Humano vs VS SALES (consolidado)
+9. PLANOS & PREÇOS — Cards dinâmicos do banco (mantido, refinado)
+10. GARANTIA — Seção de confiança ("7 dias grátis" ou "Sem contrato")
+11. FAQ — Perguntas frequentes (mantido, copy melhorada)
+12. CTA FINAL — Urgência + formulário de acesso antecipado
+13. FOOTER — Links + identidade VS Soluções
 ```
 
----
+### Mudanças específicas
 
-## Mudanças Técnicas
+**Hero:**
+- Nova headline: "Sua equipe comercial inteira. Só que é IA." com sub "SDR, BDR e Closer autônomos. 24/7. Por R$ 600/mês."
+- Um único CTA principal: "Testar grátis por 7 dias"
+- Remover contadores genéricos do hero, mover para seção de credibilidade
+- Manter ParticleCanvas e animações stagger
 
-### 1. Nova tabela `ai_scenarios` (substituindo o uso multi-purpose de `ai_configs`)
+**Seção "Para Quem É" (nova):**
+- 3 cards: Startups B2B, PMEs com time enxuto, Agências que revendem
+- Cada card com cenário real de uso
 
-```sql
-CREATE TABLE ai_scenarios (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  org_id UUID NOT NULL,
-  scenario_key TEXT NOT NULL, -- 'outbound_prospecting' | 'broadcast_own_base' | 'broadcast_whatsapp' | 'organic_inbound'
-  name TEXT NOT NULL,
-  system_prompt TEXT NOT NULL DEFAULT '',
-  temperature NUMERIC DEFAULT 0.7,
-  enabled BOOLEAN DEFAULT true,
-  behavior JSONB DEFAULT '{}', -- max_messages, delay, emoji, context_window
-  created_at TIMESTAMPTZ DEFAULT now(),
-  updated_at TIMESTAMPTZ DEFAULT now(),
-  UNIQUE(org_id, scenario_key)
-);
-```
+**Diferenciais (nova seção):**
+- Grid 2x3: Prospecção Autônoma, WhatsApp Nativo, CRM Inteligente, IA Treinável, Disparos em Massa, Agendamento Auto
+- Cada item com ícone + 2 linhas de copy
 
-Cada org tem exatamente 4 registros, criados automaticamente. O prompt de cada cenário é completo e autocontido.
+**Comparativo consolidado:**
+- Remover o comparativo duplicado da seção "O Problema"
+- Manter apenas a tabela da seção de planos, com visual mais impactante
 
-### 2. Webhook simplificado
+**Prova social:**
+- Remover depoimento fictício
+- Substituir por métricas reais do sistema (operação 24/7, tempo de setup < 48h, etc.)
 
-A lógica do `ai-whatsapp-hook` cai de ~900 linhas para ~300:
+**Cores:**
+- Substituir todo #00FF88 (verde) por variações de azul (#00D4FF, #0057FF)
+- Manter verde apenas para indicadores de "positivo" em comparativos
 
-1. Recebe mensagem → identifica org via instância
-2. Verifica se lead veio de broadcast → `scenario_key = broadcast.scenario_key`
-3. Se não é broadcast → `scenario_key = 'organic_inbound'`
-4. Busca `ai_scenarios` com `org_id + scenario_key`
-5. Monta prompt: `scenario.system_prompt` + contexto da empresa + base de conhecimento
-6. Envia para IA. Fim.
+**Seção de Garantia (nova):**
+- "Sem contrato. Sem multa. Cancele quando quiser."
+- Ícones de segurança (Shield, Lock, CheckCircle)
 
-Sem detecção de audience, sem hybrid mode, sem smart routing, sem branches B2B/B2C no webhook. O prompt já foi configurado pelo usuário com tudo que precisa.
+### Arquivos modificados
 
-### 3. UI simplificada no "Meu Vendedor"
+- `src/pages/Landing.tsx` — reescrita completa das seções, copy e estrutura
 
-Em vez de tabs B2B/B2C/Disparo com editor modular complexo, a tela mostra:
+### Copy principles aplicados
 
-- **4 cards** (um por cenário), cada um com:
-  - Nome e descrição do cenário
-  - Textarea do prompt (o prompt completo)
-  - Botão "Gerar com IA" (usa dados da empresa para criar prompt otimizado para aquele cenário)
-  - Toggle ativo/inativo
-  - Accordion com config de comportamento (delay, max msgs, emoji)
-
-### 4. Integração com Broadcasts
-
-A tabela `broadcasts` ganha coluna `scenario_key` (em vez de `ai_config_id`). Ao criar disparo, o usuário seleciona o cenário. Ao responder, o webhook usa o prompt daquele cenário.
-
-### 5. Migração de dados
-
-- Para cada org existente, criar 4 registros em `ai_scenarios` usando os prompts atuais dos `ai_configs`
-- Manter `ai_configs` para compatibilidade (chatbot tab no AIPage), mas o webhook passa a ler de `ai_scenarios`
-
----
-
-## Resultado Esperado
-
-- Cada usuário configura **4 prompts claros**, um por cenário
-- O prompt é **exatamente o que a IA usa** — sem transformações em runtime
-- Dados da empresa e base de conhecimento são injetados automaticamente como contexto complementar
-- Zero confusão entre B2B/B2C — o próprio prompt do cenário já define o tom
-- Configuração feita **uma vez**, funciona **sempre igual**
-
----
-
-## Arquivos Afetados
-
-| Ação | Arquivo |
-|------|---------|
-| Criar | `supabase/migrations/xxx_ai_scenarios.sql` |
-| Reescrever | `supabase/functions/ai-whatsapp-hook/index.ts` (~300 linhas) |
-| Refatorar | `src/pages/MySeller.tsx` (UI dos 4 cenários) |
-| Editar | `src/pages/Broadcasts.tsx` (usar scenario_key) |
-| Manter | `src/pages/AIPage.tsx` (chatbot tab sem mudança) |
+- **Dor antes da solução** — mostrar o problema real antes de apresentar o produto
+- **Especificidade** — usar números reais (R$ 600/mês, < 48h de setup, 24/7)
+- **Um CTA por fold** — não competir com múltiplos botões
+- **Prova > Promessa** — features concretas ao invés de adjetivos vagos
 
