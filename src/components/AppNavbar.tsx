@@ -1,35 +1,18 @@
 import { useState } from "react";
-import { useLocation } from "react-router-dom";
 import {
-  LayoutDashboard, Smartphone, Users, Search, Send,
-  Kanban, Calendar, Brain, Building2, UserCheck,
-  LogOut, Menu, X, ChevronDown, Settings,
+  LogOut, Menu, X, ChevronDown,
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { OnboardingDialog } from "@/components/OnboardingDialog";
 import { useAuth } from "@/contexts/AuthContext";
 import vsLogo from "@/assets/vs-sales-logo.png";
-import { cn } from "@/lib/utils";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem,
   DropdownMenuSeparator, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
-
-const allNav = [
-  { title: "Dashboard", url: "/", icon: LayoutDashboard },
-  { title: "WhatsApp", url: "/whatsapp", icon: Smartphone },
-  { title: "Leads", url: "/leads", icon: Users },
-  { title: "Prospecção", url: "/prospecting", icon: Search },
-  { title: "Disparos", url: "/broadcasts", icon: Send },
-  { title: "Pipeline", url: "/crm", icon: Kanban },
-  { title: "Agenda", url: "/appointments", icon: Calendar },
-  { title: "Agente IA", url: "/ai", icon: Brain },
-  { title: "Meu Vendedor", url: "/my-seller", icon: UserCheck },
-  { title: "Empresa", url: "/company", icon: Building2 },
-  { title: "Configurações", url: "/settings", icon: Settings },
-];
+import { allNavItems } from "@/lib/navigation";
 
 export function AppNavbar() {
   const { signOut, profile } = useAuth();
@@ -37,10 +20,9 @@ export function AppNavbar() {
 
   return (
     <>
-      {/* Top bar */}
-      <header className="sticky top-0 z-50 w-full h-16 border-b border-border/30 bg-background/80 backdrop-blur-xl flex items-center px-4 sm:px-6 gap-4">
-        {/* Mobile: Logo + hamburger */}
-        <div className="lg:hidden flex items-center gap-3 flex-1">
+      <header className="sticky top-0 z-50 w-full h-14 border-b border-border/30 bg-background/80 backdrop-blur-xl flex items-center px-4 sm:px-6 gap-4">
+        {/* Mobile hamburger */}
+        <div className="lg:hidden flex items-center gap-3">
           <Button
             variant="ghost"
             size="icon"
@@ -55,30 +37,26 @@ export function AppNavbar() {
           </NavLink>
         </div>
 
-        {/* Desktop: spacer */}
-        <div className="hidden lg:block flex-1" />
+        <div className="flex-1" />
 
-        {/* Right side */}
         <div className="flex items-center gap-3">
           <ThemeToggle />
 
-          {/* User Menu */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <button className="flex items-center gap-2.5 px-2 py-1.5 rounded-xl hover:bg-accent/50 transition-colors outline-none">
-                <div className="flex h-8 w-8 items-center justify-center rounded-full gradient-primary text-[11px] font-bold text-white shadow-glow">
+              <button className="flex items-center gap-2 px-2 py-1.5 rounded-xl hover:bg-accent/50 transition-colors outline-none">
+                <div className="flex h-7 w-7 items-center justify-center rounded-full bg-primary text-[10px] font-bold text-primary-foreground">
                   {profile?.full_name?.charAt(0)?.toUpperCase() || "U"}
                 </div>
                 <span className="hidden md:inline text-sm font-medium text-foreground/80 max-w-[120px] truncate">
                   {profile?.full_name?.split(" ")[0] || "Usuário"}
                 </span>
-                <ChevronDown className="h-3.5 w-3.5 text-muted-foreground hidden md:block" />
+                <ChevronDown className="h-3 w-3 text-muted-foreground hidden md:block" />
               </button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-56 rounded-xl border-border/50 bg-popover/95 backdrop-blur-xl">
-              <div className="px-3 py-2.5">
+            <DropdownMenuContent align="end" className="w-48 rounded-xl border-border/50 bg-popover/95 backdrop-blur-xl">
+              <div className="px-3 py-2">
                 <p className="text-sm font-semibold">{profile?.full_name || "Usuário"}</p>
-                <p className="text-[11px] text-muted-foreground">Gerenciar conta</p>
               </div>
               <DropdownMenuSeparator />
               <DropdownMenuItem asChild>
@@ -93,23 +71,23 @@ export function AppNavbar() {
                 className="text-destructive focus:text-destructive cursor-pointer"
               >
                 <LogOut className="h-4 w-4 mr-2" />
-                <span className="text-sm">Sair</span>
+                Sair
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
       </header>
 
-      {/* Mobile Nav Drawer */}
+      {/* Mobile drawer */}
       {mobileOpen && (
-        <div className="lg:hidden fixed inset-0 z-40 pt-16" onClick={() => setMobileOpen(false)}>
+        <div className="lg:hidden fixed inset-0 z-40 pt-14" onClick={() => setMobileOpen(false)}>
           <div className="absolute inset-0 bg-background/80 backdrop-blur-sm" />
           <nav
             className="relative w-72 h-full bg-sidebar border-r border-border/30 overflow-y-auto animate-slide-in"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="p-4 space-y-1">
-              {allNav.map((item) => (
+              {allNavItems.map((item) => (
                 <NavLink
                   key={item.url}
                   to={item.url}
