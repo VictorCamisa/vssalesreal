@@ -138,6 +138,7 @@ export default function WhatsAppChatViewer({ instanceName, onClose }: Props) {
         contacts={contacts}
         onClose={() => setReviewMode(false)}
         orgId={profile.org_id}
+        instanceName={instanceName}
       />
     );
   }
