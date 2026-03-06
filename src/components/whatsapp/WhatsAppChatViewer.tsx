@@ -3,8 +3,9 @@ import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import {
   ArrowLeft, MessageCircle, Loader2, User, Bot, Phone,
-  Clock, RefreshCw, Search, X
+  Clock, RefreshCw, Search, X, Sparkles
 } from "lucide-react";
+import ConversationReview from "./ConversationReview";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -44,6 +45,7 @@ export default function WhatsAppChatViewer({ instanceName, onClose }: Props) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [messagesLoading, setMessagesLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
+  const [reviewMode, setReviewMode] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -129,6 +131,17 @@ export default function WhatsAppChatViewer({ instanceName, onClose }: Props) {
     }
   });
 
+  // If review mode is active, show the review component
+  if (reviewMode && profile?.org_id) {
+    return (
+      <ConversationReview
+        contacts={contacts}
+        onClose={() => setReviewMode(false)}
+        orgId={profile.org_id}
+      />
+    );
+  }
+
   return (
     <div className="flex flex-col h-[calc(100vh-8rem)] -mx-4 -mt-2 sm:-mx-6 lg:-mx-8 rounded-2xl overflow-hidden border border-border/50 bg-card">
       {/* Top bar */}
@@ -165,9 +178,20 @@ export default function WhatsAppChatViewer({ instanceName, onClose }: Props) {
           </div>
         )}
         {!selectedContact && (
-          <Button variant="ghost" size="icon" onClick={fetchContacts} disabled={contactsLoading}>
-            <RefreshCw className={`h-4 w-4 ${contactsLoading ? "animate-spin" : ""}`} />
-          </Button>
+          <div className="flex items-center gap-1">
+            <Button
+              variant="outline"
+              size="sm"
+              className="rounded-xl text-xs gap-1.5 border-primary/30 text-primary hover:bg-primary/10"
+              onClick={() => setReviewMode(true)}
+              disabled={contacts.length === 0}
+            >
+              <Sparkles className="h-3.5 w-3.5" /> Revisar com IA
+            </Button>
+            <Button variant="ghost" size="icon" onClick={fetchContacts} disabled={contactsLoading}>
+              <RefreshCw className={`h-4 w-4 ${contactsLoading ? "animate-spin" : ""}`} />
+            </Button>
+          </div>
         )}
         {selectedContact && (
           <Button variant="ghost" size="icon" onClick={() => fetchMessages(selectedContact)} disabled={messagesLoading}>
