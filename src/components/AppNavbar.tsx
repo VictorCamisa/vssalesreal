@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { LogOut, Menu, X, ChevronDown } from "lucide-react";
+import { LogOut, Menu, X, ChevronDown, PanelLeft } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { OnboardingDialog } from "@/components/OnboardingDialog";
@@ -10,6 +10,7 @@ import {
   DropdownMenuSeparator, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
+import { SidebarTrigger } from "@/components/ui/sidebar";
 import { allNavItems } from "@/lib/navigation";
 
 export function AppNavbar() {
@@ -19,19 +20,24 @@ export function AppNavbar() {
 
   return (
     <>
-      <header className="sticky top-0 z-50 w-full h-12 border-b border-border bg-background flex items-center px-3 sm:px-5 gap-3">
-        {/* Mobile */}
+      <header className="sticky top-0 z-50 w-full h-12 border-b border-border/50 bg-background/95 backdrop-blur-sm flex items-center px-3 sm:px-5 gap-2">
+        {/* Sidebar trigger - always visible on dashboard */}
+        <SidebarTrigger className="h-7 w-7 text-muted-foreground hover:text-foreground" />
+
+        {/* Mobile menu */}
         <div className="lg:hidden flex items-center gap-2">
           <Button variant="ghost" size="icon" onClick={() => setMobileOpen(!mobileOpen)} className="h-7 w-7">
             {mobileOpen ? <X className="h-3.5 w-3.5" /> : <Menu className="h-3.5 w-3.5" />}
           </Button>
-          <NavLink to="/" className="flex items-center gap-2">
-            <div className="flex h-6 w-6 items-center justify-center rounded bg-primary">
-              <img src={vsLogo} alt="VS" className="h-3.5 w-3.5 brightness-[10]" />
-            </div>
-            <span className="text-[13px] font-semibold">VS Sales</span>
-          </NavLink>
         </div>
+
+        {/* Logo */}
+        <NavLink to="/" className="flex items-center gap-2">
+          <div className="flex h-6 w-6 items-center justify-center rounded bg-primary shadow-sm shadow-primary/20">
+            <img src={vsLogo} alt="VS" className="h-3.5 w-3.5 brightness-[10]" />
+          </div>
+          <span className="text-[13px] font-semibold text-foreground hidden sm:inline">VS Sales</span>
+        </NavLink>
 
         <div className="flex-1" />
 
