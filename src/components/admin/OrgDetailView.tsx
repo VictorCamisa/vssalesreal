@@ -137,7 +137,51 @@ export function OrgDetailView({ orgId, orgName, onBack }: Props) {
     setLoadingStats(false);
   };
 
-  const loadAiConfigs = async () => {
+  const loadOwnerInfo = async () => {
+    const { data: org } = await supabase
+      .from("organizations")
+      .select("owner_id")
+      .eq("id", orgId)
+      .single();
+    if (!org) return;
+    setOwnerId(org.owner_id);
+    // Get email from admin-list-users edge function
+    const session = (await supabase.auth.getSession()).data.session;
+    const { data } = await supabase.functions.invoke("admin-list-users", {
+      headers: { Authorization: `Bearer ${session?.access_token}` },
+    });
+    if (data?.users) {
+      const owner = data.users.find((u: any) => u.id === org.owner_id);
+      if (owner) setOwnerEmail(owner.email);
+    }
+  };
+
+  const handleChangePassword = async () => {
+    if (!ownerId || !newPassword) return;
+    if (newPassword.length < 6) {
+      toast({ title: "Erro", description: "A senha deve ter pelo menos 6 caracteres.", variant: "destructive" });
+      return;
+    }
+    setChangingPassword(true);
+    try {
+      const session = (await supabase.auth.getSession()).data.session;
+      const { data, error } = await supabase.functions.invoke("admin-update-password", {
+        headers: { Authorization: `Bearer ${session?.access_token}` },
+        body: { target_user_id: ownerId, new_password: newPassword },
+      });
+      if (error || data?.error) {
+        toast({ title: "Erro", description: data?.error || error?.message, variant: "destructive" });
+      } else {
+        toast({ title: "Senha alterada com sucesso!" });
+        setNewPassword("");
+        setShowPasswordForm(false);
+      }
+    } catch (err: any) {
+      toast({ title: "Erro", description: err.message, variant: "destructive" });
+    }
+    setChangingPassword(false);
+  };
+
     setLoadingAi(true);
     const { data } = await supabase
       .from("ai_configs")
