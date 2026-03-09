@@ -383,6 +383,50 @@ export function OrgDetailView({ orgId, orgName, onBack }: Props) {
               ))}
             </div>
 
+            {/* Owner info */}
+            <div className="rounded-xl border border-[#1a1a2e] bg-[#0d0d18]/60 p-4 space-y-3">
+              <p className="text-[10px] text-gray-500 uppercase tracking-wider">Dados do Proprietário</p>
+              <div className="flex items-center gap-3">
+                <Mail className="h-4 w-4 text-[#00D4FF]" />
+                <div>
+                  <p className="text-[10px] text-gray-500">E-mail de login</p>
+                  <p className="text-sm text-white font-medium">{ownerEmail || "Carregando..."}</p>
+                </div>
+              </div>
+              
+              {!showPasswordForm ? (
+                <button
+                  onClick={() => setShowPasswordForm(true)}
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-[#FFB800]/10 text-[#FFB800] text-[11px] font-medium hover:bg-[#FFB800]/20 transition-colors border border-[#FFB800]/20"
+                >
+                  <Eye className="h-3.5 w-3.5" /> Alterar Senha
+                </button>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    placeholder="Nova senha (mín. 6 caracteres)"
+                    value={newPassword}
+                    onChange={e => setNewPassword(e.target.value)}
+                    className="flex-1 h-9 px-3 rounded-lg bg-[#1a1a2e] border border-[#252540] text-sm text-white placeholder:text-gray-600 focus:outline-none focus:border-[#00D4FF]/50"
+                  />
+                  <button
+                    onClick={handleChangePassword}
+                    disabled={changingPassword || newPassword.length < 6}
+                    className="h-9 px-4 rounded-lg bg-[#00FF88]/15 text-[#00FF88] text-[11px] font-medium hover:bg-[#00FF88]/25 transition-colors border border-[#00FF88]/20 disabled:opacity-50"
+                  >
+                    {changingPassword ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Salvar"}
+                  </button>
+                  <button
+                    onClick={() => { setShowPasswordForm(false); setNewPassword(""); }}
+                    className="h-9 w-9 rounded-lg bg-white/5 text-gray-500 hover:text-white flex items-center justify-center"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              )}
+            </div>
+
             {/* Quick actions */}
             <div className="rounded-xl border border-[#1a1a2e] bg-[#0d0d18]/60 p-4">
               <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-3">Ações rápidas</p>
