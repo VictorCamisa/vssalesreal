@@ -593,9 +593,9 @@ export default function Leads() {
                     {company && <p><strong>Empresa:</strong> {company}</p>}
                     {role && <p><strong>Cargo:</strong> {role}</p>}
                     {segment && <p><strong>Segmento:</strong> {segment}</p>}
-                    {size && <p><strong>Porte:</strong> {size}</p>}
-                    {location && <p><strong>Localização:</strong> {location}</p>}
-                    {decisionLevel && <p><strong>Nível de Decisão:</strong> {decisionLevel}</p>}
+                    {size && <p><strong>Porte:</strong> {typeof size === 'object' ? JSON.stringify(size) : size}</p>}
+                    {location && <p><strong>Localização:</strong> {typeof location === 'object' ? [location.cidade, location.estado, location.regiao].filter(Boolean).join(', ') || JSON.stringify(location) : location}</p>}
+                    {decisionLevel && <p><strong>Nível de Decisão:</strong> {typeof decisionLevel === 'object' ? JSON.stringify(decisionLevel) : decisionLevel}</p>}
                     {channel && <p><strong>Canal Ideal:</strong> {channel}</p>}
                     {website && website !== "N/A" && <p><strong>Website:</strong> <a href={website.startsWith("http") ? website : `https://${website}`} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">{website}</a></p>}
                     {instagram && instagram !== "N/A" && <p><strong>Instagram:</strong> {instagram}</p>}
