@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -8,8 +8,9 @@ import {
   Loader2, Send, ChevronDown, ChevronUp, Sparkles,
   CheckCircle2, XCircle, AlertTriangle, TrendingUp, Users, Zap,
   Bot, Save, Plus, X, Trash2, MessageCircle,
-  Settings2, HelpCircle, Shield, Eye,
+  Settings2, HelpCircle, Shield, Eye, ChevronsUpDown,
 } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
