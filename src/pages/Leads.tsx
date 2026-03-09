@@ -299,7 +299,7 @@ export default function Leads() {
 
     const rows = lines.slice(1).map(line => {
       const values = line.split(separator).map(v => v.trim().replace(/^"|"$/g, ""));
-      const obj: any = { org_id: profile.org_id, source: "import", status: "pending" };
+      const obj: any = { org_id: profile.org_id, source: "import" as const, status: "pending" as const };
       if (nameIdx !== -1 && values[nameIdx]) obj.name = values[nameIdx];
       if (phoneIdx !== -1 && values[phoneIdx]) obj.phone = values[phoneIdx];
       if (emailIdx !== -1 && values[emailIdx]) obj.email = values[emailIdx];
@@ -307,10 +307,28 @@ export default function Leads() {
     }).filter(r => r.name || r.phone || r.email);
 
     if (rows.length === 0) { toast({ title: "CSV vazio ou inválido", description: "Verifique se o arquivo possui colunas como 'Nome', 'Telefone' ou 'Email'.", variant: "destructive" }); return; }
-    const { error } = await supabase.from("leads_raw").insert(rows);
-    if (error) { toast({ title: "Erro", description: error.message, variant: "destructive" }); logActivity({ action: "leads_importados", description: "Falha na importação CSV", success: false, errorMessage: error.message }); return; }
-    toast({ title: `${rows.length} leads importados!` });
-    logActivity({ action: "leads_importados", description: `${rows.length} leads importados via CSV` });
+    
+    console.log("CSV Import - inserting", rows.length, "rows, first row:", JSON.stringify(rows[0]));
+    
+    const { data, error } = await supabase.from("leads_raw").insert(rows).select("id");
+    if (error) { 
+      console.error("CSV Import error:", error); 
+      toast({ title: "Erro ao importar", description: error.message, variant: "destructive" }); 
+      logActivity({ action: "leads_importados", description: "Falha na importação CSV", success: false, errorMessage: error.message }); 
+      return; 
+    }
+    
+    const insertedCount = data?.length || 0;
+    console.log("CSV Import - inserted", insertedCount, "rows");
+    
+    if (insertedCount === 0) {
+      toast({ title: "Nenhum lead foi inserido", description: "Verifique suas permissões ou tente novamente.", variant: "destructive" });
+      return;
+    }
+    
+    toast({ title: `${insertedCount} leads importados!` });
+    logActivity({ action: "leads_importados", description: `${insertedCount} leads importados via CSV` });
+    e.target.value = "";
     fetchLeads();
   };
 
