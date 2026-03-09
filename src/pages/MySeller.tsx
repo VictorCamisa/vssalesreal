@@ -8,7 +8,7 @@ import {
   Loader2, Send, ChevronDown, ChevronUp, Sparkles,
   CheckCircle2, XCircle, AlertTriangle, TrendingUp, Users, Zap,
   Bot, Save, Plus, X, Trash2, MessageCircle,
-  Settings2, HelpCircle, Shield,
+  Settings2, HelpCircle, Shield, Eye,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -20,6 +20,7 @@ import { Slider } from "@/components/ui/slider";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Progress } from "@/components/ui/progress";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 
 // ---- Types ----
 type ProductItem = { name: string; description: string; price?: string };
@@ -184,6 +185,108 @@ export default function MySeller() {
 
   const [generatingPrompt, setGeneratingPrompt] = useState<string | null>(null);
   const [promptDescriptions, setPromptDescriptions] = useState<Record<string, string>>({});
+
+  // ---- Build final prompt preview ----
+  const buildFinalPrompt = (scenario: Scenario): string => {
+    const useEmoji = scenario.behavior?.use_emoji ?? true;
+    const splitMessages = scenario.behavior?.split_messages ?? true;
+    const maxBlocks = scenario.behavior?.max_blocks ?? 3;
+    const maxCharsPerBlock = scenario.behavior?.max_chars_per_block ?? 500;
+    const maxMessages = scenario.behavior?.max_messages ?? 15;
+    const activeEngagement = scenario.behavior?.active_engagement ?? true;
+    const hidePrices = scenario.behavior?.hide_prices ?? false;
+
+    // Anti-hallucination prefix
+    const antiHallucinationPrefix = `=== REGRA NÚMERO 1 (ACIMA DE TUDO — INVIOLÁVEL) ===
+Você é um vendedor que SÓ pode falar sobre o que está EXPLICITAMENTE descrito neste prompt.
+PROIBIÇÕES ABSOLUTAS:
+- Se um produto, serviço, equipamento, processo ou detalhe técnico NÃO aparece LITERALMENTE nos dados abaixo, ele NÃO EXISTE. Ponto final.
+- NUNCA ofereça coisas que não estão nos dados. NUNCA pergunte se o cliente quer algo que não está nos dados.
+- NUNCA invente processos, equipamentos ou serviços. Se não está escrito, FINJA QUE NÃO EXISTE.
+- Se o cliente perguntar algo fora dos dados, responda EXATAMENTE: "Vou verificar isso com a equipe e te retorno!"
+- NUNCA repita informações que você já disse em mensagens anteriores. O cliente JÁ LIDA essas mensagens.
+- NUNCA use aspas duplas na resposta. Não coloque sua resposta entre aspas.
+- NUNCA comece a resposta repetindo a saudação do disparo. O cliente JÁ recebeu a saudação. Vá direto ao ponto.
+${!useEmoji ? "- NUNCA use emojis. ZERO emojis. Nenhum emoji de qualquer tipo." : ""}
+=== FIM DA REGRA NÚMERO 1 ===
+
+`;
+
+    // Behavior rules
+    const behaviorParts: string[] = [];
+    behaviorParts.push(`\nCONFIGURAÇÕES TÉCNICAS (aplicadas automaticamente):`);
+    behaviorParts.push(`- Máximo de mensagens nesta conversa: ${maxMessages}`);
+
+    if (splitMessages) {
+      behaviorParts.push(`\nFORMATO DE RESPOSTA:`);
+      behaviorParts.push(`- Divida sua resposta em NO MÁXIMO ${maxBlocks} blocos curtos (${maxCharsPerBlock} chars cada)`);
+      behaviorParts.push(`- Separe cada bloco com ---BLOCO--- (numa linha isolada)`);
+    } else {
+      behaviorParts.push(`\nFORMATO DE RESPOSTA:`);
+      behaviorParts.push(`- Responda em uma única mensagem fluida e natural`);
+      behaviorParts.push(`- Máximo 600 caracteres por resposta`);
+    }
+
+    if (!useEmoji) behaviorParts.push(`- NÃO use emojis na resposta`);
+    if (activeEngagement) behaviorParts.push(`- A ÚLTIMA mensagem DEVE terminar com uma PERGUNTA ABERTA ou convite para responder`);
+    if (hidePrices) behaviorParts.push(`- NUNCA mencione preços ou valores. Se perguntarem, diga que precisa entender melhor a necessidade primeiro ou encaminhe para atendente`);
+
+    behaviorParts.push(`\nCAPACIDADE DE AGENDAMENTO:`);
+    behaviorParts.push(`Quando o lead quiser agendar, pergunte data e horário. Com data e hora, inclua: [AGENDAR:YYYY-MM-DD:HH:MM:NOME_DO_LEAD]`);
+    behaviorParts.push(`\nResponda SEMPRE em português brasileiro.`);
+
+    behaviorParts.push(`\nREGRA ANTI-INVENÇÃO (CRÍTICA E OBRIGATÓRIA):`);
+    behaviorParts.push(`- NUNCA invente, suponha ou mencione produtos, serviços, equipamentos ou detalhes técnicos que NÃO estejam EXPLICITAMENTE descritos no seu prompt de sistema ou na base de conhecimento`);
+    behaviorParts.push(`- Se você NÃO tem informação sobre algo, NÃO invente. Diga que vai verificar ou encaminhe para um atendente`);
+    behaviorParts.push(`- NÃO use conhecimento geral do mundo para completar informações sobre a empresa. Use APENAS o que foi fornecido`);
+
+    const behaviorRules = behaviorParts.join("\n");
+
+    // Company context
+    let companyContext = "";
+    if (company) {
+      const parts: string[] = [];
+      if (company.company_name) parts.push(`Empresa: ${company.company_name}`);
+      if (company.segment) parts.push(`Segmento: ${company.segment}`);
+      if (company.description) parts.push(`Descrição: ${company.description}`);
+      if (company.differentials) parts.push(`Diferenciais: ${company.differentials}`);
+      if (company.target_audience) parts.push(`Público-alvo: ${company.target_audience}`);
+      if (company.tone_of_voice) parts.push(`Tom de voz: ${company.tone_of_voice}`);
+      if (company.sales_process) parts.push(`Processo de vendas: ${company.sales_process}`);
+      if (company.products_services?.length) {
+        parts.push(`\nProdutos/Serviços:`);
+        company.products_services.forEach(p => {
+          parts.push(`- ${p.name}: ${p.description}${p.price ? ` (${p.price})` : ""}`);
+        });
+      }
+      if (company.objections_faq?.length) {
+        parts.push(`\nFAQ/Objeções:`);
+        company.objections_faq.forEach(f => {
+          parts.push(`P: ${f.question}\nR: ${f.answer}`);
+        });
+      }
+      if (parts.length > 0) companyContext = `\n\n--- DADOS DA EMPRESA ---\n${parts.join("\n")}\n--- FIM ---`;
+    }
+
+    // Knowledge context
+    let knowledgeContext = "";
+    if (docs.length > 0) {
+      const docParts = docs.map(d => `## ${d.title}\n${d.summary || d.content.substring(0, 400)}`);
+      knowledgeContext = `\n\n--- BASE DE CONHECIMENTO ---\n${docParts.join("\n\n")}\n--- FIM ---`;
+    }
+
+    const antiRepetitionReminder = `
+
+=== LEMBRETE FINAL (RELEIA ANTES DE RESPONDER) ===
+- NÃO invente NADA. Só fale do que está nos dados acima.
+- NÃO repita produtos/serviços já mencionados nas mensagens anteriores.
+- NÃO re-apresente a empresa. O cliente JÁ sabe quem você é.
+- Foque em AVANÇAR a conversa conforme o processo de vendas da empresa.
+${!useEmoji ? "- ZERO EMOJIS. Remova qualquer emoji antes de enviar." : ""}
+===`;
+
+    return antiHallucinationPrefix + (scenario.system_prompt || "(vazio)") + "\n" + behaviorRules + companyContext + knowledgeContext + antiRepetitionReminder;
+  };
 
   // ---- Company updater ----
   const updateCompany = (field: keyof CompanyData, value: any) => {
@@ -448,7 +551,29 @@ export default function MySeller() {
                     rows={10}
                     className="text-sm resize-none font-mono text-xs"
                   />
-                  <p className="text-[10px] text-muted-foreground">Este prompt é exatamente o que a IA usará. Dados da empresa e base de conhecimento são injetados automaticamente.</p>
+                  <div className="flex items-center gap-2">
+                    <p className="text-[10px] text-muted-foreground flex-1">Este prompt é exatamente o que a IA usará. Dados da empresa e base de conhecimento são injetados automaticamente.</p>
+                    <Dialog>
+                      <DialogTrigger asChild>
+                        <Button variant="outline" size="sm" className="gap-1.5 text-xs shrink-0">
+                          <Eye className="h-3 w-3" /> Ver Prompt Final
+                        </Button>
+                      </DialogTrigger>
+                      <DialogContent className="max-w-3xl max-h-[80vh]">
+                        <DialogHeader>
+                          <DialogTitle className="flex items-center gap-2">
+                            <Eye className="h-4 w-4 text-primary" /> Prompt Final — {scenario.name}
+                          </DialogTitle>
+                        </DialogHeader>
+                        <p className="text-xs text-muted-foreground">Este é o prompt completo que a IA recebe, incluindo regras de sistema, seu prompt, dados da empresa e base de conhecimento.</p>
+                        <ScrollArea className="h-[60vh] border rounded-lg p-4 bg-secondary/20">
+                          <pre className="text-xs font-mono whitespace-pre-wrap break-words text-foreground">
+                            {buildFinalPrompt(scenario)}
+                          </pre>
+                        </ScrollArea>
+                      </DialogContent>
+                    </Dialog>
+                  </div>
                 </div>
 
                 {/* Generate with AI */}
