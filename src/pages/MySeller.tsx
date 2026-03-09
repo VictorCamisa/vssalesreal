@@ -551,7 +551,29 @@ ${!useEmoji ? "- ZERO EMOJIS. Remova qualquer emoji antes de enviar." : ""}
                     rows={10}
                     className="text-sm resize-none font-mono text-xs"
                   />
-                  <p className="text-[10px] text-muted-foreground">Este prompt é exatamente o que a IA usará. Dados da empresa e base de conhecimento são injetados automaticamente.</p>
+                  <div className="flex items-center gap-2">
+                    <p className="text-[10px] text-muted-foreground flex-1">Este prompt é exatamente o que a IA usará. Dados da empresa e base de conhecimento são injetados automaticamente.</p>
+                    <Dialog>
+                      <DialogTrigger asChild>
+                        <Button variant="outline" size="sm" className="gap-1.5 text-xs shrink-0">
+                          <Eye className="h-3 w-3" /> Ver Prompt Final
+                        </Button>
+                      </DialogTrigger>
+                      <DialogContent className="max-w-3xl max-h-[80vh]">
+                        <DialogHeader>
+                          <DialogTitle className="flex items-center gap-2">
+                            <Eye className="h-4 w-4 text-primary" /> Prompt Final — {scenario.name}
+                          </DialogTitle>
+                        </DialogHeader>
+                        <p className="text-xs text-muted-foreground">Este é o prompt completo que a IA recebe, incluindo regras de sistema, seu prompt, dados da empresa e base de conhecimento.</p>
+                        <ScrollArea className="h-[60vh] border rounded-lg p-4 bg-secondary/20">
+                          <pre className="text-xs font-mono whitespace-pre-wrap break-words text-foreground">
+                            {buildFinalPrompt(scenario)}
+                          </pre>
+                        </ScrollArea>
+                      </DialogContent>
+                    </Dialog>
+                  </div>
                 </div>
 
                 {/* Generate with AI */}
