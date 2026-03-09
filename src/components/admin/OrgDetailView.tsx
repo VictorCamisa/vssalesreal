@@ -95,7 +95,7 @@ export function OrgDetailView({ orgId, orgName, onBack }: Props) {
   const [loadingCompany, setLoadingCompany] = useState(false);
   const [savingCompany, setSavingCompany] = useState(false);
 
-  useEffect(() => { loadStats(); }, [orgId]);
+  useEffect(() => { loadStats(); loadOwnerInfo(); }, [orgId]);
   useEffect(() => {
     if (subTab === "ai") loadAiConfigs();
     if (subTab === "whatsapp") loadWhatsApp();
