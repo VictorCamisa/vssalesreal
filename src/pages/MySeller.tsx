@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -8,8 +8,9 @@ import {
   Loader2, Send, ChevronDown, ChevronUp, Sparkles,
   CheckCircle2, XCircle, AlertTriangle, TrendingUp, Users, Zap,
   Bot, Save, Plus, X, Trash2, MessageCircle,
-  Settings2, HelpCircle, Shield, Eye,
+  Settings2, HelpCircle, Shield, Eye, ChevronsUpDown,
 } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -162,9 +163,17 @@ const SIM_SCENARIOS = [
 
 // ====== COMPONENT ======
 export default function MySeller() {
-  const { profile } = useAuth();
+  const { profile, user } = useAuth();
   const { toast } = useToast();
-  const orgId = profile?.org_id;
+  const ownOrgId = profile?.org_id;
+
+  // Platform admin state
+  const [isPlatformAdmin, setIsPlatformAdmin] = useState(false);
+  const [allOrgs, setAllOrgs] = useState<{ id: string; name: string }[]>([]);
+  const [selectedOrgId, setSelectedOrgId] = useState<string | null>(null);
+  
+  // Effective org = selected (admin) or own
+  const orgId = selectedOrgId || ownOrgId;
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState<string | null>(null);
@@ -398,9 +407,33 @@ ${!useEmoji ? "- ZERO EMOJIS. Remova qualquer emoji antes de enviar." : ""}
   };
   const removeFaq = (idx: number) => { if (company) updateCompany("objections_faq", company.objections_faq.filter((_, i) => i !== idx)); };
 
-  // ---- Fetch ----
+  // ---- Check platform admin + load orgs ----
+  useEffect(() => {
+    if (!user) return;
+    (async () => {
+      const { data } = await supabase
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", user.id)
+        .eq("role", "admin")
+        .maybeSingle();
+      if (data) {
+        setIsPlatformAdmin(true);
+        const { data: orgs } = await supabase
+          .from("organizations")
+          .select("id, name")
+          .order("name");
+        setAllOrgs(orgs || []);
+        // Default to own org
+        setSelectedOrgId(ownOrgId || null);
+      }
+    })();
+  }, [user, ownOrgId]);
+
+  // ---- Fetch data for selected org ----
   useEffect(() => {
     if (!orgId) return;
+    setLoading(true);
     (async () => {
       const [companyRes, scenariosRes, docsRes, leadsRes, oppsRes] = await Promise.all([
         supabase.from("company_profiles").select("*").eq("org_id", orgId).maybeSingle(),
@@ -464,6 +497,29 @@ ${!useEmoji ? "- ZERO EMOJIS. Remova qualquer emoji antes de enviar." : ""}
         </h1>
         <p className="page-description">Configure seus 4 cenários de IA. Cada cenário tem 1 prompt isolado e funciona de forma independente.</p>
       </div>
+
+      {/* ====== ORG SELECTOR (Platform Admin only) ====== */}
+      {isPlatformAdmin && (
+        <div className="glass-card p-4 flex items-center gap-4 border-primary/30 bg-primary/5">
+          <div className="flex items-center gap-2 shrink-0">
+            <Shield className="h-4 w-4 text-primary" />
+            <span className="text-sm font-semibold text-primary">Admin</span>
+          </div>
+          <Select value={selectedOrgId || ""} onValueChange={(v) => setSelectedOrgId(v)}>
+            <SelectTrigger className="flex-1 h-9 text-sm">
+              <SelectValue placeholder="Selecione uma organização..." />
+            </SelectTrigger>
+            <SelectContent>
+              {allOrgs.map(org => (
+                <SelectItem key={org.id} value={org.id} className="text-sm">
+                  {org.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <span className="text-[10px] text-muted-foreground shrink-0">{allOrgs.length} orgs</span>
+        </div>
+      )}
 
       {/* ====== MAIN CARD ====== */}
       <div className="glass-card p-5 space-y-5">
