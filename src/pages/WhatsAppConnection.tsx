@@ -54,9 +54,16 @@ export default function WhatsAppConnection() {
   const handleCreateInstance = async () => {
     if (!profile?.org_id || !newInstanceName.trim()) return;
     setCreatingInstance(true);
+    // Sanitize: remove spaces and special chars for Evolution API compatibility
+    const sanitizedName = newInstanceName.trim().replace(/[^a-zA-Z0-9_-]/g, "_").replace(/_+/g, "_").replace(/^_|_$/g, "");
+    if (!sanitizedName) {
+      toast({ title: "Nome inválido", description: "Use letras, números, - ou _", variant: "destructive" });
+      setCreatingInstance(false);
+      return;
+    }
     try {
       const { data, error } = await supabase.functions.invoke("manage-evolution", {
-        body: { action: "create", org_id: profile.org_id, instance_name: newInstanceName.trim() },
+        body: { action: "create", org_id: profile.org_id, instance_name: sanitizedName },
       });
       if (error) throw error;
       toast({ title: "Instância criada!", description: `${newInstanceName} pronta para conexão.` });
