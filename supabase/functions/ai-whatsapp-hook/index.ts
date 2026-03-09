@@ -505,20 +505,7 @@ ${!useEmoji ? "- ZERO EMOJIS. Remova qualquer emoji antes de enviar." : ""}
       return new Response(JSON.stringify({ error: "Empty AI response" }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-    // POST-PROCESSING: Remove hallucinated terms that are NOT in the scenario prompt
-    const scenarioPromptLower = (scenario.system_prompt || "").toLowerCase();
-    const hallucinationPatterns = [
-      { pattern: /instala[çc][ãa]o\s+(d[aeo]s?\s+)?chopeiras?/gi, term: "instalação" },
-      { pattern: /cilindros?\s*(extras?)?/gi, term: "cilindro" },
-      { pattern: /suporte\s+t[ée]cnico/gi, term: "suporte técnico" },
-      { pattern: /manuten[çc][ãa]o/gi, term: "manutenção" },
-      { pattern: /assist[êe]ncia/gi, term: "assistência" },
-    ];
-    for (const hp of hallucinationPatterns) {
-      if (!scenarioPromptLower.includes(hp.term)) {
-        reply = reply.replace(new RegExp(`[^.!?]*${hp.pattern.source}[^.!?]*[.!?]?`, "gi"), "").trim();
-      }
-    }
+    // Anti-hallucination is now handled entirely by the system prompt (user-configured)
 
     // POST-PROCESSING: Strip emojis if disabled
     if (!useEmoji) {
