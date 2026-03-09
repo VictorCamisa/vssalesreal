@@ -498,6 +498,29 @@ ${!useEmoji ? "- ZERO EMOJIS. Remova qualquer emoji antes de enviar." : ""}
         <p className="page-description">Configure seus 4 cenários de IA. Cada cenário tem 1 prompt isolado e funciona de forma independente.</p>
       </div>
 
+      {/* ====== ORG SELECTOR (Platform Admin only) ====== */}
+      {isPlatformAdmin && (
+        <div className="glass-card p-4 flex items-center gap-4 border-primary/30 bg-primary/5">
+          <div className="flex items-center gap-2 shrink-0">
+            <Shield className="h-4 w-4 text-primary" />
+            <span className="text-sm font-semibold text-primary">Admin</span>
+          </div>
+          <Select value={selectedOrgId || ""} onValueChange={(v) => setSelectedOrgId(v)}>
+            <SelectTrigger className="flex-1 h-9 text-sm">
+              <SelectValue placeholder="Selecione uma organização..." />
+            </SelectTrigger>
+            <SelectContent>
+              {allOrgs.map(org => (
+                <SelectItem key={org.id} value={org.id} className="text-sm">
+                  {org.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <span className="text-[10px] text-muted-foreground shrink-0">{allOrgs.length} orgs</span>
+        </div>
+      )}
+
       {/* ====== MAIN CARD ====== */}
       <div className="glass-card p-5 space-y-5">
         <div className="flex items-start gap-4">
