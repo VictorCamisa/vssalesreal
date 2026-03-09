@@ -291,7 +291,7 @@ export default function Leads() {
       return -1;
     };
 
-    const nameIdx = findCol(["nome", "name", "nome completo", "full name", "contato", "contact"]);
+    const nameIdx = findCol(["nome", "name", "nome completo", "full name", "contato", "contact", "cliente", "razao social", "empresa"]);
     const phoneIdx = findCol(["telefone", "phone", "celular", "whatsapp", "tel", "fone", "numero"]);
     const emailIdx = findCol(["email", "e-mail", "correio"]);
 
