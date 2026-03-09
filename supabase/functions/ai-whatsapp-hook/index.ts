@@ -486,9 +486,7 @@ ${!useEmoji ? "- ZERO EMOJIS. Remova qualquer emoji antes de enviar." : ""}
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY not configured");
 
-    // Cap temperature at 0.4 max to reduce hallucination
-    const rawTemp = Number(scenario.temperature) || 0.7;
-    const temperature = Math.min(rawTemp, 0.4);
+    const temperature = Number(scenario.temperature) || 0.7;
 
     const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
