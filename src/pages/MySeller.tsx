@@ -407,9 +407,33 @@ ${!useEmoji ? "- ZERO EMOJIS. Remova qualquer emoji antes de enviar." : ""}
   };
   const removeFaq = (idx: number) => { if (company) updateCompany("objections_faq", company.objections_faq.filter((_, i) => i !== idx)); };
 
-  // ---- Fetch ----
+  // ---- Check platform admin + load orgs ----
+  useEffect(() => {
+    if (!user) return;
+    (async () => {
+      const { data } = await supabase
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", user.id)
+        .eq("role", "admin")
+        .maybeSingle();
+      if (data) {
+        setIsPlatformAdmin(true);
+        const { data: orgs } = await supabase
+          .from("organizations")
+          .select("id, name")
+          .order("name");
+        setAllOrgs(orgs || []);
+        // Default to own org
+        setSelectedOrgId(ownOrgId || null);
+      }
+    })();
+  }, [user, ownOrgId]);
+
+  // ---- Fetch data for selected org ----
   useEffect(() => {
     if (!orgId) return;
+    setLoading(true);
     (async () => {
       const [companyRes, scenariosRes, docsRes, leadsRes, oppsRes] = await Promise.all([
         supabase.from("company_profiles").select("*").eq("org_id", orgId).maybeSingle(),
