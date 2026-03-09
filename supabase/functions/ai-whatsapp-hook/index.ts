@@ -442,8 +442,7 @@ ${!useEmoji ? "- NUNCA use emojis. ZERO emojis. Nenhum emoji de qualquer tipo." 
 - NÃO invente NADA. Só fale do que está nos dados acima.
 - NÃO repita produtos/serviços já mencionados nas mensagens anteriores.
 - NÃO re-apresente a empresa. O cliente JÁ sabe quem você é.
-- Perguntas devem ser sobre LOGÍSTICA (quando, onde, quanto), NUNCA oferecendo coisas que não estão na base.
-- Responda de forma CURTA e DIRETA. Máximo 1-2 frases.
+- Foque em AVANÇAR a conversa conforme o processo de vendas da empresa.
 ${!useEmoji ? "- ZERO EMOJIS. Remova qualquer emoji antes de enviar." : ""}
 ===`;
 
