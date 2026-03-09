@@ -69,6 +69,13 @@ export function OrgDetailView({ orgId, orgName, onBack }: Props) {
   });
   const [loadingStats, setLoadingStats] = useState(true);
 
+  // Owner info state
+  const [ownerEmail, setOwnerEmail] = useState<string | null>(null);
+  const [ownerId, setOwnerId] = useState<string | null>(null);
+  const [newPassword, setNewPassword] = useState("");
+  const [changingPassword, setChangingPassword] = useState(false);
+  const [showPasswordForm, setShowPasswordForm] = useState(false);
+
   // AI state
   const [aiConfigs, setAiConfigs] = useState<any[]>([]);
   const [loadingAi, setLoadingAi] = useState(false);
