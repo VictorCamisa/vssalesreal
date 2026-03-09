@@ -8,7 +8,7 @@ import {
   Loader2, Send, ChevronDown, ChevronUp, Sparkles,
   CheckCircle2, XCircle, AlertTriangle, TrendingUp, Users, Zap,
   Bot, Save, Plus, X, Trash2, MessageCircle,
-  Settings2, HelpCircle, Shield,
+  Settings2, HelpCircle, Shield, Eye,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
