@@ -3,8 +3,11 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
+    "authorization, x-client-info, apikey, content-type, x-internal-secret, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
+
+const BATCH_SIZE = 10;
+const INSTANCE_RECHECK_INTERVAL = 5;
 
 const json = (data: unknown, status = 200) =>
   new Response(JSON.stringify(data), {
@@ -21,15 +24,23 @@ Deno.serve(async (req) => {
     const EVOLUTION_API_URL = (Deno.env.get("EVOLUTION_API_URL") || "").replace(/\/$/, "");
     const EVOLUTION_API_KEY = Deno.env.get("EVOLUTION_API_KEY") || "";
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY") || "";
+    const INTERNAL_SECRET = Deno.env.get("BROADCAST_INTERNAL_SECRET") || "";
 
-    const authHeader = req.headers.get("authorization");
-    if (!authHeader?.startsWith("Bearer ")) return json({ error: "Unauthorized" }, 401);
+    // --- AUTH: support both user JWT and internal secret ---
+    const internalSecret = req.headers.get("x-internal-secret");
+    const isInternalCall = internalSecret && INTERNAL_SECRET && internalSecret === INTERNAL_SECRET;
 
-    const supabaseUser = createClient(SUPABASE_URL, Deno.env.get("SUPABASE_ANON_KEY")!, {
-      global: { headers: { Authorization: authHeader } },
-    });
-    const { data: { user }, error: authError } = await supabaseUser.auth.getUser();
-    if (authError || !user) return json({ error: "Unauthorized" }, 401);
+    if (!isInternalCall) {
+      const authHeader = req.headers.get("authorization");
+      if (!authHeader?.startsWith("Bearer ")) return json({ error: "Unauthorized" }, 401);
+
+      const supabaseUser = createClient(SUPABASE_URL, Deno.env.get("SUPABASE_ANON_KEY")!, {
+        global: { headers: { Authorization: authHeader } },
+      });
+      const token = authHeader.replace("Bearer ", "");
+      const { data: claims, error: claimsErr } = await supabaseUser.auth.getClaims(token);
+      if (claimsErr || !claims?.claims) return json({ error: "Unauthorized" }, 401);
+    }
 
     const body = await req.json();
     const { broadcast_id, org_id } = body;
@@ -87,12 +98,12 @@ Deno.serve(async (req) => {
       return null;
     };
 
-    // Get instance to use — always verify it's online
+    // Get instance to use — verify it's online
     let instanceName = broadcast.instance_name;
     if (instanceName) {
       const online = await isInstanceOnline(instanceName);
       if (!online) {
-        console.log(`Configured instance "${instanceName}" is offline, searching for online instance...`);
+        console.log(`Instance "${instanceName}" offline, searching...`);
         instanceName = await findOnlineInstance();
       }
     } else {
@@ -101,11 +112,11 @@ Deno.serve(async (req) => {
 
     if (!instanceName) {
       await supabase.from("broadcasts").update({ status: "paused" }).eq("id", broadcast_id);
-      return json({ error: "Nenhuma instância WhatsApp online encontrada. Disparo pausado." }, 400);
+      return json({ error: "Nenhuma instância WhatsApp online. Disparo pausado.", paused: true }, 400);
     }
     console.log(`Using instance: ${instanceName}`);
 
-    // Load scenario prompt from ai_scenarios (replaces ai_configs)
+    // Load scenario config (only once per batch — context is identical)
     const scenarioKey = (broadcast as any).scenario_key || "broadcast_own_base";
     let scenarioPrompt = "";
     let maxBlocks = 2;
@@ -121,9 +132,7 @@ Deno.serve(async (req) => {
         .eq("scenario_key", scenarioKey)
         .maybeSingle();
 
-      if (scenario?.system_prompt) {
-        scenarioPrompt = scenario.system_prompt;
-      }
+      if (scenario?.system_prompt) scenarioPrompt = scenario.system_prompt;
       if (scenario) {
         const beh = (scenario.behavior || {}) as any;
         maxBlocks = Number(beh.max_blocks) || 2;
@@ -133,7 +142,7 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Get company profile for context
+    // Company context
     let companyContext = "";
     if (broadcast.ai_enabled) {
       const { data: company } = await supabase
@@ -156,7 +165,7 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Load knowledge base for the org
+    // Knowledge base
     let knowledgeContext = "";
     if (broadcast.ai_enabled) {
       const { data: docs } = await supabase
@@ -171,7 +180,7 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Build final system prompt for AI generation with anti-hallucination
+    // Build system prompt
     const antiHallucinationRule = `=== REGRA NÚMERO 1 (INVIOLÁVEL) ===
 - NUNCA invente produtos, serviços ou processos. Se não está escrito abaixo, NÃO EXISTE.
 - Se o dado não está na base de conhecimento, NÃO mencione.
@@ -192,34 +201,29 @@ ${!useEmoji ? "- NUNCA use emojis. ZERO emojis." : ""}
 - NÃO coloque a resposta entre aspas.`,
     ].filter(Boolean).join("\n");
 
-    // Get pending broadcast leads
+    // --- Get ONLY pending leads, limited to BATCH_SIZE ---
     const { data: bLeads } = await supabase
       .from("broadcast_leads")
       .select("id, lead_id, lead:leads_raw(name, phone, enrichment_data)")
       .eq("broadcast_id", broadcast_id)
       .eq("status", "pending")
-      .limit(50);
+      .limit(BATCH_SIZE);
 
     if (!bLeads || bLeads.length === 0) {
       await supabase.from("broadcasts").update({
         status: "completed",
         completed_at: new Date().toISOString(),
       }).eq("id", broadcast_id);
-      return json({ success: true, message: "All messages sent. Broadcast completed.", sent: 0 });
+      await updateBroadcastCounts(supabase, broadcast_id);
+      return json({ success: true, message: "Disparo concluído.", sent: 0, remaining: 0 });
     }
 
-    // Helper: send message in blocks with human-like delays
+    // Helper: send message in blocks
     const sendInBlocks = async (phone: string, fullMessage: string): Promise<boolean> => {
       let blocks = fullMessage.split(/---BLOCO---/i).map(b => b.trim()).filter(b => b.length > 0);
-      if (blocks.length <= 1) {
-        blocks = fullMessage.split(/\n\n+/).map(b => b.trim()).filter(b => b.length > 0);
-      }
+      if (blocks.length <= 1) blocks = fullMessage.split(/\n\n+/).map(b => b.trim()).filter(b => b.length > 0);
       if (blocks.length === 0) blocks = [fullMessage];
-
-      // HARD CAP: respect max_blocks from scenario
       blocks = blocks.slice(0, maxBlocks);
-
-      // HARD CAP: truncate each block
       blocks = blocks.map(block => {
         if (block.length > maxCharsPerBlock) {
           const cut = block.substring(0, maxCharsPerBlock);
@@ -236,16 +240,11 @@ ${!useEmoji ? "- NUNCA use emojis. ZERO emojis." : ""}
           const lengthBonus = Math.min(blocks[i].length * 10, 1000);
           await new Promise(resolve => setTimeout(resolve, baseDelay + lengthBonus));
         }
-
         const sendResp = await fetch(`${EVOLUTION_API_URL}/message/sendText/${instanceName}`, {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            apikey: EVOLUTION_API_KEY,
-          },
+          headers: { "Content-Type": "application/json", apikey: EVOLUTION_API_KEY },
           body: JSON.stringify({ number: phone, text: blocks[i] }),
         });
-
         if (sendResp.ok) {
           await sendResp.json();
           success = true;
@@ -260,8 +259,29 @@ ${!useEmoji ? "- NUNCA use emojis. ZERO emojis." : ""}
     let failCount = 0;
     const delayMs = (broadcast.delay_between_messages || 10) * 1000;
 
-    for (const bl of bLeads) {
+    for (let idx = 0; idx < bLeads.length; idx++) {
+      const bl = bLeads[idx];
       const lead = (bl as any).lead;
+
+      // Re-verify instance every INSTANCE_RECHECK_INTERVAL sends
+      if (idx > 0 && idx % INSTANCE_RECHECK_INTERVAL === 0) {
+        const stillOnline = await isInstanceOnline(instanceName!);
+        if (!stillOnline) {
+          console.log("Instance went offline mid-batch, pausing broadcast");
+          await supabase.from("broadcasts").update({ status: "paused" }).eq("id", broadcast_id);
+          await updateBroadcastCounts(supabase, broadcast_id);
+          return json({ success: false, error: "Instância ficou offline. Disparo pausado.", sent: sentCount, failed: failCount, paused: true });
+        }
+
+        // Also check if broadcast was paused/cancelled
+        const { data: freshB } = await supabase.from("broadcasts").select("status").eq("id", broadcast_id).single();
+        if (freshB && freshB.status !== "running") {
+          console.log("Broadcast paused/cancelled during execution");
+          await updateBroadcastCounts(supabase, broadcast_id);
+          return json({ success: true, sent: sentCount, failed: failCount, remaining: bLeads.length - idx });
+        }
+      }
+
       if (!lead?.phone) {
         await supabase.from("broadcast_leads").update({
           status: "failed", error_message: "Lead sem telefone",
@@ -270,19 +290,8 @@ ${!useEmoji ? "- NUNCA use emojis. ZERO emojis." : ""}
         continue;
       }
 
-      // Check if broadcast was paused/cancelled during execution
-      if (sentCount > 0 && sentCount % 10 === 0) {
-        const { data: freshB } = await supabase.from("broadcasts").select("status").eq("id", broadcast_id).single();
-        if (freshB && freshB.status !== "running") {
-          console.log("Broadcast paused/cancelled during execution");
-          break;
-        }
-      }
-
       // Generate or use template message
       let messageText = broadcast.message_template || "";
-
-      // Replace variables
       if (messageText) {
         messageText = messageText
           .replace(/\{nome\}/gi, lead.name?.split(" ")[0] || "")
@@ -290,12 +299,11 @@ ${!useEmoji ? "- NUNCA use emojis. ZERO emojis." : ""}
           .replace(/\{telefone\}/gi, lead.phone || "");
       }
 
-      // If AI is enabled and no template, generate with AI using scenario prompt
+      // AI generation fallback
       if (broadcast.ai_enabled && !messageText && LOVABLE_API_KEY && fullSystemPrompt) {
         try {
           const leadFirstName = lead.name?.split(" ")[0] || "";
           const leadContext = leadFirstName ? `Lead: ${leadFirstName}` : "Lead sem nome identificado";
-
           const aiResp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
             method: "POST",
             headers: {
@@ -314,13 +322,10 @@ ${!useEmoji ? "- NUNCA use emojis. ZERO emojis." : ""}
           if (aiResp.ok) {
             const aiData = await aiResp.json();
             messageText = (aiData.choices?.[0]?.message?.content || "").trim();
-            // Remove wrapping quotes
             messageText = messageText.replace(/^[""](.*)[""]$/s, "$1").trim();
-            // Strip emojis if disabled
             if (!useEmoji) {
               messageText = messageText.replace(/[\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{1F000}-\u{1F02F}\u{1F0A0}-\u{1F0FF}\u{1F100}-\u{1F64F}\u{1F680}-\u{1F6FF}\u{1FA00}-\u{1FA6F}\u{1FA70}-\u{1FAFF}\u{FE00}-\u{FE0F}\u{200D}\u{20E3}\u{E0020}-\u{E007F}]/gu, "").trim();
             }
-            // Replace name placeholders
             if (leadFirstName) {
               messageText = messageText.replace(/\[Nome\]/gi, leadFirstName);
             } else {
@@ -330,7 +335,7 @@ ${!useEmoji ? "- NUNCA use emojis. ZERO emojis." : ""}
             await aiResp.text();
           }
         } catch (e) {
-          console.error("AI message generation error:", e);
+          console.error("AI generation error:", e);
         }
       }
 
@@ -342,37 +347,28 @@ ${!useEmoji ? "- NUNCA use emojis. ZERO emojis." : ""}
         continue;
       }
 
-      // Send via Evolution API — in blocks with human-like delays
+      // Send via Evolution API
       const cleanPhone = lead.phone.replace(/\D/g, "");
       try {
         const success = await sendInBlocks(cleanPhone, messageText);
-
         if (success) {
           const storedMsg = messageText.replace(/---BLOCO---/gi, "\n").trim();
           const sentAt = new Date().toISOString();
           await supabase.from("broadcast_leads").update({
-            status: "sent",
-            sent_at: sentAt,
-            message_sent: storedMsg,
+            status: "sent", sent_at: sentAt, message_sent: storedMsg,
           }).eq("id", bl.id);
 
-          // Save broadcast message to chat_messages so the webhook has full history
-          const remoteJidMsg = `${cleanPhone}@s.whatsapp.net`;
+          // Save to chat_messages
+          const remoteJid = `${cleanPhone}@s.whatsapp.net`;
           try {
             await supabase.from("chat_messages").insert({
-              org_id: org_id,
-              instance_name: instanceName!,
-              remote_jid: remoteJidMsg,
-              from_me: true,
-              message_text: storedMsg,
-              push_name: null,
-              message_id: `broadcast_${broadcast_id}_${bl.id}`,
-              timestamp: sentAt,
+              org_id, instance_name: instanceName!, remote_jid: remoteJid,
+              from_me: true, message_text: storedMsg, push_name: null,
+              message_id: `broadcast_${broadcast_id}_${bl.id}`, timestamp: sentAt,
             });
-          } catch (e) { console.error("Save broadcast chat_message error:", e); }
+          } catch (e) { console.error("Save chat_message error:", e); }
 
-          // Create/update conversation_tracker with scenario_key
-          const remoteJid = `${cleanPhone}@s.whatsapp.net`;
+          // Upsert conversation_tracker
           const { data: existingConv } = await supabase
             .from("conversation_tracker")
             .select("id")
@@ -383,20 +379,13 @@ ${!useEmoji ? "- NUNCA use emojis. ZERO emojis." : ""}
 
           if (!existingConv) {
             await supabase.from("conversation_tracker").insert({
-              org_id: org_id,
-              instance_name: instanceName!,
-              remote_jid: remoteJid,
-              push_name: lead.name || null,
-              last_bot_msg_at: new Date().toISOString(),
-              last_customer_msg_at: new Date().toISOString(),
-              lead_id: bl.lead_id,
-              scenario_key: scenarioKey,
+              org_id, instance_name: instanceName!, remote_jid: remoteJid,
+              push_name: lead.name || null, last_bot_msg_at: sentAt,
+              last_customer_msg_at: sentAt, lead_id: bl.lead_id, scenario_key: scenarioKey,
             });
           } else {
             await supabase.from("conversation_tracker").update({
-              last_bot_msg_at: new Date().toISOString(),
-              lead_id: bl.lead_id,
-              scenario_key: scenarioKey,
+              last_bot_msg_at: sentAt, lead_id: bl.lead_id, scenario_key: scenarioKey,
             }).eq("id", existingConv.id);
           }
 
@@ -409,66 +398,75 @@ ${!useEmoji ? "- NUNCA use emojis. ZERO emojis." : ""}
         }
       } catch (e) {
         await supabase.from("broadcast_leads").update({
-          status: "failed",
-          error_message: e instanceof Error ? e.message : "Unknown error",
+          status: "failed", error_message: e instanceof Error ? e.message : "Unknown error",
         }).eq("id", bl.id);
         failCount++;
       }
 
       // Delay between leads
-      if (delayMs > 0) {
+      if (delayMs > 0 && idx < bLeads.length - 1) {
         await new Promise(resolve => setTimeout(resolve, delayMs));
       }
     }
 
-    // Update broadcast counters
-    const { data: stats } = await supabase
+    // Update counts
+    await updateBroadcastCounts(supabase, broadcast_id);
+
+    // Check remaining
+    const { count: pendingCount } = await supabase
       .from("broadcast_leads")
-      .select("status")
-      .eq("broadcast_id", broadcast_id);
+      .select("id", { count: "exact", head: true })
+      .eq("broadcast_id", broadcast_id)
+      .eq("status", "pending");
 
-    const counts = {
-      sent_count: stats?.filter(s => s.status === "sent").length || 0,
-      failed_count: stats?.filter(s => s.status === "failed").length || 0,
-      delivered_count: stats?.filter(s => s.status === "delivered").length || 0,
-      read_count: stats?.filter(s => s.status === "read").length || 0,
-      replied_count: stats?.filter(s => s.status === "replied").length || 0,
-    };
-
-    const pending = stats?.filter(s => s.status === "pending").length || 0;
-    if (pending === 0) {
-      await supabase.from("broadcasts").update({
-        ...counts,
-        status: "completed",
-        completed_at: new Date().toISOString(),
-      }).eq("id", broadcast_id);
-    } else {
-      await supabase.from("broadcasts").update(counts).eq("id", broadcast_id);
-    }
+    const remaining = pendingCount || 0;
 
     // Auto-continue if there are remaining leads
-    if (pending > 0) {
+    if (remaining > 0) {
+      console.log(`Batch done: ${sentCount} sent, ${failCount} failed, ${remaining} remaining. Auto-continuing...`);
       const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-      const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+      // Fire-and-forget with internal secret
       fetch(`${supabaseUrl}/functions/v1/execute-broadcast`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${serviceKey}`,
+          "x-internal-secret": INTERNAL_SECRET,
           apikey: Deno.env.get("SUPABASE_ANON_KEY")!,
         },
         body: JSON.stringify({ broadcast_id, org_id }),
       }).catch((err) => console.error("Auto-continue error:", err));
+    } else {
+      // Mark as completed
+      await supabase.from("broadcasts").update({
+        status: "completed",
+        completed_at: new Date().toISOString(),
+      }).eq("id", broadcast_id);
+      console.log("Broadcast completed!");
     }
 
-    return json({
-      success: true,
-      sent: sentCount,
-      failed: failCount,
-      remaining: pending,
-    });
+    return json({ success: true, sent: sentCount, failed: failCount, remaining });
   } catch (e) {
     console.error("execute-broadcast error:", e);
     return json({ error: e instanceof Error ? e.message : "Unknown error" }, 500);
   }
 });
+
+// Helper: update broadcast aggregate counts
+async function updateBroadcastCounts(supabase: any, broadcastId: string) {
+  const { data: stats } = await supabase
+    .from("broadcast_leads")
+    .select("status")
+    .eq("broadcast_id", broadcastId);
+
+  if (!stats) return;
+
+  const counts = {
+    sent_count: stats.filter((s: any) => s.status === "sent").length,
+    failed_count: stats.filter((s: any) => s.status === "failed").length,
+    delivered_count: stats.filter((s: any) => s.status === "delivered").length,
+    read_count: stats.filter((s: any) => s.status === "read").length,
+    replied_count: stats.filter((s: any) => s.status === "replied").length,
+  };
+
+  await supabase.from("broadcasts").update(counts).eq("id", broadcastId);
+}

@@ -214,14 +214,26 @@ export default function Broadcasts() {
         body: { broadcast_id: broadcastId, org_id: orgId },
       });
       if (error) throw error;
-      if (data?.remaining > 0) {
-        toast({ title: `Enviando... ${data.sent} enviadas, ${data.remaining} restantes` });
-        setTimeout(() => executeBroadcast(broadcastId), 2000);
+      if (data?.paused) {
+        toast({ title: "⚠️ Disparo pausado", description: data?.error || "Instância offline", variant: "destructive" });
       } else {
-        toast({ title: "✅ Disparo concluído!", description: `${data?.sent || 0} mensagens enviadas.` });
-        logActivity({ action: "broadcast_executado", description: `Disparo concluído: ${data?.sent || 0} mensagens enviadas`, metadata: { broadcast_id: broadcastId, sent: data?.sent } });
-        loadData();
+        toast({ title: "🚀 Disparo iniciado!", description: "O envio continua automaticamente em segundo plano." });
+        logActivity({ action: "broadcast_executado", description: `Disparo iniciado`, metadata: { broadcast_id: broadcastId } });
       }
+      // Poll for updates every 10s
+      const pollInterval = setInterval(async () => {
+        const { data: fresh } = await supabase.from("broadcasts").select("status, sent_count, failed_count, total_leads").eq("id", broadcastId).single();
+        if (fresh) {
+          setBroadcasts(prev => prev.map(b => b.id === broadcastId ? { ...b, ...fresh } : b));
+          if (fresh.status === "completed" || fresh.status === "paused" || fresh.status === "cancelled") {
+            clearInterval(pollInterval);
+            toast({ title: fresh.status === "completed" ? "✅ Disparo concluído!" : "⏸️ Disparo pausado", description: `${fresh.sent_count || 0} enviadas, ${fresh.failed_count || 0} falhas` });
+            loadData();
+          }
+        }
+      }, 10000);
+      // Stop polling after 30 minutes max
+      setTimeout(() => clearInterval(pollInterval), 30 * 60 * 1000);
     } catch (error: any) {
       toast({ title: "Erro no disparo", description: error.message, variant: "destructive" });
       logActivity({ action: "broadcast_executado", description: `Falha no disparo`, success: false, errorMessage: error.message, metadata: { broadcast_id: broadcastId } });
