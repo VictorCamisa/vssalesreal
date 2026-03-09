@@ -182,6 +182,7 @@ export function OrgDetailView({ orgId, orgName, onBack }: Props) {
     setChangingPassword(false);
   };
 
+  const loadAiConfigs = async () => {
     setLoadingAi(true);
     const { data } = await supabase
       .from("ai_configs")
