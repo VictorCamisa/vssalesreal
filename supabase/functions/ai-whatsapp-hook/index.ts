@@ -399,29 +399,23 @@ O lead está respondendo à mensagem enviada pelo disparo. Continue naturalmente
     if (botHistory && botHistory.length > 0) {
       const allBotText = botHistory.map((m: any) => m.message_text).join(" ").toLowerCase();
       
-      // Extract specific product/topic mentions to explicitly ban them
-      const productPatterns = [
-        /chopp?\s+de\s+vinho/gi,
-        /chopp?\s+pilsen/gi,
-        /sem\s+gl[úu]ten/gi,
-        /artesanal/gi,
-        /frota\s+pr[óo]pria/gi,
-        /carro[\-\s]chefe/gi,
-      ];
-      const mentionedTopics = new Set<string>();
-      for (const pattern of productPatterns) {
-        const matches = allBotText.match(pattern);
-        if (matches) {
-          for (const m of matches) mentionedTopics.add(m.trim().toLowerCase());
-        }
+      // Dynamic anti-repetition: extract repeated sentences/phrases from bot history
+      const botSentences = allBotText.split(/[.!?\n]+/).map((s: string) => s.trim().toLowerCase()).filter((s: string) => s.length > 15);
+      const sentenceCounts = new Map<string, number>();
+      for (const sentence of botSentences) {
+        sentenceCounts.set(sentence, (sentenceCounts.get(sentence) || 0) + 1);
       }
+      const repeatedPhrases = [...sentenceCounts.entries()]
+        .filter(([_, count]) => count >= 2)
+        .map(([phrase]) => phrase);
 
       behaviorParts.push(`\nREGRA ANTI-REPETIÇÃO (MÁXIMA PRIORIDADE - INVIOLÁVEL):`);
-      behaviorParts.push(`- Você JÁ mencionou os seguintes tópicos/produtos em mensagens anteriores: [${[...mentionedTopics].join(", ") || "nenhum detectado"}]`);
-      behaviorParts.push(`- É TERMINANTEMENTE PROIBIDO mencionar esses tópicos novamente, A MENOS QUE o cliente PERGUNTE DIRETAMENTE sobre eles`);
-      behaviorParts.push(`- Se o cliente perguntar "só tem esses?", "tem IPA?", etc: responda de forma DIRETA e CURTA (ex: "No momento trabalhamos com esses, sim!") SEM listar os produtos de novo`);
-      behaviorParts.push(`- NUNCA re-descreva produtos que você já apresentou. O cliente já sabe. Siga em frente na conversa`);
-      behaviorParts.push(`- Foque em AVANÇAR a conversa: pergunte sobre necessidades, quantidade, data, logística — NÃO repita catálogo`);
+      if (repeatedPhrases.length > 0) {
+        behaviorParts.push(`- Você JÁ repetiu estas frases/tópicos em mensagens anteriores: [${repeatedPhrases.slice(0, 10).join("; ")}]`);
+      }
+      behaviorParts.push(`- É TERMINANTEMENTE PROIBIDO repetir informações, produtos ou argumentos que você já apresentou, A MENOS QUE o cliente PERGUNTE DIRETAMENTE sobre eles`);
+      behaviorParts.push(`- NUNCA re-descreva produtos/serviços que você já apresentou. O cliente já sabe. Siga em frente na conversa`);
+      behaviorParts.push(`- Foque em AVANÇAR a conversa conforme o processo de vendas da empresa`);
     }
 
     const behaviorRules = behaviorParts.join("\n");
