@@ -268,20 +268,45 @@ export default function Leads() {
     const file = e.target.files?.[0];
     if (!file || !profile?.org_id) return;
     const text = await file.text();
-    const lines = text.split("\n").filter(l => l.trim());
+    const lines = text.split(/\r?\n/).filter(l => l.trim());
     if (lines.length < 2) return;
-    const headers = lines[0].split(",").map(h => h.trim().toLowerCase());
+
+    // Detect separator: ; or , or \t
+    const firstLine = lines[0];
+    const separator = firstLine.includes(";") ? ";" : firstLine.includes("\t") ? "\t" : ",";
+
+    const normalizeHeader = (h: string) =>
+      h.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[_\s]+/g, " ").trim().replace(/^"|"$/g, "");
+
+    const headers = firstLine.split(separator).map(normalizeHeader);
+
+    const findCol = (possibleNames: string[]): number => {
+      const normalized = possibleNames.map(normalizeHeader);
+      // Exact match
+      for (const n of normalized) { const i = headers.indexOf(n); if (i !== -1) return i; }
+      // Starts with
+      for (const n of normalized) { const i = headers.findIndex(h => h.startsWith(n)); if (i !== -1) return i; }
+      // Contains
+      for (const n of normalized) { const i = headers.findIndex(h => h.includes(n)); if (i !== -1) return i; }
+      return -1;
+    };
+
+    const nameIdx = findCol(["nome", "name", "nome completo", "full name", "contato", "contact"]);
+    const phoneIdx = findCol(["telefone", "phone", "celular", "whatsapp", "tel", "fone", "numero"]);
+    const emailIdx = findCol(["email", "e-mail", "correio"]);
+
+    console.log("CSV Import - separator:", JSON.stringify(separator), "headers:", headers, "nameIdx:", nameIdx, "phoneIdx:", phoneIdx, "emailIdx:", emailIdx);
+
     const rows = lines.slice(1).map(line => {
-      const values = line.split(",").map(v => v.trim().replace(/^"|"$/g, ""));
+      const values = line.split(separator).map(v => v.trim().replace(/^"|"$/g, ""));
       const obj: any = { org_id: profile.org_id, source: "import", status: "pending" };
-      headers.forEach((h, i) => {
-        if (h.includes("nome") || h.includes("name")) obj.name = values[i];
-        else if (h.includes("email")) obj.email = values[i];
-        else if (h.includes("telefone") || h.includes("phone") || h.includes("celular")) obj.phone = values[i];
-      });
+      if (nameIdx !== -1 && values[nameIdx]) obj.name = values[nameIdx];
+      if (phoneIdx !== -1 && values[phoneIdx]) obj.phone = values[phoneIdx];
+      if (emailIdx !== -1 && values[emailIdx]) obj.email = values[emailIdx];
       return obj;
     }).filter(r => r.name || r.phone || r.email);
-    if (rows.length === 0) { toast({ title: "CSV vazio ou inválido", variant: "destructive" }); return; }
+
+    if (rows.length === 0) { toast({ title: "CSV vazio ou inválido", description: "Verifique se o arquivo possui colunas como 'Nome', 'Telefone' ou 'Email'.", variant: "destructive" }); return; }
     const { error } = await supabase.from("leads_raw").insert(rows);
     if (error) { toast({ title: "Erro", description: error.message, variant: "destructive" }); logActivity({ action: "leads_importados", description: "Falha na importação CSV", success: false, errorMessage: error.message }); return; }
     toast({ title: `${rows.length} leads importados!` });
