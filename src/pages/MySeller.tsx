@@ -163,9 +163,17 @@ const SIM_SCENARIOS = [
 
 // ====== COMPONENT ======
 export default function MySeller() {
-  const { profile } = useAuth();
+  const { profile, user } = useAuth();
   const { toast } = useToast();
-  const orgId = profile?.org_id;
+  const ownOrgId = profile?.org_id;
+
+  // Platform admin state
+  const [isPlatformAdmin, setIsPlatformAdmin] = useState(false);
+  const [allOrgs, setAllOrgs] = useState<{ id: string; name: string }[]>([]);
+  const [selectedOrgId, setSelectedOrgId] = useState<string | null>(null);
+  
+  // Effective org = selected (admin) or own
+  const orgId = selectedOrgId || ownOrgId;
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState<string | null>(null);
