@@ -399,29 +399,23 @@ O lead está respondendo à mensagem enviada pelo disparo. Continue naturalmente
     if (botHistory && botHistory.length > 0) {
       const allBotText = botHistory.map((m: any) => m.message_text).join(" ").toLowerCase();
       
-      // Extract specific product/topic mentions to explicitly ban them
-      const productPatterns = [
-        /chopp?\s+de\s+vinho/gi,
-        /chopp?\s+pilsen/gi,
-        /sem\s+gl[úu]ten/gi,
-        /artesanal/gi,
-        /frota\s+pr[óo]pria/gi,
-        /carro[\-\s]chefe/gi,
-      ];
-      const mentionedTopics = new Set<string>();
-      for (const pattern of productPatterns) {
-        const matches = allBotText.match(pattern);
-        if (matches) {
-          for (const m of matches) mentionedTopics.add(m.trim().toLowerCase());
-        }
+      // Dynamic anti-repetition: extract repeated sentences/phrases from bot history
+      const botSentences = allBotText.split(/[.!?\n]+/).map((s: string) => s.trim().toLowerCase()).filter((s: string) => s.length > 15);
+      const sentenceCounts = new Map<string, number>();
+      for (const sentence of botSentences) {
+        sentenceCounts.set(sentence, (sentenceCounts.get(sentence) || 0) + 1);
       }
+      const repeatedPhrases = [...sentenceCounts.entries()]
+        .filter(([_, count]) => count >= 2)
+        .map(([phrase]) => phrase);
 
       behaviorParts.push(`\nREGRA ANTI-REPETIÇÃO (MÁXIMA PRIORIDADE - INVIOLÁVEL):`);
-      behaviorParts.push(`- Você JÁ mencionou os seguintes tópicos/produtos em mensagens anteriores: [${[...mentionedTopics].join(", ") || "nenhum detectado"}]`);
-      behaviorParts.push(`- É TERMINANTEMENTE PROIBIDO mencionar esses tópicos novamente, A MENOS QUE o cliente PERGUNTE DIRETAMENTE sobre eles`);
-      behaviorParts.push(`- Se o cliente perguntar "só tem esses?", "tem IPA?", etc: responda de forma DIRETA e CURTA (ex: "No momento trabalhamos com esses, sim!") SEM listar os produtos de novo`);
-      behaviorParts.push(`- NUNCA re-descreva produtos que você já apresentou. O cliente já sabe. Siga em frente na conversa`);
-      behaviorParts.push(`- Foque em AVANÇAR a conversa: pergunte sobre necessidades, quantidade, data, logística — NÃO repita catálogo`);
+      if (repeatedPhrases.length > 0) {
+        behaviorParts.push(`- Você JÁ repetiu estas frases/tópicos em mensagens anteriores: [${repeatedPhrases.slice(0, 10).join("; ")}]`);
+      }
+      behaviorParts.push(`- É TERMINANTEMENTE PROIBIDO repetir informações, produtos ou argumentos que você já apresentou, A MENOS QUE o cliente PERGUNTE DIRETAMENTE sobre eles`);
+      behaviorParts.push(`- NUNCA re-descreva produtos/serviços que você já apresentou. O cliente já sabe. Siga em frente na conversa`);
+      behaviorParts.push(`- Foque em AVANÇAR a conversa conforme o processo de vendas da empresa`);
     }
 
     const behaviorRules = behaviorParts.join("\n");
@@ -431,13 +425,10 @@ O lead está respondendo à mensagem enviada pelo disparo. Continue naturalmente
 Você é um vendedor que SÓ pode falar sobre o que está EXPLICITAMENTE descrito neste prompt.
 PROIBIÇÕES ABSOLUTAS:
 - Se um produto, serviço, equipamento, processo ou detalhe técnico NÃO aparece LITERALMENTE nos dados abaixo, ele NÃO EXISTE. Ponto final.
-- NUNCA mencione: instalação, cilindros, suporte técnico, manutenção, assistência, chopeira (a não ser que esteja ESCRITO nos dados abaixo).
 - NUNCA ofereça coisas que não estão nos dados. NUNCA pergunte se o cliente quer algo que não está nos dados.
 - NUNCA invente processos, equipamentos ou serviços. Se não está escrito, FINJA QUE NÃO EXISTE.
 - Se o cliente perguntar algo fora dos dados, responda EXATAMENTE: "Vou verificar isso com a equipe e te retorno!"
-- Suas perguntas devem ser APENAS sobre: quantidade, data, horário, local de entrega, forma de pagamento.
 - NUNCA repita informações que você já disse em mensagens anteriores. O cliente JÁ LIDA essas mensagens.
-- Cada resposta deve ter NO MÁXIMO 1-2 frases curtas e objetivas.
 - NUNCA use aspas duplas na resposta. Não coloque sua resposta entre aspas.
 - NUNCA comece a resposta repetindo a saudação do disparo. O cliente JÁ recebeu a saudação. Vá direto ao ponto.
 ${!useEmoji ? "- NUNCA use emojis. ZERO emojis. Nenhum emoji de qualquer tipo." : ""}
@@ -451,8 +442,7 @@ ${!useEmoji ? "- NUNCA use emojis. ZERO emojis. Nenhum emoji de qualquer tipo." 
 - NÃO invente NADA. Só fale do que está nos dados acima.
 - NÃO repita produtos/serviços já mencionados nas mensagens anteriores.
 - NÃO re-apresente a empresa. O cliente JÁ sabe quem você é.
-- Perguntas devem ser sobre LOGÍSTICA (quando, onde, quanto), NUNCA oferecendo coisas que não estão na base.
-- Responda de forma CURTA e DIRETA. Máximo 1-2 frases.
+- Foque em AVANÇAR a conversa conforme o processo de vendas da empresa.
 ${!useEmoji ? "- ZERO EMOJIS. Remova qualquer emoji antes de enviar." : ""}
 ===`;
 
@@ -496,9 +486,7 @@ ${!useEmoji ? "- ZERO EMOJIS. Remova qualquer emoji antes de enviar." : ""}
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY not configured");
 
-    // Cap temperature at 0.4 max to reduce hallucination
-    const rawTemp = Number(scenario.temperature) || 0.7;
-    const temperature = Math.min(rawTemp, 0.4);
+    const temperature = Number(scenario.temperature) || 0.7;
 
     const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
@@ -517,20 +505,7 @@ ${!useEmoji ? "- ZERO EMOJIS. Remova qualquer emoji antes de enviar." : ""}
       return new Response(JSON.stringify({ error: "Empty AI response" }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-    // POST-PROCESSING: Remove hallucinated terms that are NOT in the scenario prompt
-    const scenarioPromptLower = (scenario.system_prompt || "").toLowerCase();
-    const hallucinationPatterns = [
-      { pattern: /instala[çc][ãa]o\s+(d[aeo]s?\s+)?chopeiras?/gi, term: "instalação" },
-      { pattern: /cilindros?\s*(extras?)?/gi, term: "cilindro" },
-      { pattern: /suporte\s+t[ée]cnico/gi, term: "suporte técnico" },
-      { pattern: /manuten[çc][ãa]o/gi, term: "manutenção" },
-      { pattern: /assist[êe]ncia/gi, term: "assistência" },
-    ];
-    for (const hp of hallucinationPatterns) {
-      if (!scenarioPromptLower.includes(hp.term)) {
-        reply = reply.replace(new RegExp(`[^.!?]*${hp.pattern.source}[^.!?]*[.!?]?`, "gi"), "").trim();
-      }
-    }
+    // Anti-hallucination is now handled entirely by the system prompt (user-configured)
 
     // POST-PROCESSING: Strip emojis if disabled
     if (!useEmoji) {
