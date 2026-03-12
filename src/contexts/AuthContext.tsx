@@ -30,6 +30,9 @@ const AuthContext = createContext<AuthContextType>({
 
 export const useAuth = () => useContext(AuthContext);
 
+const PROFILE_TIMEOUT_MS = 8000;
+const AUTH_INIT_TIMEOUT_MS = 12000;
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
@@ -39,39 +42,83 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const fetchProfile = async (userId: string) => {
     setProfileLoading(true);
-    const { data } = await supabase
-      .from("profiles")
-      .select("*")
-      .eq("user_id", userId)
-      .single();
-    setProfile(data);
-    setProfileLoading(false);
+
+    try {
+      const result = await Promise.race([
+        supabase.from("profiles").select("*").eq("user_id", userId).maybeSingle(),
+        new Promise<{ data: null; error: Error }>((resolve) =>
+          setTimeout(() => resolve({ data: null, error: new Error("PROFILE_TIMEOUT") }), PROFILE_TIMEOUT_MS),
+        ),
+      ]);
+
+      if (result.error) {
+        console.error("Erro ao buscar perfil:", result.error.message);
+        setProfile(null);
+        return;
+      }
+
+      setProfile(result.data);
+    } catch (error) {
+      console.error("Falha inesperada ao buscar perfil:", error);
+      setProfile(null);
+    } finally {
+      setProfileLoading(false);
+    }
   };
 
   useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (_event, session) => {
-        setSession(session);
-        setUser(session?.user ?? null);
-        if (session?.user) {
-          await fetchProfile(session.user.id);
-        } else {
-          setProfile(null);
-        }
+    let isActive = true;
+
+    const authInitTimeout = setTimeout(() => {
+      if (!isActive) return;
+      console.warn("Auth init timeout: liberando loading para evitar travamento.");
+      setLoading(false);
+      setProfileLoading(false);
+    }, AUTH_INIT_TIMEOUT_MS);
+
+    const handleSession = async (nextSession: Session | null) => {
+      if (!isActive) return;
+
+      setSession(nextSession);
+      setUser(nextSession?.user ?? null);
+
+      if (nextSession?.user) {
+        await fetchProfile(nextSession.user.id);
+      } else {
+        setProfile(null);
+      }
+
+      if (isActive) {
         setLoading(false);
       }
-    );
+    };
 
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      if (session?.user) {
-        await fetchProfile(session.user.id);
-      }
-      setLoading(false);
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(async (_event, nextSession) => {
+      await handleSession(nextSession);
     });
 
-    return () => subscription.unsubscribe();
+    supabase.auth
+      .getSession()
+      .then(async ({ data: { session } }) => {
+        await handleSession(session);
+      })
+      .catch((error) => {
+        console.error("Erro ao carregar sessão:", error);
+        if (!isActive) return;
+        setSession(null);
+        setUser(null);
+        setProfile(null);
+        setLoading(false);
+        setProfileLoading(false);
+      });
+
+    return () => {
+      isActive = false;
+      clearTimeout(authInitTimeout);
+      subscription.unsubscribe();
+    };
   }, []);
 
   const signOut = async () => {
