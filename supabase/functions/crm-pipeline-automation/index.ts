@@ -6,18 +6,6 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-const PIPELINE_STAGES = [
-  { key: "lead", name: "Lead", order: 0 },
-  { key: "enriched", name: "Enriquecidas", order: 1 },
-  { key: "contacted", name: "Contato Feito", order: 2 },
-  { key: "prospecting", name: "Em Prospecção", order: 3 },
-  { key: "qualified", name: "Qualificado", order: 4 },
-  { key: "scheduled", name: "Agendado", order: 5 },
-  { key: "proposal", name: "Reunião / Proposta", order: 6 },
-  { key: "won", name: "Ganho", order: 7 },
-  { key: "lost", name: "Perdido", order: 8 },
-];
-
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
