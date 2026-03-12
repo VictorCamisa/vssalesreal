@@ -378,12 +378,6 @@ O lead está respondendo à mensagem enviada pelo disparo. Continue naturalmente
     behaviorParts.push(`Para cancelar: [CANCELAR:TELEFONE_DO_LEAD]. NÃO mostre os comandos ao lead.`);
     behaviorParts.push(`\nResponda SEMPRE em português brasileiro.`);
 
-    // ---- ANTI-HALLUCINATION: never invent products/services ----
-    behaviorParts.push(`\nREGRA ANTI-INVENÇÃO (CRÍTICA E OBRIGATÓRIA):`);
-    behaviorParts.push(`- NUNCA invente, suponha ou mencione produtos, serviços, equipamentos ou detalhes técnicos que NÃO estejam EXPLICITAMENTE descritos no seu prompt de sistema ou na base de conhecimento`);
-    behaviorParts.push(`- Se você NÃO tem informação sobre algo, NÃO invente. Diga que vai verificar ou encaminhe para um atendente`);
-    behaviorParts.push(`- NÃO use conhecimento geral do mundo para completar informações sobre a empresa. Use APENAS o que foi fornecido`);
-    behaviorParts.push(`- Perguntas ao cliente devem ser sobre NECESSIDADES dele, NUNCA oferecer coisas que você não sabe se a empresa tem`);
 
     // ---- Anti-repetition: scan bot history for already-mentioned topics ----
     const { data: botHistory } = await supabaseAdmin
