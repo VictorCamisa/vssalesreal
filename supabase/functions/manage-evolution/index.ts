@@ -288,6 +288,7 @@ Deno.serve(async (req) => {
         if (response.status === 404) {
           const userInst = getUserInstances().filter((n) => n !== instance_name);
           await setUserInstances(userInst);
+          await supabaseAdmin.from("integration_instances").delete().eq("instance_name", instance_name);
           return json({ success: true, message: "Instância já não existia na API, removida localmente." });
         }
         return json({ error: `Erro ao deletar: ${response.status} - ${errText}` }, 502);
