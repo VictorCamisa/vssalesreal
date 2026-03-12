@@ -486,7 +486,7 @@ ${!useEmoji ? "- ZERO EMOJIS. Remova qualquer emoji antes de enviar." : ""}
       .eq("instance_name", instanceName)
       .eq("remote_jid", remoteJid)
       .order("timestamp", { ascending: false })
-      .limit(contextWindow);
+      .limit(10);
 
     if (historyMsgs && historyMsgs.length > 0) {
       const sorted = [...historyMsgs].reverse();
