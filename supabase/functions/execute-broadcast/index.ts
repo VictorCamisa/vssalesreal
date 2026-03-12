@@ -290,6 +290,15 @@ ${!useEmoji ? "- NUNCA use emojis. ZERO emojis." : ""}
         continue;
       }
 
+      // Cooldown check
+      const cleanPhoneForCooldown = lead.phone.replace(/\D/g, "");
+      if (await isInCooldown(supabase, cleanPhoneForCooldown, org_id)) {
+        await supabase.from("broadcast_leads").update({
+          status: "skipped", error_message: "Em cooldown",
+        }).eq("id", bl.id);
+        continue;
+      }
+
       // Generate or use template message
       let messageText = broadcast.message_template || "";
       if (messageText) {
