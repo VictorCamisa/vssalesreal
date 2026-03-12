@@ -1,79 +1,113 @@
 
 
-# Reconstrução Completa da Landing Page — VS SALES
+# Plano: N-02 (Hook de instâncias) + N-03 (Handoff com verificação)
 
-## Diagnóstico
+## 1. N-02 — Criar `src/hooks/useEvolutionInstances.ts`
 
-A landing page atual tem uma estrutura funcional, mas apresenta problemas críticos de copywriting, persuasão e design que a enfraquecem como ferramenta de conversão:
+Extrair toda a lógica duplicada de gestão de instâncias Evolution API das duas páginas para um hook centralizado.
 
-1. **Copy genérica** — frases como "Prospecção. Qualificação. Fechamento." não comunicam valor real. Falta dor, urgência e diferenciação.
-2. **Seções repetitivas** — há dois comparativos (seção 2 e seção 5) que dizem quase a mesma coisa.
-3. **Prova social fraca** — um depoimento fictício de "Carlos Mendes" não convence ninguém.
-4. **Números inventados** — "12.400 leads qualificados" e "97% satisfação" sem contexto parecem falsos.
-5. **Falta de seções-chave** — não há: demonstração visual do produto, seção "Para quem é", garantia, ecossistema VS.
-6. **CTA disperso** — muitos CTAs competindo entre si sem hierarquia clara.
-7. **Cor inconsistente** — usa verde (#00FF88) em vários elementos quando a marca é azul.
+**O hook exporta:**
+- `instances`, `instancesLoading` — lista e estado de carregamento
+- `createInstance(name)` — cria instância, retorna QR se disponível
+- `deleteInstance(name)` — remove instância
+- `getQRCode(name)` — obtém QR code
+- `connectionStatus` — estado de conexão (`waiting | connected | error`)
+- `qrCode`, `qrDialogOpen`, `qrInstanceName`, `qrLoading` — estado do dialog QR
+- `setQrDialogOpen` — controle externo do dialog
+- `selectedInstance`, `setSelectedInstance` — instância selecionada
+- `fetchInstances` — refresh manual
 
-## Plano de Reconstrução
+**Lógica incluída no hook:**
+- `fetchInstances` (linhas 127-142 de Prospecting / 39-50 de WhatsAppConnection)
+- `handleCreateInstance` (linhas 146-165 / 54-81)
+- `handleGetQR` (linhas 167-180 / 83-96)
+- `handleDeleteInstance` (linhas 182-193 / 98-110)
+- Polling de QR status (linhas 196-221 / 113-139)
+- Estado completo de QR dialog
 
-### Estrutura de seções (nova ordem narrativa)
+**Diferenças entre as duas páginas a reconciliar:**
+- WhatsAppConnection faz sanitização do nome (`replace(/[^a-zA-Z0-9_-]/g, "_")`) e `logActivity` — **manter ambos no hook**
+- Prospecting auto-seleciona instância conectada no fetch — **manter no hook**
+- WhatsAppConnection não tem `selectedInstance` — **o hook expõe mas a página não precisa usar**
 
-```text
-1. HERO — Headline de impacto + sub-headline com dor + CTA único forte
-2. BARRA DE CREDIBILIDADE — "Powered by VS Soluções Labs" + tecnologias
-3. O PROBLEMA — 4 cards de dor do gestor comercial (melhor copy)
-4. A SOLUÇÃO — O que é o VS SALES (com mockup/screenshot do dashboard)
-5. COMO FUNCIONA — 6 etapas do pipeline (mantido, refinado)
-6. PARA QUEM É — 3 perfis ideais (Startups, PMEs, Agências)
-7. DIFERENCIAIS — Grid de features com ícones e descrições curtas
-8. COMPARATIVO ÚNICO — Tabela Time Humano vs VS SALES (consolidado)
-9. PLANOS & PREÇOS — Cards dinâmicos do banco (mantido, refinado)
-10. GARANTIA — Seção de confiança ("7 dias grátis" ou "Sem contrato")
-11. FAQ — Perguntas frequentes (mantido, copy melhorada)
-12. CTA FINAL — Urgência + formulário de acesso antecipado
-13. FOOTER — Links + identidade VS Soluções
+**Alterações em `src/pages/Prospecting.tsx`:**
+- Remover linhas 82-93 (estados de instância), 127-221 (funções + polling)
+- Importar e usar `useEvolutionInstances()`
+- Manter toda a lógica de scraping, extração, grupos, manual, file upload intacta
+
+**Alterações em `src/pages/WhatsAppConnection.tsx`:**
+- Remover linhas 28-37 (estados), 39-139 (funções + polling)
+- Importar e usar `useEvolutionInstances()`
+- Manter `chatViewerInstance`, `getStatusInfo`, UI intacta
+
+---
+
+## 2. N-03 — Handoff com verificação de entrega
+
+**Arquivo:** `src/pages/CRM.tsx`, função `sendManualHandoff` (linhas 221-284)
+
+**Alterações no bloco try/catch (linhas 269-282):**
+
+```typescript
+try {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 10000);
+
+  const { data: result, error } = await supabase.functions.invoke("manage-evolution", {
+    body: {
+      action: "sendText",
+      instanceName,
+      number: handoffNumber.replace(/\D/g, ""),
+      text: lines,
+    },
+  });
+
+  clearTimeout(timeout);
+
+  if (error) throw error;
+
+  if (result?.error || !result?.key) {
+    toast({
+      title: "Falha no envio do handoff",
+      description: "Verifique a instância WhatsApp",
+      variant: "destructive",
+    });
+  } else {
+    toast({ title: "Ficha enviada para handoff! ✅" });
+  }
+} catch (err: any) {
+  if (err.name === "AbortError") {
+    toast({
+      title: "Handoff enviado mas entrega não confirmada",
+      description: "Timeout de 10s — verifique manualmente",
+      variant: "destructive",
+    });
+  } else {
+    toast({ title: "Erro ao enviar handoff", description: err.message, variant: "destructive" });
+  }
+}
 ```
 
-### Mudanças específicas
+**Nota:** `supabase.functions.invoke` não suporta `AbortController` nativamente. A implementação usará `Promise.race` com um timeout de 10s em vez de `AbortController`:
 
-**Hero:**
-- Nova headline: "Sua equipe comercial inteira. Só que é IA." com sub "SDR, BDR e Closer autônomos. 24/7. Por R$ 600/mês."
-- Um único CTA principal: "Testar grátis por 7 dias"
-- Remover contadores genéricos do hero, mover para seção de credibilidade
-- Manter ParticleCanvas e animações stagger
+```typescript
+const sendPromise = supabase.functions.invoke("manage-evolution", { body: { ... } });
+const timeoutPromise = new Promise((_, reject) =>
+  setTimeout(() => reject(new Error("TIMEOUT")), 10000)
+);
+const { data: result, error } = await Promise.race([sendPromise, timeoutPromise]);
+```
 
-**Seção "Para Quem É" (nova):**
-- 3 cards: Startups B2B, PMEs com time enxuto, Agências que revendem
-- Cada card com cenário real de uso
+---
 
-**Diferenciais (nova seção):**
-- Grid 2x3: Prospecção Autônoma, WhatsApp Nativo, CRM Inteligente, IA Treinável, Disparos em Massa, Agendamento Auto
-- Cada item com ícone + 2 linhas de copy
+## Resumo de arquivos
 
-**Comparativo consolidado:**
-- Remover o comparativo duplicado da seção "O Problema"
-- Manter apenas a tabela da seção de planos, com visual mais impactante
+| Arquivo | Ação |
+|---------|------|
+| `src/hooks/useEvolutionInstances.ts` | **Criar** — hook centralizado |
+| `src/pages/Prospecting.tsx` | Remover lógica duplicada, usar hook |
+| `src/pages/WhatsAppConnection.tsx` | Remover lógica duplicada, usar hook |
+| `src/pages/CRM.tsx` | Alterar `sendManualHandoff` (~15 linhas) |
 
-**Prova social:**
-- Remover depoimento fictício
-- Substituir por métricas reais do sistema (operação 24/7, tempo de setup < 48h, etc.)
-
-**Cores:**
-- Substituir todo #00FF88 (verde) por variações de azul (#00D4FF, #0057FF)
-- Manter verde apenas para indicadores de "positivo" em comparativos
-
-**Seção de Garantia (nova):**
-- "Sem contrato. Sem multa. Cancele quando quiser."
-- Ícones de segurança (Shield, Lock, CheckCircle)
-
-### Arquivos modificados
-
-- `src/pages/Landing.tsx` — reescrita completa das seções, copy e estrutura
-
-### Copy principles aplicados
-
-- **Dor antes da solução** — mostrar o problema real antes de apresentar o produto
-- **Especificidade** — usar números reais (R$ 600/mês, < 48h de setup, 24/7)
-- **Um CTA por fold** — não competir com múltiplos botões
-- **Prova > Promessa** — features concretas ao invés de adjetivos vagos
+Nenhuma outra lógica será alterada.
 
