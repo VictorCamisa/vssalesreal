@@ -21,12 +21,12 @@ serve(async (req) => {
 
     // Find all conversations that need follow-up:
     // - Not paused (lead hasn't replied since last follow-up)
-    // - Has an ai_config_id linked
+    // - Has a scenario_key linked
     const { data: conversations, error: convErr } = await supabaseAdmin
       .from("conversation_tracker")
       .select("*")
       .eq("follow_up_paused", false)
-      .not("ai_config_id", "is", null);
+      .not("scenario_key", "is", null);
 
     if (convErr) {
       console.error("Error fetching conversations:", convErr);
@@ -66,15 +66,18 @@ serve(async (req) => {
     const evolutionKey = Deno.env.get("EVOLUTION_API_KEY") || "";
     const orgIds = [...new Set(conversations.map((c: any) => c.org_id))];
 
-    // Get AI configs for system prompts
-    const { data: aiConfigs } = await supabaseAdmin
-      .from("ai_configs")
+    // Get AI scenarios for system prompts
+    const scenarioKeys = [...new Set(conversations.map((c: any) => c.scenario_key).filter(Boolean))];
+    const { data: aiScenarios } = await supabaseAdmin
+      .from("ai_scenarios")
       .select("*")
-      .in("id", configIds);
+      .in("org_id", orgIds)
+      .in("scenario_key", scenarioKeys);
 
-    const aiConfigById: Record<string, any> = {};
-    for (const cfg of aiConfigs || []) {
-      aiConfigById[cfg.id] = cfg;
+    // Index scenarios by "org_id::scenario_key"
+    const scenarioByKey: Record<string, any> = {};
+    for (const sc of aiScenarios || []) {
+      scenarioByKey[`${sc.org_id}::${sc.scenario_key}`] = sc;
     }
 
     // Get company profiles for context
@@ -119,8 +122,8 @@ serve(async (req) => {
         continue;
       }
 
-      const aiConfig = aiConfigById[conv.ai_config_id];
-      if (!aiConfig?.enabled) continue;
+      const scenario = scenarioByKey[`${conv.org_id}::${conv.scenario_key}`];
+      if (!scenario?.enabled) continue;
 
       // Generate follow-up message using AI
       const contextHint = rule.context_hint || "reativar a conversa de forma natural";
@@ -140,7 +143,7 @@ serve(async (req) => {
       }
 
       const systemPrompt = `Você é um assistente de vendas via WhatsApp.
-${aiConfig.system_prompt || "Seja educado, prestativo e profissional."}
+${scenario.system_prompt || "Seja educado, prestativo e profissional."}
 
 SITUAÇÃO: O lead "${conv.push_name || 'cliente'}" não respondeu há ${Math.round(minutesSince)} minutos.
 Este é o ${stepLabel}.
@@ -175,7 +178,7 @@ REGRAS:
               { role: "system", content: systemPrompt },
               { role: "user", content: `Gere a mensagem de follow-up #${nextStep} para ${conv.push_name || "o lead"}.` },
             ],
-            temperature: aiConfig.temperature ? Number(aiConfig.temperature) : 0.7,
+            temperature: scenario.temperature ? Number(scenario.temperature) : 0.7,
           }),
         });
 
