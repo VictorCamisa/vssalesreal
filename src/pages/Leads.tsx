@@ -413,6 +413,7 @@ export default function Leads() {
             </div>
             <p className="text-sm text-muted-foreground font-medium">{m.label}</p>
             <p className="text-3xl font-bold mt-1 tracking-tight">{m.value}</p>
+            {"sub" in m && m.sub && <p className="text-[10px] text-muted-foreground">{m.sub as string}</p>}
           </div>
         ))}
       </div>
