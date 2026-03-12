@@ -111,7 +111,7 @@ export default function Leads() {
       query = query.or(`name.ilike.%${debouncedSearch}%,phone.ilike.%${debouncedSearch}%,email.ilike.%${debouncedSearch}%`);
     }
     if (statusFilter !== "all") {
-      query = query.eq("status", statusFilter);
+      query = query.eq("status", statusFilter as any);
     }
     if (sourceFilter !== "all") {
       query = query.eq("source", sourceFilter);
