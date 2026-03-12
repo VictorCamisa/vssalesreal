@@ -407,21 +407,7 @@ O lead está respondendo à mensagem enviada pelo disparo. Continue naturalmente
 
     const behaviorRules = behaviorParts.join("\n");
 
-    // CRITICAL: Anti-hallucination prefix goes BEFORE everything else so the model sees it first
-    const antiHallucinationPrefix = `=== REGRA NÚMERO 1 (ACIMA DE TUDO — INVIOLÁVEL) ===
-Você é um vendedor que SÓ pode falar sobre o que está EXPLICITAMENTE descrito neste prompt.
-PROIBIÇÕES ABSOLUTAS:
-- Se um produto, serviço, equipamento, processo ou detalhe técnico NÃO aparece LITERALMENTE nos dados abaixo, ele NÃO EXISTE. Ponto final.
-- NUNCA ofereça coisas que não estão nos dados. NUNCA pergunte se o cliente quer algo que não está nos dados.
-- NUNCA invente processos, equipamentos ou serviços. Se não está escrito, FINJA QUE NÃO EXISTE.
-- Se o cliente perguntar algo fora dos dados, responda EXATAMENTE: "Vou verificar isso com a equipe e te retorno!"
-- NUNCA repita informações que você já disse em mensagens anteriores. O cliente JÁ LIDA essas mensagens.
-- NUNCA use aspas duplas na resposta. Não coloque sua resposta entre aspas.
-- NUNCA comece a resposta repetindo a saudação do disparo. O cliente JÁ recebeu a saudação. Vá direto ao ponto.
-${!useEmoji ? "- NUNCA use emojis. ZERO emojis. Nenhum emoji de qualquer tipo." : ""}
-=== FIM DA REGRA NÚMERO 1 ===
-
-`;
+    const antiHallucinationPrefix = `FONTES AUTORIZADAS: Responda APENAS com informações presentes no system prompt, contexto da empresa ou base de conhecimento fornecidos. Se não souber, diga que vai verificar com a equipe. Não repita informações já ditas. Não use aspas duplas. Não repita a saudação do disparo.${!useEmoji ? " ZERO emojis." : ""}\n\n`;
 
     const antiRepetitionReminder = `
 
