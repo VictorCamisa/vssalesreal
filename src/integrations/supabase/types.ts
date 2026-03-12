@@ -847,6 +847,42 @@ export type Database = {
           },
         ]
       }
+      integration_instances: {
+        Row: {
+          created_at: string | null
+          instance_name: string
+          integration_id: string
+          org_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          instance_name: string
+          integration_id: string
+          org_id: string
+        }
+        Update: {
+          created_at?: string | null
+          instance_name?: string
+          integration_id?: string
+          org_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "integration_instances_integration_id_fkey"
+            columns: ["integration_id"]
+            isOneToOne: false
+            referencedRelation: "integrations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "integration_instances_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       integrations: {
         Row: {
           api_key: string | null

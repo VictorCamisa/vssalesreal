@@ -1,75 +1,79 @@
 
 
-## Plano: Criar tabela `integration_instances` e otimizar lookup no webhook
+# Reconstrução Completa da Landing Page — VS SALES
 
-### 1. Migration SQL
+## Diagnóstico
 
-Criar a tabela, popular com dados existentes, e habilitar RLS:
+A landing page atual tem uma estrutura funcional, mas apresenta problemas críticos de copywriting, persuasão e design que a enfraquecem como ferramenta de conversão:
 
-```sql
--- Tabela dedicada
-CREATE TABLE public.integration_instances (
-  instance_name TEXT PRIMARY KEY,
-  org_id UUID NOT NULL REFERENCES organizations(id),
-  integration_id UUID NOT NULL REFERENCES integrations(id),
-  created_at TIMESTAMPTZ DEFAULT NOW()
-);
+1. **Copy genérica** — frases como "Prospecção. Qualificação. Fechamento." não comunicam valor real. Falta dor, urgência e diferenciação.
+2. **Seções repetitivas** — há dois comparativos (seção 2 e seção 5) que dizem quase a mesma coisa.
+3. **Prova social fraca** — um depoimento fictício de "Carlos Mendes" não convence ninguém.
+4. **Números inventados** — "12.400 leads qualificados" e "97% satisfação" sem contexto parecem falsos.
+5. **Falta de seções-chave** — não há: demonstração visual do produto, seção "Para quem é", garantia, ecossistema VS.
+6. **CTA disperso** — muitos CTAs competindo entre si sem hierarquia clara.
+7. **Cor inconsistente** — usa verde (#00FF88) em vários elementos quando a marca é azul.
 
--- Habilitar RLS
-ALTER TABLE public.integration_instances ENABLE ROW LEVEL SECURITY;
+## Plano de Reconstrução
 
--- Policy: service role pode inserir (usado pelo webhook e pela gestão de instâncias)
-CREATE POLICY "Service can insert instances" ON public.integration_instances
-  FOR INSERT TO public WITH CHECK (true);
+### Estrutura de seções (nova ordem narrativa)
 
--- Policy: org members podem ver suas instâncias
-CREATE POLICY "Org members can view instances" ON public.integration_instances
-  FOR SELECT TO public USING (is_org_member(org_id));
-
--- Popular a partir de instances_by_user
-INSERT INTO public.integration_instances (instance_name, org_id, integration_id)
-SELECT DISTINCT inst.instance_name, i.org_id, i.id
-FROM public.integrations i,
-LATERAL (
-  SELECT jsonb_array_elements_text(value) AS instance_name
-  FROM jsonb_each(i.config->'instances_by_user')
-) inst
-WHERE i.service_name = 'evolution'
-  AND inst.instance_name IS NOT NULL AND inst.instance_name != ''
-ON CONFLICT (instance_name) DO NOTHING;
-
--- Popular a partir do array flat 'instances'
-INSERT INTO public.integration_instances (instance_name, org_id, integration_id)
-SELECT DISTINCT
-  jsonb_array_elements_text(i.config->'instances') AS instance_name,
-  i.org_id, i.id
-FROM public.integrations i
-WHERE i.service_name = 'evolution'
-  AND i.config->'instances' IS NOT NULL
-ON CONFLICT (instance_name) DO NOTHING;
+```text
+1. HERO — Headline de impacto + sub-headline com dor + CTA único forte
+2. BARRA DE CREDIBILIDADE — "Powered by VS Soluções Labs" + tecnologias
+3. O PROBLEMA — 4 cards de dor do gestor comercial (melhor copy)
+4. A SOLUÇÃO — O que é o VS SALES (com mockup/screenshot do dashboard)
+5. COMO FUNCIONA — 6 etapas do pipeline (mantido, refinado)
+6. PARA QUEM É — 3 perfis ideais (Startups, PMEs, Agências)
+7. DIFERENCIAIS — Grid de features com ícones e descrições curtas
+8. COMPARATIVO ÚNICO — Tabela Time Humano vs VS SALES (consolidado)
+9. PLANOS & PREÇOS — Cards dinâmicos do banco (mantido, refinado)
+10. GARANTIA — Seção de confiança ("7 dias grátis" ou "Sem contrato")
+11. FAQ — Perguntas frequentes (mantido, copy melhorada)
+12. CTA FINAL — Urgência + formulário de acesso antecipado
+13. FOOTER — Links + identidade VS Soluções
 ```
 
-### 2. Alteração em `supabase/functions/ai-whatsapp-hook/index.ts` (linhas 50-60)
+### Mudanças específicas
 
-**Antes** — SELECT * + loop em memória:
-```typescript
-const { data: integrations } = await supabaseAdmin.from("integrations").select("*").eq("service_name", "evolution");
-let orgId: string | null = null;
-for (const integ of integrations || []) { ... }
-```
+**Hero:**
+- Nova headline: "Sua equipe comercial inteira. Só que é IA." com sub "SDR, BDR e Closer autônomos. 24/7. Por R$ 600/mês."
+- Um único CTA principal: "Testar grátis por 7 dias"
+- Remover contadores genéricos do hero, mover para seção de credibilidade
+- Manter ParticleCanvas e animações stagger
 
-**Depois** — query direta na nova tabela:
-```typescript
-const { data: instRow } = await supabaseAdmin
-  .from("integration_instances")
-  .select("org_id")
-  .eq("instance_name", instanceName)
-  .maybeSingle();
-const orgId = instRow?.org_id || null;
-```
+**Seção "Para Quem É" (nova):**
+- 3 cards: Startups B2B, PMEs com time enxuto, Agências que revendem
+- Cada card com cenário real de uso
 
-### Resumo
-- 1 migration (tabela + RLS + população de dados existentes)
-- 1 arquivo editado, 1 trecho substituído (linhas 50-60)
-- Nenhuma outra lógica alterada
+**Diferenciais (nova seção):**
+- Grid 2x3: Prospecção Autônoma, WhatsApp Nativo, CRM Inteligente, IA Treinável, Disparos em Massa, Agendamento Auto
+- Cada item com ícone + 2 linhas de copy
+
+**Comparativo consolidado:**
+- Remover o comparativo duplicado da seção "O Problema"
+- Manter apenas a tabela da seção de planos, com visual mais impactante
+
+**Prova social:**
+- Remover depoimento fictício
+- Substituir por métricas reais do sistema (operação 24/7, tempo de setup < 48h, etc.)
+
+**Cores:**
+- Substituir todo #00FF88 (verde) por variações de azul (#00D4FF, #0057FF)
+- Manter verde apenas para indicadores de "positivo" em comparativos
+
+**Seção de Garantia (nova):**
+- "Sem contrato. Sem multa. Cancele quando quiser."
+- Ícones de segurança (Shield, Lock, CheckCircle)
+
+### Arquivos modificados
+
+- `src/pages/Landing.tsx` — reescrita completa das seções, copy e estrutura
+
+### Copy principles aplicados
+
+- **Dor antes da solução** — mostrar o problema real antes de apresentar o produto
+- **Especificidade** — usar números reais (R$ 600/mês, < 48h de setup, 24/7)
+- **Um CTA por fold** — não competir com múltiplos botões
+- **Prova > Promessa** — features concretas ao invés de adjetivos vagos
 

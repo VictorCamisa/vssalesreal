@@ -47,17 +47,13 @@ serve(async (req) => {
       } catch (e) { console.error("saveMessage error:", e); return { inserted: false, msgId: null }; }
     };
 
-    // ---- Find org via instance ----
-    const { data: integrations } = await supabaseAdmin.from("integrations").select("*").eq("service_name", "evolution");
-    let orgId: string | null = null;
-    for (const integ of integrations || []) {
-      const config = integ.config as any;
-      const byUser = config?.instances_by_user || {};
-      for (const userId of Object.keys(byUser)) {
-        if ((byUser[userId] as string[]).includes(instanceName)) { orgId = integ.org_id; break; }
-      }
-      if (orgId) break;
-    }
+    // ---- Find org via instance (direct lookup) ----
+    const { data: instRow } = await supabaseAdmin
+      .from("integration_instances")
+      .select("org_id")
+      .eq("instance_name", instanceName)
+      .maybeSingle();
+    const orgId = instRow?.org_id || null;
     if (!orgId) {
       return new Response(JSON.stringify({ error: "Instance not found" }), { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
