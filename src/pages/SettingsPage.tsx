@@ -87,13 +87,18 @@ export default function SettingsPage() {
 
   useEffect(() => {
     if (!profile?.org_id) return;
-    supabase
-      .from("integrations")
-      .select("*")
-      .eq("org_id", profile.org_id)
-      .then(({ data }) => {
+    supabase.functions
+      .invoke("manage-integrations", {
+        body: { action: "load", org_id: profile.org_id },
+      })
+      .then(({ data, error }) => {
+        if (error) {
+          console.error("Failed to load integrations:", error);
+          return;
+        }
+        const rows = data?.data || [];
         const map: Record<string, IntegrationData> = {};
-        data?.forEach((row) => {
+        rows.forEach((row: any) => {
           map[row.service_name] = {
             id: row.id,
             api_key: row.api_key || "",
@@ -121,24 +126,29 @@ export default function SettingsPage() {
     setSaving((p) => ({ ...p, [service]: true }));
 
     try {
-      const data = integrations[service];
-      const payload = {
-        org_id: profile.org_id,
-        service_name: service,
-        api_key: data?.api_key || null,
-        endpoint_url: data?.endpoint_url || null,
-        status: "active",
-      };
+      const intData = integrations[service];
+      const { data: result, error } = await supabase.functions.invoke("manage-integrations", {
+        body: {
+          action: "save",
+          org_id: profile.org_id,
+          service_name: service,
+          api_key: intData?.api_key || null,
+          endpoint_url: intData?.endpoint_url || null,
+          integration_id: intData?.id || null,
+        },
+      });
 
-      if (data?.id) {
-        const { error } = await supabase.from("integrations").update(payload).eq("id", data.id);
-        if (error) throw error;
-      } else {
-        const { data: inserted, error } = await supabase.from("integrations").insert(payload).select().single();
-        if (error) throw error;
+      if (error) throw error;
+
+      if (result?.id && !intData?.id) {
         setIntegrations((prev) => ({
           ...prev,
-          [service]: { ...prev[service], id: inserted.id, status: "active" },
+          [service]: { ...prev[service], id: result.id, status: "active" },
+        }));
+      } else {
+        setIntegrations((prev) => ({
+          ...prev,
+          [service]: { ...prev[service], status: "active" },
         }));
       }
 
