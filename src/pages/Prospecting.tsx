@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -8,7 +8,7 @@ import {
   Contact, Smartphone, QrCode, RefreshCw, Trash2, Wifi, WifiOff,
   CheckCircle2, Tag, X, Zap, Eye,
   Sparkles, Phone, Building2, User, Upload,
-  FileSpreadsheet, AlertCircle, MapPin, Hash, ArrowRight, Send,
+  FileSpreadsheet, AlertCircle, MapPin, ArrowRight,
   ExternalLink, Compass
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
@@ -26,8 +26,8 @@ import {
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from "@/components/ui/dialog";
+import { useEvolutionInstances } from "@/hooks/useEvolutionInstances";
 
-type EvolutionInstance = { name: string; state: string; owner: string | null };
 type ScrapeResult = { name: string | null; phone: string | null; email: string | null; company: string | null; role: string | null; city: string | null; website: string | null; segment: string | null };
 type ScrapeJob = {
   id: string; niche: string; keywords: string; city: string;
@@ -62,11 +62,17 @@ export default function Prospecting() {
   const { toast } = useToast();
   const navigate = useNavigate();
 
+  const {
+    instances, instancesLoading, selectedInstance, setSelectedInstance,
+    newInstanceName, setNewInstanceName, creatingInstance, createInstance,
+    deleteInstance, getQRCode, fetchInstances,
+    qrDialogOpen, setQrDialogOpen, qrCode, qrLoading, qrInstanceName, connectionStatus,
+  } = useEvolutionInstances();
+
   const [scrapeJobs, setScrapeJobs] = useState<ScrapeJob[]>([]);
   const [scrapingLoading, setScrapingLoading] = useState(false);
   const [viewResults, setViewResults] = useState<ScrapeJob | null>(null);
   const [selectedResults, setSelectedResults] = useState<Set<number>>(new Set());
-  const [sendingToCrm, setSendingToCrm] = useState(false);
 
   // Wizard
   const [wizardOpen, setWizardOpen] = useState(false);
@@ -80,16 +86,6 @@ export default function Prospecting() {
   // WhatsApp state
   const [whatsappMode, setWhatsappMode] = useState<"group" | "conversation" | "contact">("group");
   const [evolutionLoading, setEvolutionLoading] = useState(false);
-  const [instances, setInstances] = useState<EvolutionInstance[]>([]);
-  const [instancesLoading, setInstancesLoading] = useState(false);
-  const [selectedInstance, setSelectedInstance] = useState("");
-  const [newInstanceName, setNewInstanceName] = useState("");
-  const [creatingInstance, setCreatingInstance] = useState(false);
-  const [qrDialogOpen, setQrDialogOpen] = useState(false);
-  const [qrCode, setQrCode] = useState("");
-  const [qrLoading, setQrLoading] = useState(false);
-  const [qrInstanceName, setQrInstanceName] = useState("");
-  const [connectionStatus, setConnectionStatus] = useState<"waiting" | "connected" | "error">("waiting");
   const [availableGroups, setAvailableGroups] = useState<{ id: string; name: string; size: number }[]>([]);
   const [selectedGroupIds, setSelectedGroupIds] = useState<Set<string>>(new Set());
   const [groupsLoading, setGroupsLoading] = useState(false);
@@ -122,103 +118,6 @@ export default function Prospecting() {
   };
 
   const capitalizeName = (name: string) => name.replace(/\b\w/g, (c) => c.toUpperCase()).trim();
-
-  // === Instance Management ===
-  const fetchInstances = useCallback(async () => {
-    if (!profile?.org_id) return;
-    setInstancesLoading(true);
-    try {
-      const { data, error } = await supabase.functions.invoke("manage-evolution", {
-        body: { action: "list", org_id: profile.org_id },
-      });
-      if (error) throw error;
-      setInstances(data?.instances || []);
-      if (data?.instances?.length && !selectedInstance) {
-        const connected = data.instances.find((i: EvolutionInstance) => i.state === "open");
-        setSelectedInstance(connected?.name || data.instances[0].name);
-      }
-    } catch { /* silently fail */ }
-    finally { setInstancesLoading(false); }
-  }, [profile?.org_id, selectedInstance]);
-
-  useEffect(() => { fetchInstances(); }, [fetchInstances]);
-
-  const handleCreateInstance = async () => {
-    if (!profile?.org_id || !newInstanceName.trim()) return;
-    setCreatingInstance(true);
-    try {
-      const { data, error } = await supabase.functions.invoke("manage-evolution", {
-        body: { action: "create", org_id: profile.org_id, instance_name: newInstanceName.trim() },
-      });
-      if (error) throw error;
-      toast({ title: "Instância criada!", description: `${newInstanceName} pronta para conexão.` });
-      if (data?.qrcode?.base64 || data?.qrcode) {
-        const qr = typeof data.qrcode === "string" ? data.qrcode : data.qrcode.base64;
-        if (qr) { setQrCode(qr); setQrInstanceName(newInstanceName.trim()); setConnectionStatus("waiting"); setQrDialogOpen(true); }
-      }
-      setNewInstanceName("");
-      await fetchInstances();
-      setSelectedInstance(newInstanceName.trim());
-    } catch (error: any) {
-      toast({ title: "Erro ao criar instância", description: error.message, variant: "destructive" });
-    } finally { setCreatingInstance(false); }
-  };
-
-  const handleGetQR = async (instanceName: string) => {
-    if (!profile?.org_id) return;
-    setQrLoading(true); setQrInstanceName(instanceName); setQrDialogOpen(true); setQrCode(""); setConnectionStatus("waiting");
-    try {
-      const { data, error } = await supabase.functions.invoke("manage-evolution", {
-        body: { action: "qrcode", org_id: profile.org_id, instance_name: instanceName },
-      });
-      if (error) throw error;
-      setQrCode(data?.qrcode || "");
-    } catch (error: any) {
-      toast({ title: "Erro ao obter QR Code", description: error.message, variant: "destructive" });
-      setQrDialogOpen(false);
-    } finally { setQrLoading(false); }
-  };
-
-  const handleDeleteInstance = async (instanceName: string) => {
-    if (!profile?.org_id) return;
-    try {
-      const { error } = await supabase.functions.invoke("manage-evolution", {
-        body: { action: "delete", org_id: profile.org_id, instance_name: instanceName },
-      });
-      if (error) throw error;
-      toast({ title: "Instância removida" });
-      if (selectedInstance === instanceName) setSelectedInstance("");
-      await fetchInstances();
-    } catch (error: any) { toast({ title: "Erro", description: error.message, variant: "destructive" }); }
-  };
-
-  // Poll QR status
-  useEffect(() => {
-    if (!qrDialogOpen || !qrInstanceName || !profile?.org_id) return;
-    let qrRefreshCount = 0;
-    const statusInterval = setInterval(async () => {
-      try {
-        const { data } = await supabase.functions.invoke("manage-evolution", {
-          body: { action: "status", org_id: profile.org_id, instance_name: qrInstanceName },
-        });
-        if (data?.state === "open") {
-          setConnectionStatus("connected");
-          toast({ title: "✅ WhatsApp conectado!", description: `Instância ${qrInstanceName} online.` });
-          setTimeout(() => { setQrDialogOpen(false); fetchInstances(); setSelectedInstance(qrInstanceName); }, 1500);
-        }
-      } catch { /* ignore */ }
-      qrRefreshCount++;
-      if (qrRefreshCount % 8 === 0) {
-        try {
-          const { data } = await supabase.functions.invoke("manage-evolution", {
-            body: { action: "qrcode", org_id: profile.org_id, instance_name: qrInstanceName },
-          });
-          if (data?.qrcode) setQrCode(data.qrcode);
-        } catch { /* ignore */ }
-      }
-    }, 3000);
-    return () => clearInterval(statusInterval);
-  }, [qrDialogOpen, qrInstanceName, profile?.org_id]);
 
   // === Web Scraping ===
   const activeNiche = customNiche || selectedNiche;
@@ -276,8 +175,6 @@ export default function Prospecting() {
       toast({ title: "Erro na prospecção", description: error.message, variant: "destructive" });
     } finally { setScrapingLoading(false); }
   };
-
-  // Removed: handleSendToCrm - leads are saved directly and managed in Leads page
 
   // === WhatsApp Extract ===
   const handleFetchGroups = async () => {
@@ -614,8 +511,8 @@ export default function Prospecting() {
                     </div>
                     <div className="flex items-center gap-1.5">
                       {instanceState(inst.state)}
-                      {inst.state !== "open" && <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleGetQR(inst.name)}><QrCode className="h-3.5 w-3.5" /></Button>}
-                      <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive" onClick={() => handleDeleteInstance(inst.name)}><Trash2 className="h-3.5 w-3.5" /></Button>
+                      {inst.state !== "open" && <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => getQRCode(inst.name)}><QrCode className="h-3.5 w-3.5" /></Button>}
+                      <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive" onClick={() => deleteInstance(inst.name)}><Trash2 className="h-3.5 w-3.5" /></Button>
                     </div>
                   </div>
                 ))}
@@ -624,8 +521,8 @@ export default function Prospecting() {
 
             <div className="flex gap-2">
               <Input placeholder="Nome da instância" value={newInstanceName} onChange={(e) => setNewInstanceName(e.target.value)}
-                className="text-sm" onKeyDown={(e) => e.key === "Enter" && handleCreateInstance()} />
-              <Button onClick={handleCreateInstance} disabled={creatingInstance || !newInstanceName.trim()} size="sm" className="shrink-0 gap-1.5 text-xs">
+                className="text-sm" onKeyDown={(e) => e.key === "Enter" && createInstance()} />
+              <Button onClick={createInstance} disabled={creatingInstance || !newInstanceName.trim()} size="sm" className="shrink-0 gap-1.5 text-xs">
                 {creatingInstance ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <><Plus className="h-3.5 w-3.5" />Criar</>}
               </Button>
             </div>
@@ -982,7 +879,7 @@ export default function Prospecting() {
               <>
                 <div className="bg-white p-3 rounded-lg"><img src={qrCode.startsWith("data:") ? qrCode : `data:image/png;base64,${qrCode}`} alt="QR Code" className="w-56 h-56" /></div>
                 <div className="flex items-center gap-1.5 text-xs text-muted-foreground"><div className="h-1.5 w-1.5 rounded-full bg-warning animate-pulse" />Aguardando leitura...</div>
-                <Button variant="outline" size="sm" onClick={() => handleGetQR(qrInstanceName)} className="text-xs gap-1"><RefreshCw className="h-3 w-3" />Atualizar QR</Button>
+                <Button variant="outline" size="sm" onClick={() => getQRCode(qrInstanceName)} className="text-xs gap-1"><RefreshCw className="h-3 w-3" />Atualizar QR</Button>
               </>
             ) : <p className="text-xs text-muted-foreground py-6">Não foi possível gerar o QR Code.</p>}
           </div>

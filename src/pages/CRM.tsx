@@ -267,7 +267,7 @@ export default function CRM() {
     ].filter(Boolean).join("\n");
 
     try {
-      const { data: result, error } = await supabase.functions.invoke("manage-evolution", {
+      const sendPromise = supabase.functions.invoke("manage-evolution", {
         body: {
           action: "sendText",
           instanceName,
@@ -275,10 +275,32 @@ export default function CRM() {
           text: lines,
         },
       });
+      const timeoutPromise = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error("TIMEOUT")), 10000)
+      );
+
+      const { data: result, error } = await Promise.race([sendPromise, timeoutPromise]);
       if (error) throw error;
-      toast({ title: "Ficha enviada para handoff! ✅" });
+
+      if (result?.error || !result?.key) {
+        toast({
+          title: "Falha no envio do handoff",
+          description: "Verifique a instância WhatsApp",
+          variant: "destructive",
+        });
+      } else {
+        toast({ title: "Ficha enviada para handoff! ✅" });
+      }
     } catch (err: any) {
-      toast({ title: "Erro ao enviar handoff", description: err.message, variant: "destructive" });
+      if (err.message === "TIMEOUT") {
+        toast({
+          title: "Handoff enviado mas entrega não confirmada",
+          description: "Timeout de 10s — verifique manualmente",
+          variant: "destructive",
+        });
+      } else {
+        toast({ title: "Erro ao enviar handoff", description: err.message, variant: "destructive" });
+      }
     }
     setHandoffSending(false);
   };
