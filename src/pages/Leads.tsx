@@ -421,19 +421,18 @@ export default function Leads() {
       {/* Quick Filter Chips */}
       <div className="flex flex-wrap gap-2">
         {[
-          { key: "all", label: "Todos", count: leads.length },
-          { key: "pending", label: "Prospectados", count: prospectedCount },
-          { key: "enriched", label: "Enriquecidos", count: enrichedCount },
-          { key: "converted", label: "Em Comercial", count: convertedCount },
+          { key: "all", label: "Todos" },
+          { key: "pending", label: "Prospectados" },
+          { key: "enriched", label: "Enriquecidos" },
+          { key: "converted", label: "Em Comercial" },
         ].map(f => (
-          <button key={f.key} onClick={() => setQuickFilter(f.key)}
+          <button key={f.key} onClick={() => { setQuickFilter(f.key); setCurrentPage(0); }}
             className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-all ${
               quickFilter === f.key
                 ? "border-primary bg-primary/10 text-primary"
                 : "border-border/50 hover:border-primary/30 text-muted-foreground hover:text-foreground"
             }`}>
-            {f.label} ({f.count})
-          </button>
+            {f.label}{f.key === quickFilter ? ` (${totalCount})` : ""}
         ))}
       </div>
 
