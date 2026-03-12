@@ -307,31 +307,25 @@ ${!useEmoji ? "- NUNCA use emojis. ZERO emojis." : ""}
           .replace(/\{telefone\}/gi, lead.phone || "");
       }
 
-      // AI generation fallback
-      if (broadcast.ai_enabled && !messageText && ANTHROPIC_API_KEY && fullSystemPrompt) {
+      // AI generation via Google Gemini
+      if (broadcast.ai_enabled && !messageText && GOOGLE_API_KEY && fullSystemPrompt) {
         try {
           const leadFirstName = lead.name?.split(" ")[0] || "";
           const leadContext = leadFirstName ? `Lead: ${leadFirstName}` : "Lead sem nome identificado";
-          const aiResp = await fetch("https://api.anthropic.com/v1/messages", {
+          const userPrompt = `Crie UMA mensagem de primeiro contato para: ${leadContext}. ${broadcast.description ? `Contexto da campanha: ${broadcast.description}` : ""}. Use EXATAMENTE ${maxBlocks} blocos. Retorne APENAS os blocos separados por ---BLOCO---, sem aspas.`;
+          
+          const aiResp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GOOGLE_API_KEY}`, {
             method: "POST",
-            headers: {
-              "x-api-key": ANTHROPIC_API_KEY,
-              "anthropic-version": "2023-06-01",
-              "Content-Type": "application/json",
-            },
+            headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-              model: "claude-haiku-3-5-20251001",
-              system: fullSystemPrompt,
-              messages: [
-                { role: "user", content: `Crie UMA mensagem de primeiro contato para: ${leadContext}. ${broadcast.description ? `Contexto da campanha: ${broadcast.description}` : ""}. Use EXATAMENTE ${maxBlocks} blocos. Retorne APENAS os blocos separados por ---BLOCO---, sem aspas.` },
-              ],
-              max_tokens: 1024,
-              temperature: scenarioTemperature,
+              system_instruction: { parts: [{ text: fullSystemPrompt }] },
+              contents: [{ role: "user", parts: [{ text: userPrompt }] }],
+              generationConfig: { temperature: scenarioTemperature, maxOutputTokens: 1024 },
             }),
           });
           if (aiResp.ok) {
             const aiData = await aiResp.json();
-            messageText = (aiData.content?.[0]?.text || "").trim();
+            messageText = (aiData.candidates?.[0]?.content?.parts?.[0]?.text || "").trim();
             messageText = messageText.replace(/^[""](.*)[""]$/s, "$1").trim();
             if (!useEmoji) {
               messageText = messageText.replace(/[\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{1F000}-\u{1F02F}\u{1F0A0}-\u{1F0FF}\u{1F100}-\u{1F64F}\u{1F680}-\u{1F6FF}\u{1FA00}-\u{1FA6F}\u{1FA70}-\u{1FAFF}\u{FE00}-\u{FE0F}\u{200D}\u{20E3}\u{E0020}-\u{E007F}]/gu, "").trim();
@@ -342,7 +336,7 @@ ${!useEmoji ? "- NUNCA use emojis. ZERO emojis." : ""}
               messageText = messageText.replace(/\[Nome\]\s*/gi, "");
             }
           } else {
-            await aiResp.text();
+            console.error("Gemini API error:", aiResp.status, await aiResp.text());
           }
         } catch (e) {
           console.error("AI generation error:", e);
