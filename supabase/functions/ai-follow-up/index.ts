@@ -192,7 +192,7 @@ REGRAS:
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            model: "claude-haiku-3-5-20251001",
+            model: "claude-3-5-haiku-20241022",
             system: systemPrompt,
             messages: [
               { role: "user", content: `Gere a mensagem de follow-up #${nextStep} para ${conv.push_name || "o lead"}.` },
