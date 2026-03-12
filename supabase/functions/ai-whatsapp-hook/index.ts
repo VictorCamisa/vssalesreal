@@ -387,7 +387,7 @@ O lead está respondendo à mensagem enviada pelo disparo. Continue naturalmente
       .eq("instance_name", instanceName)
       .eq("remote_jid", remoteJid)
       .eq("from_me", true)
-      .order("timestamp", { ascending: false })
+      .order("created_at", { ascending: false })
       .limit(20);
 
     if (botHistory && botHistory.length > 0) {
@@ -450,7 +450,7 @@ O lead está respondendo à mensagem enviada pelo disparo. Continue naturalmente
       .eq("org_id", orgId)
       .eq("instance_name", instanceName)
       .eq("remote_jid", remoteJid)
-      .order("timestamp", { ascending: false })
+      .order("created_at", { ascending: false })
       .limit(10);
 
     if (historyMsgs && historyMsgs.length > 0) {
