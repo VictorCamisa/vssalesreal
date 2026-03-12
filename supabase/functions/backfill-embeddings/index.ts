@@ -69,7 +69,7 @@ serve(async (req) => {
     for (const doc of docs) {
       try {
         const embeddingResponse = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/text-embedding-004:embedContent?key=${GOOGLE_API_KEY}`,
+          `https://generativelanguage.googleapis.com/v1/models/text-embedding-004:embedContent?key=${GOOGLE_API_KEY}`,
           {
             method: "POST",
             headers: { "Content-Type": "application/json" },
