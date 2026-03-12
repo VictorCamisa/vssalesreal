@@ -323,7 +323,7 @@ ${!useEmoji ? "- NUNCA use emojis. ZERO emojis." : ""}
               "anthropic-version": "2023-06-01",
             },
             body: JSON.stringify({
-              model: "claude-haiku-3-5-20251001",
+              model: "claude-3-5-haiku-20241022",
               system: fullSystemPrompt,
               max_tokens: 1000,
               messages: [{ role: "user", content: prompt }],
