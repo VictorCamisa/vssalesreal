@@ -126,6 +126,11 @@ Deno.serve(async (req) => {
         await setUserInstances(userInst);
       }
 
+      // Sync integration_instances table
+      await supabaseAdmin
+        .from("integration_instances")
+        .upsert({ instance_name, org_id, integration_id: integration!.id }, { onConflict: "instance_name" });
+
       // Auto-configure webhook for AI responses
       const webhookUrl = `${SUPABASE_URL}/functions/v1/ai-whatsapp-hook`;
       try {
