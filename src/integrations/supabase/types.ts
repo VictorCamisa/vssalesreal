@@ -770,6 +770,7 @@ export type Database = {
           id: string
           name: string
           org_id: string
+          stage_key: string | null
           stage_order: number
         }
         Insert: {
@@ -777,6 +778,7 @@ export type Database = {
           id?: string
           name: string
           org_id: string
+          stage_key?: string | null
           stage_order?: number
         }
         Update: {
@@ -784,6 +786,7 @@ export type Database = {
           id?: string
           name?: string
           org_id?: string
+          stage_key?: string | null
           stage_order?: number
         }
         Relationships: [
