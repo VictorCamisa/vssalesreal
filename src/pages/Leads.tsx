@@ -146,8 +146,8 @@ export default function Leads() {
   };
 
   const toggleAll = () => {
-    if (selected.size === filtered.length) setSelected(new Set());
-    else setSelected(new Set(filtered.map((l) => l.id)));
+    if (selected.size === leads.length) setSelected(new Set());
+    else setSelected(new Set(leads.map((l) => l.id)));
   };
 
   const handleEnrich = async () => {
