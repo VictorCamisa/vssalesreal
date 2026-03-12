@@ -23,7 +23,7 @@ Deno.serve(async (req) => {
     const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const EVOLUTION_API_URL = (Deno.env.get("EVOLUTION_API_URL") || "").replace(/\/$/, "");
     const EVOLUTION_API_KEY = Deno.env.get("EVOLUTION_API_KEY") || "";
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY") || "";
+    const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY") || "";
     const INTERNAL_SECRET = Deno.env.get("BROADCAST_INTERNAL_SECRET") || "";
 
     // --- AUTH: support both user JWT and internal secret ---

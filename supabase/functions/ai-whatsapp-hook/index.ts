@@ -489,15 +489,29 @@ ${!useEmoji ? "- ZERO EMOJIS. Remova qualquer emoji antes de enviar." : ""}
     conversationMessages.push({ role: "user", content: `[MENSAGEM DO USUÁRIO] [${pushName}]: ${messageText} [/MENSAGEM DO USUÁRIO]` });
 
     // ---- Call AI ----
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY not configured");
+    const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY");
+    if (!ANTHROPIC_API_KEY) throw new Error("ANTHROPIC_API_KEY not configured");
 
     const temperature = Number(scenario.temperature) || 0.7;
 
-    const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    // Extract system message from conversation
+    const systemMsg = conversationMessages.find((m: any) => m.role === "system")?.content || "";
+    const nonSystemMessages = conversationMessages.filter((m: any) => m.role !== "system");
+
+    const aiResponse = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
-      headers: { Authorization: `Bearer ${LOVABLE_API_KEY}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ model: "google/gemini-3-flash-preview", messages: conversationMessages, temperature }),
+      headers: {
+        "x-api-key": ANTHROPIC_API_KEY,
+        "anthropic-version": "2023-06-01",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "claude-haiku-3-5-20251001",
+        system: systemMsg,
+        messages: nonSystemMessages,
+        max_tokens: 1024,
+        temperature,
+      }),
     });
 
     if (!aiResponse.ok) {
@@ -506,7 +520,7 @@ ${!useEmoji ? "- ZERO EMOJIS. Remova qualquer emoji antes de enviar." : ""}
     }
 
     const aiData = await aiResponse.json();
-    let reply = aiData.choices?.[0]?.message?.content || "";
+    let reply = aiData.content?.[0]?.text || "";
     if (!reply) {
       return new Response(JSON.stringify({ error: "Empty AI response" }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
