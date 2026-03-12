@@ -1,44 +1,79 @@
 
 
-# Plano de Correções — 4 Tarefas
+# Reconstrução Completa da Landing Page — VS SALES
 
-## Tarefa 1: CORS multi-origem em `scrape-leads` e `ai-follow-up`
+## Diagnóstico
 
-Substituir o header CORS estático por lógica de múltiplas origens conforme especificado:
+A landing page atual tem uma estrutura funcional, mas apresenta problemas críticos de copywriting, persuasão e design que a enfraquecem como ferramenta de conversão:
 
-**`supabase/functions/scrape-leads/index.ts`** (linhas 3-7):
-- Adicionar lógica de `allowedOrigins` com produção + `ALLOWED_ORIGIN`
-- Usar `corsOrigin` dinâmico no header
-- A função `json()` (linha 9-10) também precisa usar o corsOrigin dinâmico — será refatorada para receber o origin ou usar variável de escopo
+1. **Copy genérica** — frases como "Prospecção. Qualificação. Fechamento." não comunicam valor real. Falta dor, urgência e diferenciação.
+2. **Seções repetitivas** — há dois comparativos (seção 2 e seção 5) que dizem quase a mesma coisa.
+3. **Prova social fraca** — um depoimento fictício de "Carlos Mendes" não convence ninguém.
+4. **Números inventados** — "12.400 leads qualificados" e "97% satisfação" sem contexto parecem falsos.
+5. **Falta de seções-chave** — não há: demonstração visual do produto, seção "Para quem é", garantia, ecossistema VS.
+6. **CTA disperso** — muitos CTAs competindo entre si sem hierarquia clara.
+7. **Cor inconsistente** — usa verde (#00FF88) em vários elementos quando a marca é azul.
 
-**`supabase/functions/ai-follow-up/index.ts`** (linhas 5-9):
-- Mesma lógica de origens múltiplas
-- OPTIONS handler (linha 12) precisa usar corsOrigin
+## Plano de Reconstrução
 
-## Tarefa 2: Corrigir mensagens cortadas em `execute-broadcast`
+### Estrutura de seções (nova ordem narrativa)
 
-**`supabase/functions/execute-broadcast/index.ts`**:
-
-- **Linha 124**: Mudar default de `maxCharsPerBlock` de `200` → `500`
-- **Linha 198**: Atualizar o prompt de formato para refletir o novo limite
-- **Linhas 205-212**: Reordenar modelos — `claude-3-5-haiku-20241022` primeiro, remover `claude-haiku-3-5-20251001` (inexistente)
-- **Linhas 270-277**: Melhorar truncamento para cortar em final de frase (`.`, `!`, `?`) antes de cortar em espaço
-
-## Tarefa 3: Corrigir versão supabase-js no `execute-broadcast`
-
-**Linha 1**: Fixar import para `@2.49.0`:
+```text
+1. HERO — Headline de impacto + sub-headline com dor + CTA único forte
+2. BARRA DE CREDIBILIDADE — "Powered by VS Soluções Labs" + tecnologias
+3. O PROBLEMA — 4 cards de dor do gestor comercial (melhor copy)
+4. A SOLUÇÃO — O que é o VS SALES (com mockup/screenshot do dashboard)
+5. COMO FUNCIONA — 6 etapas do pipeline (mantido, refinado)
+6. PARA QUEM É — 3 perfis ideais (Startups, PMEs, Agências)
+7. DIFERENCIAIS — Grid de features com ícones e descrições curtas
+8. COMPARATIVO ÚNICO — Tabela Time Humano vs VS SALES (consolidado)
+9. PLANOS & PREÇOS — Cards dinâmicos do banco (mantido, refinado)
+10. GARANTIA — Seção de confiança ("7 dias grátis" ou "Sem contrato")
+11. FAQ — Perguntas frequentes (mantido, copy melhorada)
+12. CTA FINAL — Urgência + formulário de acesso antecipado
+13. FOOTER — Links + identidade VS Soluções
 ```
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.0";
-```
 
-Adicionalmente, fallback `getClaims` → `getUser` (linhas 41-43) para resiliência.
+### Mudanças específicas
 
-## Tarefa 4: Aumentar PROFILE_TIMEOUT_MS
+**Hero:**
+- Nova headline: "Sua equipe comercial inteira. Só que é IA." com sub "SDR, BDR e Closer autônomos. 24/7. Por R$ 600/mês."
+- Um único CTA principal: "Testar grátis por 7 dias"
+- Remover contadores genéricos do hero, mover para seção de credibilidade
+- Manter ParticleCanvas e animações stagger
 
-**`src/contexts/AuthContext.tsx`** (linha 33):
-- `PROFILE_TIMEOUT_MS` de `8000` → `15000`
+**Seção "Para Quem É" (nova):**
+- 3 cards: Startups B2B, PMEs com time enxuto, Agências que revendem
+- Cada card com cenário real de uso
 
----
+**Diferenciais (nova seção):**
+- Grid 2x3: Prospecção Autônoma, WhatsApp Nativo, CRM Inteligente, IA Treinável, Disparos em Massa, Agendamento Auto
+- Cada item com ícone + 2 linhas de copy
 
-**Total: 4 arquivos editados, 4 tarefas.**
+**Comparativo consolidado:**
+- Remover o comparativo duplicado da seção "O Problema"
+- Manter apenas a tabela da seção de planos, com visual mais impactante
+
+**Prova social:**
+- Remover depoimento fictício
+- Substituir por métricas reais do sistema (operação 24/7, tempo de setup < 48h, etc.)
+
+**Cores:**
+- Substituir todo #00FF88 (verde) por variações de azul (#00D4FF, #0057FF)
+- Manter verde apenas para indicadores de "positivo" em comparativos
+
+**Seção de Garantia (nova):**
+- "Sem contrato. Sem multa. Cancele quando quiser."
+- Ícones de segurança (Shield, Lock, CheckCircle)
+
+### Arquivos modificados
+
+- `src/pages/Landing.tsx` — reescrita completa das seções, copy e estrutura
+
+### Copy principles aplicados
+
+- **Dor antes da solução** — mostrar o problema real antes de apresentar o produto
+- **Especificidade** — usar números reais (R$ 600/mês, < 48h de setup, 24/7)
+- **Um CTA por fold** — não competir com múltiplos botões
+- **Prova > Promessa** — features concretas ao invés de adjetivos vagos
 

@@ -1,4 +1,4 @@
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.0";
 import { isInCooldown, registerContact } from "../_shared/contact-cooldown.ts";
 
 const corsHeaders = {
@@ -39,8 +39,15 @@ Deno.serve(async (req) => {
         global: { headers: { Authorization: authHeader } },
       });
       const token = authHeader.replace("Bearer ", "");
-      const { data: claims, error: claimsErr } = await supabaseUser.auth.getClaims(token);
-      if (claimsErr || !claims?.claims) return json({ error: "Unauthorized" }, 401);
+      let userId: string | null = null;
+      try {
+        const { data: claims, error: claimsErr } = await supabaseUser.auth.getClaims(token);
+        if (!claimsErr && claims?.claims) userId = claims.claims.sub as string;
+      } catch { /* getClaims not available */ }
+      if (!userId) {
+        const { data: { user }, error: userErr } = await supabaseUser.auth.getUser();
+        if (userErr || !user) return json({ error: "Unauthorized" }, 401);
+      }
     }
 
     const body = await req.json();
@@ -121,7 +128,7 @@ Deno.serve(async (req) => {
     const scenarioKey = (broadcast as any).scenario_key || "broadcast_own_base";
     let scenarioPrompt = "";
     let maxBlocks = 2;
-    let maxCharsPerBlock = 200;
+    let maxCharsPerBlock = 500;
     let useEmoji = true;
     let scenarioTemperature = 0.4;
 
@@ -137,7 +144,7 @@ Deno.serve(async (req) => {
       if (scenario) {
         const beh = (scenario.behavior || {}) as any;
         maxBlocks = Number(beh.max_blocks) || 2;
-        maxCharsPerBlock = Number(beh.max_chars_per_block) || 200;
+        maxCharsPerBlock = Number(beh.max_chars_per_block) || 500;
         useEmoji = beh.use_emoji !== false;
         scenarioTemperature = Math.max(0.2, Math.min(Number(scenario.temperature) ?? 0.3, 0.45));
       }
@@ -195,7 +202,8 @@ ${!useEmoji ? "- NUNCA use emojis. ZERO emojis." : ""}
       companyContext ? `\n--- CONTEXTO DA EMPRESA ---\n${companyContext}` : "",
       knowledgeContext,
       `\nREGRAS DE FORMATO:
-- Divida a mensagem em EXATAMENTE ${maxBlocks} blocos curtos (máximo ${maxCharsPerBlock} caracteres cada).
+- Divida a mensagem em EXATAMENTE ${maxBlocks} blocos curtos e COMPLETOS (máximo ${maxCharsPerBlock} caracteres cada).
+- Cada bloco deve terminar em frase completa. NUNCA corte no meio de uma frase.
 - Separe cada bloco com ---BLOCO--- numa linha isolada.
 - NUNCA invente informações. Use APENAS dados fornecidos acima.
 - Escreva de forma NATURAL para WhatsApp.
@@ -203,12 +211,10 @@ ${!useEmoji ? "- NUNCA use emojis. ZERO emojis." : ""}
     ].filter(Boolean).join("\n");
 
     let anthropicModels = [
-      "claude-haiku-3-5-20251001",
       "claude-3-5-haiku-20241022",
       "claude-3-5-haiku-latest",
       "claude-3-haiku-20240307",
       "claude-3-sonnet-20240229",
-      "claude-3-opus-20240229",
     ];
 
     if (broadcast.ai_enabled && ANTHROPIC_API_KEY) {
@@ -269,9 +275,22 @@ ${!useEmoji ? "- NUNCA use emojis. ZERO emojis." : ""}
       blocks = blocks.slice(0, maxBlocks);
       blocks = blocks.map(block => {
         if (block.length > maxCharsPerBlock) {
-          const cut = block.substring(0, maxCharsPerBlock);
-          const lastSpace = cut.lastIndexOf(" ");
-          return lastSpace > maxCharsPerBlock * 0.7 ? cut.substring(0, lastSpace) : cut;
+          // Try to cut at end of sentence first
+          const truncated = block.substring(0, maxCharsPerBlock);
+          const lastSentenceEnd = Math.max(
+            truncated.lastIndexOf(". "),
+            truncated.lastIndexOf("! "),
+            truncated.lastIndexOf("? "),
+            truncated.lastIndexOf(".\n"),
+            truncated.lastIndexOf("!\n"),
+            truncated.lastIndexOf("?\n"),
+          );
+          if (lastSentenceEnd > maxCharsPerBlock * 0.5) {
+            return truncated.substring(0, lastSentenceEnd + 1).trim();
+          }
+          // Fallback: cut at last space
+          const lastSpace = truncated.lastIndexOf(" ");
+          return lastSpace > maxCharsPerBlock * 0.5 ? truncated.substring(0, lastSpace).trim() : truncated.trim();
         }
         return block;
       });
