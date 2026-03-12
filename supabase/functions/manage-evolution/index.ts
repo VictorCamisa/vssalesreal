@@ -126,6 +126,11 @@ Deno.serve(async (req) => {
         await setUserInstances(userInst);
       }
 
+      // Sync integration_instances table
+      await supabaseAdmin
+        .from("integration_instances")
+        .upsert({ instance_name, org_id, integration_id: integration!.id }, { onConflict: "instance_name" });
+
       // Auto-configure webhook for AI responses
       const webhookUrl = `${SUPABASE_URL}/functions/v1/ai-whatsapp-hook`;
       try {
@@ -283,6 +288,7 @@ Deno.serve(async (req) => {
         if (response.status === 404) {
           const userInst = getUserInstances().filter((n) => n !== instance_name);
           await setUserInstances(userInst);
+          await supabaseAdmin.from("integration_instances").delete().eq("instance_name", instance_name);
           return json({ success: true, message: "Instância já não existia na API, removida localmente." });
         }
         return json({ error: `Erro ao deletar: ${response.status} - ${errText}` }, 502);
@@ -290,6 +296,7 @@ Deno.serve(async (req) => {
 
       const userInst = getUserInstances().filter((n) => n !== instance_name);
       await setUserInstances(userInst);
+      await supabaseAdmin.from("integration_instances").delete().eq("instance_name", instance_name);
 
       return json({ success: true });
     }
