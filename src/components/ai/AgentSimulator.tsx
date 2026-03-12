@@ -248,7 +248,7 @@ Mensagem do lead: ${msg}`;
 
     await streamSimulation(
       SIMULATE_URL,
-      { messages: finalMsgs, ai_config_id: selectedAgent },
+      { messages: finalMsgs, scenario_key: selectedAgent },
       (full) => {
         fullReply = full;
         // Update streaming in messages
