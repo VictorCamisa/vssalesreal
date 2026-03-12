@@ -503,7 +503,7 @@ export default function Leads() {
             <TableHeader>
               <TableRow className="border-border/30 hover:bg-transparent">
                 <TableHead className="w-10">
-                  <Checkbox checked={selected.size === filtered.length && filtered.length > 0} onCheckedChange={toggleAll} />
+                  <Checkbox checked={selected.size === leads.length && leads.length > 0} onCheckedChange={toggleAll} />
                 </TableHead>
                 <TableHead className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Nome</TableHead>
                 <TableHead className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Telefone</TableHead>
