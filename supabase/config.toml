@@ -1,5 +1,8 @@
 project_id = "akstlpiqjvgbjjnawqfn"
 
+[functions.get-service-key]
+verify_jwt = false
+
 [functions.enrich-lead]
 verify_jwt = false
 
