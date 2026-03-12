@@ -87,13 +87,18 @@ export default function SettingsPage() {
 
   useEffect(() => {
     if (!profile?.org_id) return;
-    supabase
-      .from("integrations")
-      .select("*")
-      .eq("org_id", profile.org_id)
-      .then(({ data }) => {
+    supabase.functions
+      .invoke("manage-integrations", {
+        body: { action: "load", org_id: profile.org_id },
+      })
+      .then(({ data, error }) => {
+        if (error) {
+          console.error("Failed to load integrations:", error);
+          return;
+        }
+        const rows = data?.data || [];
         const map: Record<string, IntegrationData> = {};
-        data?.forEach((row) => {
+        rows.forEach((row: any) => {
           map[row.service_name] = {
             id: row.id,
             api_key: row.api_key || "",
