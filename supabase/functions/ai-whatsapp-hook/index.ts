@@ -481,7 +481,7 @@ ${!useEmoji ? "- ZERO EMOJIS. Remova qualquer emoji antes de enviar." : ""}
     }
 
     // Add current message
-    conversationMessages.push({ role: "user", content: `[${pushName}]: ${messageText}` });
+    conversationMessages.push({ role: "user", content: `[MENSAGEM DO USUÁRIO] [${pushName}]: ${messageText} [/MENSAGEM DO USUÁRIO]` });
 
     // ---- Call AI ----
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
