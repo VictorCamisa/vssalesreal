@@ -236,9 +236,8 @@ ${!useEmoji ? "- NUNCA use emojis. ZERO emojis." : ""}
       let success = false;
       for (let i = 0; i < blocks.length; i++) {
         if (i > 0) {
-          const baseDelay = 1000 + Math.random() * 2000;
-          const lengthBonus = Math.min(blocks[i].length * 10, 1000);
-          await new Promise(resolve => setTimeout(resolve, baseDelay + lengthBonus));
+          const baseDelay = Math.max(3000, blocks[i].length * 50);
+          await new Promise(resolve => setTimeout(resolve, baseDelay));
         }
         const sendResp = await fetch(`${EVOLUTION_API_URL}/message/sendText/${instanceName}`, {
           method: "POST",
