@@ -403,13 +403,6 @@ O lead está respondendo à mensagem enviada pelo disparo. Continue naturalmente
         .filter(([_, count]) => count >= 2)
         .map(([phrase]) => phrase);
 
-      behaviorParts.push(`\nREGRA ANTI-REPETIÇÃO (MÁXIMA PRIORIDADE - INVIOLÁVEL):`);
-      if (repeatedPhrases.length > 0) {
-        behaviorParts.push(`- Você JÁ repetiu estas frases/tópicos em mensagens anteriores: [${repeatedPhrases.slice(0, 10).join("; ")}]`);
-      }
-      behaviorParts.push(`- É TERMINANTEMENTE PROIBIDO repetir informações, produtos ou argumentos que você já apresentou, A MENOS QUE o cliente PERGUNTE DIRETAMENTE sobre eles`);
-      behaviorParts.push(`- NUNCA re-descreva produtos/serviços que você já apresentou. O cliente já sabe. Siga em frente na conversa`);
-      behaviorParts.push(`- Foque em AVANÇAR a conversa conforme o processo de vendas da empresa`);
     }
 
     const behaviorRules = behaviorParts.join("\n");
