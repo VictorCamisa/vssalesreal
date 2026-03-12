@@ -45,12 +45,19 @@ serve(async (req) => {
         { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-    // Fetch all docs without embedding
+    // Parse optional batch_size from body
+    let batch_size = 10;
+    try {
+      const body = await req.json();
+      if (body?.batch_size) batch_size = Math.min(body.batch_size, 50);
+    } catch {}
+
+    // Fetch docs without embedding
     const { data: docs, error: fetchError } = await supabaseAdmin
       .from("ai_knowledge_docs")
       .select("id, title, content")
       .is("embedding", null)
-      .limit(500);
+      .limit(batch_size);
 
     if (fetchError) throw fetchError;
     if (!docs || docs.length === 0) {
@@ -69,13 +76,14 @@ serve(async (req) => {
     for (const doc of docs) {
       try {
         const embeddingResponse = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/text-embedding-004:embedContent?key=${GOOGLE_API_KEY}`,
+          `https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-001:embedContent?key=${GOOGLE_API_KEY}`,
           {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-              model: "models/text-embedding-004",
+              model: "models/gemini-embedding-001",
               content: { parts: [{ text: doc.content.substring(0, 10000) }] },
+              outputDimensionality: 768,
             }),
           }
         );
@@ -102,9 +110,9 @@ serve(async (req) => {
         processed++;
         console.log(`✓ Embedded: ${doc.title} (${processed}/${docs.length})`);
 
-        // Rate limit: wait 200ms between requests
+        // Rate limit: wait 2s between requests (free tier)
         if (processed < docs.length) {
-          await new Promise(r => setTimeout(r, 200));
+          await new Promise(r => setTimeout(r, 2000));
         }
       } catch (docErr) {
         failed++;
