@@ -475,7 +475,7 @@ ${!useEmoji ? "- ZERO EMOJIS. Remova qualquer emoji antes de enviar." : ""}
         if (!hm.from_me && hm.message_text === messageText) continue;
         conversationMessages.push({
           role: hm.from_me ? "assistant" : "user",
-          content: hm.from_me ? hm.message_text : `[${hm.push_name || pushName}]: ${hm.message_text}`,
+          content: hm.from_me ? hm.message_text : `[MENSAGEM DO USUÁRIO] [${hm.push_name || pushName}]: ${hm.message_text} [/MENSAGEM DO USUÁRIO]`,
         });
       }
     }
