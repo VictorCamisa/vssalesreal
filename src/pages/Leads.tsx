@@ -487,14 +487,14 @@ export default function Leads() {
       {/* Table */}
       {loading ? (
         <div className="flex justify-center p-12"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div>
-      ) : filtered.length === 0 ? (
+      ) : leads.length === 0 ? (
         <div className="glass rounded-2xl p-12 text-center">
           <Users className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
           <h3 className="text-lg font-semibold">
-            {leads.length === 0 ? "Nenhum lead capturado ainda" : "Nenhum lead encontrado"}
+            {totalCount === 0 && !debouncedSearch && statusFilter === "all" && sourceFilter === "all" && quickFilter === "all" ? "Nenhum lead capturado ainda" : "Nenhum lead encontrado"}
           </h3>
           <p className="text-sm text-muted-foreground mt-1">
-            {leads.length === 0 ? "Inicie uma prospecção ou adicione leads manualmente." : "Ajuste os filtros aplicados."}
+            {totalCount === 0 && !debouncedSearch && statusFilter === "all" && sourceFilter === "all" && quickFilter === "all" ? "Inicie uma prospecção ou adicione leads manualmente." : "Ajuste os filtros aplicados."}
           </p>
         </div>
       ) : (
