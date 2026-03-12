@@ -256,7 +256,7 @@ ${!useEmoji ? "- NUNCA use emojis. ZERO emojis." : ""}
 
     let sentCount = 0;
     let failCount = 0;
-    const delayMs = (broadcast.delay_between_messages || 10) * 1000;
+    const delayMs = Math.max(5000, (broadcast.delay_between_messages || 10) * 1000);
 
     for (let idx = 0; idx < bLeads.length; idx++) {
       const bl = bLeads[idx];
