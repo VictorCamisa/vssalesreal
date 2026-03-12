@@ -296,7 +296,7 @@ export default function CRM() {
       const stagesToInsert = PIPELINE_STAGES.map((s, i) => ({
         org_id: profile.org_id!, name: s.name, stage_order: i,
       }));
-      const { data: newStages } = await supabase.from("crm_stages").insert(stagesToInsert).select("id, name, stage_order").order("stage_order");
+      const { data: newStages } = await supabase.from("crm_stages").insert(stagesToInsert).select("id, name, stage_order, stage_key").order("stage_order");
       currentStages = newStages ?? [];
     }
 
