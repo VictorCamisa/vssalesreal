@@ -178,7 +178,7 @@ REGRAS:
               { role: "system", content: systemPrompt },
               { role: "user", content: `Gere a mensagem de follow-up #${nextStep} para ${conv.push_name || "o lead"}.` },
             ],
-            temperature: aiConfig.temperature ? Number(aiConfig.temperature) : 0.7,
+            temperature: scenario.temperature ? Number(scenario.temperature) : 0.7,
           }),
         });
 
