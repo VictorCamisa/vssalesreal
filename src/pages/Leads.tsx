@@ -114,7 +114,7 @@ export default function Leads() {
       query = query.eq("status", statusFilter as any);
     }
     if (sourceFilter !== "all") {
-      query = query.eq("source", sourceFilter);
+      query = query.eq("source", sourceFilter as any);
     }
     if (quickFilter === "enriched") {
       query = query.not("enrichment_data", "is", null);
