@@ -287,7 +287,7 @@ export default function CRM() {
     if (!profile?.org_id) return;
     setLoading(true);
     const [stagesRes, oppsRes] = await Promise.all([
-      supabase.from("crm_stages").select("id, name, stage_order").eq("org_id", profile.org_id).order("stage_order"),
+      supabase.from("crm_stages").select("id, name, stage_order, stage_key").eq("org_id", profile.org_id).order("stage_order"),
       supabase.from("opportunities").select("id, stage_id, value, probability, notes, automation_status, personalized_message, message_sent_at, lead_id, lead:leads_raw(name, phone, email, enrichment_data)").eq("org_id", profile.org_id),
     ]);
 
