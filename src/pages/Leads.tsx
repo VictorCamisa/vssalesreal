@@ -443,7 +443,7 @@ export default function Leads() {
           <Input placeholder="Buscar por nome, telefone ou email..." value={searchQuery}
             onChange={(e) => handleSearchChange(e.target.value)} className="pl-10 rounded-xl bg-secondary/30 border-border/30" />
         </div>
-        <Select value={statusFilter} onValueChange={setStatusFilter}>
+        <Select value={statusFilter} onValueChange={(v) => { setStatusFilter(v); setCurrentPage(0); }}>
           <SelectTrigger className="w-[150px] rounded-xl bg-secondary/30 border-border/30"><SelectValue placeholder="Status" /></SelectTrigger>
           <SelectContent className="rounded-xl">
             <SelectItem value="all">Todos</SelectItem>
