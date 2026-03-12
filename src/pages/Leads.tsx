@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
@@ -74,6 +74,21 @@ export default function Leads() {
   const [converting, setConverting] = useState(false);
   const [detailLead, setDetailLead] = useState<Lead | null>(null);
   const [enrichingId, setEnrichingId] = useState<string | null>(null);
+  const [currentPage, setCurrentPage] = useState(0);
+  const [totalCount, setTotalCount] = useState(0);
+  const PAGE_SIZE = 50;
+
+  // Debounce search
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const debounceRef = useRef<ReturnType<typeof setTimeout>>();
+  const handleSearchChange = (value: string) => {
+    setSearchQuery(value);
+    clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      setDebouncedSearch(value);
+      setCurrentPage(0);
+    }, 400);
+  };
 
   // Add lead dialog
   const [addOpen, setAddOpen] = useState(false);
@@ -83,58 +98,44 @@ export default function Leads() {
   const fetchLeads = async () => {
     if (!profile?.org_id) return;
     setLoading(true);
-    
-    // Fetch all leads without limit using pagination
-    let allLeads: Lead[] = [];
-    let from = 0;
-    const pageSize = 1000;
-    let hasMore = true;
-    
-    while (hasMore) {
-      const { data } = await supabase
-        .from("leads_raw")
-        .select("id, name, phone, email, source, status, tags, created_at, enrichment_data")
-        .eq("org_id", profile.org_id)
-        .order("created_at", { ascending: false })
-        .range(from, from + pageSize - 1);
-      
-      if (data && data.length > 0) {
-        allLeads = [...allLeads, ...data];
-        from += pageSize;
-        hasMore = data.length === pageSize;
-      } else {
-        hasMore = false;
-      }
+
+    let query = supabase
+      .from("leads_raw")
+      .select("id, name, phone, email, source, status, tags, created_at, enrichment_data", { count: "exact" })
+      .eq("org_id", profile.org_id)
+      .order("created_at", { ascending: false })
+      .range(currentPage * PAGE_SIZE, (currentPage + 1) * PAGE_SIZE - 1);
+
+    // Server-side filters
+    if (debouncedSearch) {
+      query = query.or(`name.ilike.%${debouncedSearch}%,phone.ilike.%${debouncedSearch}%,email.ilike.%${debouncedSearch}%`);
     }
-    
-    setLeads(allLeads);
+    if (statusFilter !== "all") {
+      query = query.eq("status", statusFilter as any);
+    }
+    if (sourceFilter !== "all") {
+      query = query.eq("source", sourceFilter as any);
+    }
+    if (quickFilter === "enriched") {
+      query = query.not("enrichment_data", "is", null);
+    } else if (quickFilter === "pending") {
+      query = query.is("enrichment_data", null);
+    } else if (quickFilter === "converted") {
+      query = query.eq("status", "converted");
+    }
+
+    const { data, count } = await query;
+    setLeads(data || []);
+    setTotalCount(count || 0);
     setLoading(false);
   };
 
-  useEffect(() => { fetchLeads(); }, [profile?.org_id]);
+  useEffect(() => { fetchLeads(); }, [profile?.org_id, currentPage, debouncedSearch, statusFilter, sourceFilter, quickFilter]);
 
   const enrichedCount = leads.filter(l => l.status === "enriched").length;
   const prospectedCount = leads.filter(l => l.status === "pending").length;
   const convertedCount = leads.filter(l => l.status === "converted").length;
-  const conversionRate = leads.length > 0 ? ((convertedCount / leads.length) * 100).toFixed(1) : "0";
-
-  const filtered = useMemo(() => {
-    return leads.filter((l) => {
-      const matchSearch = !searchQuery ||
-        l.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        l.phone?.includes(searchQuery) ||
-        l.email?.toLowerCase().includes(searchQuery.toLowerCase());
-      const matchStatus = statusFilter === "all" || l.status === statusFilter;
-      const matchSource = sourceFilter === "all" || l.source === sourceFilter;
-
-      let matchQuick = true;
-      if (quickFilter === "enriched") matchQuick = l.status === "enriched";
-      else if (quickFilter === "pending") matchQuick = l.status === "pending";
-      else if (quickFilter === "converted") matchQuick = l.status === "converted";
-
-      return matchSearch && matchStatus && matchSource && matchQuick;
-    });
-  }, [leads, searchQuery, statusFilter, sourceFilter, quickFilter]);
+  const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
 
   const toggleSelect = (id: string) => {
     setSelected((prev) => {
@@ -145,8 +146,8 @@ export default function Leads() {
   };
 
   const toggleAll = () => {
-    if (selected.size === filtered.length) setSelected(new Set());
-    else setSelected(new Set(filtered.map((l) => l.id)));
+    if (selected.size === leads.length) setSelected(new Set());
+    else setSelected(new Set(leads.map((l) => l.id)));
   };
 
   const handleEnrich = async () => {
@@ -363,7 +364,7 @@ export default function Leads() {
 
   const exportCSV = () => {
     const rows = [["Nome", "Telefone", "Email", "Fonte", "Status"]];
-    filtered.forEach((l) => rows.push([l.name || "", l.phone || "", l.email || "", sourceLabels[l.source] || l.source, statusLabels[l.status] || l.status]));
+    leads.forEach((l) => rows.push([l.name || "", l.phone || "", l.email || "", sourceLabels[l.source] || l.source, statusLabels[l.status] || l.status]));
     const csv = rows.map((r) => r.map((v) => `"${v.replace(/"/g, '""')}"`).join(",")).join("\n");
     const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
@@ -378,7 +379,7 @@ export default function Leads() {
        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Leads</h1>
-          <p className="text-sm text-muted-foreground mt-1">Triagem e qualificação — {leads.length} leads</p>
+          <p className="text-sm text-muted-foreground mt-1">Triagem e qualificação — {totalCount} leads</p>
         </div>
         <div className="flex items-center gap-2">
           <label className="cursor-pointer">
@@ -399,10 +400,10 @@ export default function Leads() {
       {/* Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {[
-          { label: "Total", value: leads.length, icon: Users, color: "text-primary", bg: "bg-primary/10" },
-          { label: "Prospectados", value: prospectedCount, icon: Target, color: "text-chart-4", bg: "bg-chart-4/10" },
-          { label: "Enriquecidos", value: enrichedCount, icon: Sparkles, color: "text-primary", bg: "bg-primary/10" },
-          { label: "Em Comercial", value: convertedCount, icon: Zap, color: "text-success", bg: "bg-success/10" },
+          { label: "Total", value: totalCount, icon: Users, color: "text-primary", bg: "bg-primary/10" },
+          { label: "Prospectados", value: prospectedCount, icon: Target, color: "text-chart-4", bg: "bg-chart-4/10", sub: "nesta página" },
+          { label: "Enriquecidos", value: enrichedCount, icon: Sparkles, color: "text-primary", bg: "bg-primary/10", sub: "nesta página" },
+          { label: "Em Comercial", value: convertedCount, icon: Zap, color: "text-success", bg: "bg-success/10", sub: "nesta página" },
         ].map(m => (
           <div key={m.label} className="glass-card p-5 hover:shadow-card transition-shadow">
             <div className="flex items-center justify-between mb-3">
@@ -412,6 +413,7 @@ export default function Leads() {
             </div>
             <p className="text-sm text-muted-foreground font-medium">{m.label}</p>
             <p className="text-3xl font-bold mt-1 tracking-tight">{m.value}</p>
+            {"sub" in m && m.sub && <p className="text-[10px] text-muted-foreground">{m.sub as string}</p>}
           </div>
         ))}
       </div>
@@ -419,18 +421,18 @@ export default function Leads() {
       {/* Quick Filter Chips */}
       <div className="flex flex-wrap gap-2">
         {[
-          { key: "all", label: "Todos", count: leads.length },
-          { key: "pending", label: "Prospectados", count: prospectedCount },
-          { key: "enriched", label: "Enriquecidos", count: enrichedCount },
-          { key: "converted", label: "Em Comercial", count: convertedCount },
+          { key: "all", label: "Todos" },
+          { key: "pending", label: "Prospectados" },
+          { key: "enriched", label: "Enriquecidos" },
+          { key: "converted", label: "Em Comercial" },
         ].map(f => (
-          <button key={f.key} onClick={() => setQuickFilter(f.key)}
+          <button key={f.key} onClick={() => { setQuickFilter(f.key); setCurrentPage(0); }}
             className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-all ${
               quickFilter === f.key
                 ? "border-primary bg-primary/10 text-primary"
                 : "border-border/50 hover:border-primary/30 text-muted-foreground hover:text-foreground"
             }`}>
-            {f.label} ({f.count})
+            {f.label}{f.key === quickFilter ? ` (${totalCount})` : ""}
           </button>
         ))}
       </div>
@@ -440,9 +442,9 @@ export default function Leads() {
         <div className="relative flex-1">
           <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
           <Input placeholder="Buscar por nome, telefone ou email..." value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)} className="pl-10 rounded-xl bg-secondary/30 border-border/30" />
+            onChange={(e) => handleSearchChange(e.target.value)} className="pl-10 rounded-xl bg-secondary/30 border-border/30" />
         </div>
-        <Select value={statusFilter} onValueChange={setStatusFilter}>
+        <Select value={statusFilter} onValueChange={(v) => { setStatusFilter(v); setCurrentPage(0); }}>
           <SelectTrigger className="w-[150px] rounded-xl bg-secondary/30 border-border/30"><SelectValue placeholder="Status" /></SelectTrigger>
           <SelectContent className="rounded-xl">
             <SelectItem value="all">Todos</SelectItem>
@@ -452,7 +454,7 @@ export default function Leads() {
             <SelectItem value="discarded">Descartado</SelectItem>
           </SelectContent>
         </Select>
-        <Select value={sourceFilter} onValueChange={setSourceFilter}>
+        <Select value={sourceFilter} onValueChange={(v) => { setSourceFilter(v); setCurrentPage(0); }}>
           <SelectTrigger className="w-[130px] rounded-xl bg-secondary/30 border-border/30"><SelectValue placeholder="Fonte" /></SelectTrigger>
           <SelectContent className="rounded-xl">
             <SelectItem value="all">Todas</SelectItem>
@@ -486,14 +488,14 @@ export default function Leads() {
       {/* Table */}
       {loading ? (
         <div className="flex justify-center p-12"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div>
-      ) : filtered.length === 0 ? (
+      ) : leads.length === 0 ? (
         <div className="glass rounded-2xl p-12 text-center">
           <Users className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
           <h3 className="text-lg font-semibold">
-            {leads.length === 0 ? "Nenhum lead capturado ainda" : "Nenhum lead encontrado"}
+            {totalCount === 0 && !debouncedSearch && statusFilter === "all" && sourceFilter === "all" && quickFilter === "all" ? "Nenhum lead capturado ainda" : "Nenhum lead encontrado"}
           </h3>
           <p className="text-sm text-muted-foreground mt-1">
-            {leads.length === 0 ? "Inicie uma prospecção ou adicione leads manualmente." : "Ajuste os filtros aplicados."}
+            {totalCount === 0 && !debouncedSearch && statusFilter === "all" && sourceFilter === "all" && quickFilter === "all" ? "Inicie uma prospecção ou adicione leads manualmente." : "Ajuste os filtros aplicados."}
           </p>
         </div>
       ) : (
@@ -502,7 +504,7 @@ export default function Leads() {
             <TableHeader>
               <TableRow className="border-border/30 hover:bg-transparent">
                 <TableHead className="w-10">
-                  <Checkbox checked={selected.size === filtered.length && filtered.length > 0} onCheckedChange={toggleAll} />
+                  <Checkbox checked={selected.size === leads.length && leads.length > 0} onCheckedChange={toggleAll} />
                 </TableHead>
                 <TableHead className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Nome</TableHead>
                 <TableHead className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Telefone</TableHead>
@@ -513,7 +515,7 @@ export default function Leads() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filtered.map((lead) => (
+              {leads.map((lead) => (
                 <TableRow key={lead.id} className={`border-border/20 transition-colors ${selected.has(lead.id) ? "bg-primary/5" : "hover:bg-secondary/30"}`}>
                   <TableCell><Checkbox checked={selected.has(lead.id)} onCheckedChange={() => toggleSelect(lead.id)} /></TableCell>
                   <TableCell>
@@ -563,6 +565,24 @@ export default function Leads() {
               ))}
             </TableBody>
           </Table>
+          {/* Pagination */}
+          <div className="flex items-center justify-between p-4 border-t border-border/30">
+            <p className="text-xs text-muted-foreground">
+              {totalCount} leads no total — Página {currentPage + 1} de {totalPages}
+            </p>
+            <div className="flex gap-2">
+              <Button variant="outline" size="sm" className="rounded-xl"
+                disabled={currentPage === 0}
+                onClick={() => setCurrentPage(p => p - 1)}>
+                Anterior
+              </Button>
+              <Button variant="outline" size="sm" className="rounded-xl"
+                disabled={(currentPage + 1) * PAGE_SIZE >= totalCount}
+                onClick={() => setCurrentPage(p => p + 1)}>
+                Próxima
+              </Button>
+            </div>
+          </div>
         </div>
       )}
 

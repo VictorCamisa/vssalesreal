@@ -1,110 +1,79 @@
 
 
-## Plano: Paginação server-side e filtros no Supabase — Leads.tsx
+# Reconstrução Completa da Landing Page — VS SALES
 
-### Arquivo: `src/pages/Leads.tsx`
+## Diagnóstico
 
-### 1. Novos estados (adicionar após linha 76)
-```typescript
-const [currentPage, setCurrentPage] = useState(0);
-const [totalCount, setTotalCount] = useState(0);
-const PAGE_SIZE = 50;
+A landing page atual tem uma estrutura funcional, mas apresenta problemas críticos de copywriting, persuasão e design que a enfraquecem como ferramenta de conversão:
+
+1. **Copy genérica** — frases como "Prospecção. Qualificação. Fechamento." não comunicam valor real. Falta dor, urgência e diferenciação.
+2. **Seções repetitivas** — há dois comparativos (seção 2 e seção 5) que dizem quase a mesma coisa.
+3. **Prova social fraca** — um depoimento fictício de "Carlos Mendes" não convence ninguém.
+4. **Números inventados** — "12.400 leads qualificados" e "97% satisfação" sem contexto parecem falsos.
+5. **Falta de seções-chave** — não há: demonstração visual do produto, seção "Para quem é", garantia, ecossistema VS.
+6. **CTA disperso** — muitos CTAs competindo entre si sem hierarquia clara.
+7. **Cor inconsistente** — usa verde (#00FF88) em vários elementos quando a marca é azul.
+
+## Plano de Reconstrução
+
+### Estrutura de seções (nova ordem narrativa)
+
+```text
+1. HERO — Headline de impacto + sub-headline com dor + CTA único forte
+2. BARRA DE CREDIBILIDADE — "Powered by VS Soluções Labs" + tecnologias
+3. O PROBLEMA — 4 cards de dor do gestor comercial (melhor copy)
+4. A SOLUÇÃO — O que é o VS SALES (com mockup/screenshot do dashboard)
+5. COMO FUNCIONA — 6 etapas do pipeline (mantido, refinado)
+6. PARA QUEM É — 3 perfis ideais (Startups, PMEs, Agências)
+7. DIFERENCIAIS — Grid de features com ícones e descrições curtas
+8. COMPARATIVO ÚNICO — Tabela Time Humano vs VS SALES (consolidado)
+9. PLANOS & PREÇOS — Cards dinâmicos do banco (mantido, refinado)
+10. GARANTIA — Seção de confiança ("7 dias grátis" ou "Sem contrato")
+11. FAQ — Perguntas frequentes (mantido, copy melhorada)
+12. CTA FINAL — Urgência + formulário de acesso antecipado
+13. FOOTER — Links + identidade VS Soluções
 ```
 
-### 2. Substituir `fetchLeads` (linhas 83-112)
-Nova versão com query única, filtros server-side, e `count: "exact"`:
+### Mudanças específicas
 
-```typescript
-const fetchLeads = async () => {
-  if (!profile?.org_id) return;
-  setLoading(true);
+**Hero:**
+- Nova headline: "Sua equipe comercial inteira. Só que é IA." com sub "SDR, BDR e Closer autônomos. 24/7. Por R$ 600/mês."
+- Um único CTA principal: "Testar grátis por 7 dias"
+- Remover contadores genéricos do hero, mover para seção de credibilidade
+- Manter ParticleCanvas e animações stagger
 
-  let query = supabase
-    .from("leads_raw")
-    .select("id, name, phone, email, source, status, tags, created_at, enrichment_data", { count: "exact" })
-    .eq("org_id", profile.org_id)
-    .order("created_at", { ascending: false })
-    .range(currentPage * PAGE_SIZE, (currentPage + 1) * PAGE_SIZE - 1);
+**Seção "Para Quem É" (nova):**
+- 3 cards: Startups B2B, PMEs com time enxuto, Agências que revendem
+- Cada card com cenário real de uso
 
-  // Server-side filters
-  if (searchQuery) {
-    query = query.or(`name.ilike.%${searchQuery}%,phone.ilike.%${searchQuery}%,email.ilike.%${searchQuery}%`);
-  }
-  if (statusFilter !== "all") {
-    query = query.eq("status", statusFilter);
-  }
-  if (sourceFilter !== "all") {
-    query = query.eq("source", sourceFilter);
-  }
-  if (quickFilter === "enriched") {
-    query = query.not("enrichment_data", "is", null);
-  } else if (quickFilter === "pending") {
-    query = query.is("enrichment_data", null);
-  } else if (quickFilter === "converted") {
-    query = query.eq("status", "converted");
-  }
+**Diferenciais (nova seção):**
+- Grid 2x3: Prospecção Autônoma, WhatsApp Nativo, CRM Inteligente, IA Treinável, Disparos em Massa, Agendamento Auto
+- Cada item com ícone + 2 linhas de copy
 
-  const { data, count } = await query;
-  setLeads(data || []);
-  setTotalCount(count || 0);
-  setLoading(false);
-};
-```
+**Comparativo consolidado:**
+- Remover o comparativo duplicado da seção "O Problema"
+- Manter apenas a tabela da seção de planos, com visual mais impactante
 
-### 3. Atualizar useEffect (linha 114)
-Adicionar dependências dos filtros e página:
-```typescript
-useEffect(() => { fetchLeads(); }, [profile?.org_id, currentPage, searchQuery, statusFilter, sourceFilter, quickFilter]);
-```
+**Prova social:**
+- Remover depoimento fictício
+- Substituir por métricas reais do sistema (operação 24/7, tempo de setup < 48h, etc.)
 
-### 4. Remover useMemo de filtragem (linhas 121-137)
-Substituir por referência direta — `filtered` vira `leads` (os dados já vêm filtrados do servidor). Adicionar debounce no search para evitar queries a cada tecla.
+**Cores:**
+- Substituir todo #00FF88 (verde) por variações de azul (#00D4FF, #0057FF)
+- Manter verde apenas para indicadores de "positivo" em comparativos
 
-Todas as referências a `filtered` no template passam a usar `leads` diretamente.
+**Seção de Garantia (nova):**
+- "Sem contrato. Sem multa. Cancele quando quiser."
+- Ícones de segurança (Shield, Lock, CheckCircle)
 
-### 5. Handlers de filtro resetam página
-Cada `onChange` de filtro (search, status, source, quickFilter) reseta `currentPage` para 0. Como o useEffect já depende desses estados, o fetch é automático.
+### Arquivos modificados
 
-### 6. Stats cards (linhas 116-119)
-Os contadores por status não podem mais ser calculados client-side (só temos 50 leads). Usar `totalCount` para "Total" e remover contadores individuais por status, ou mostrar apenas o total + contagem da página atual.
+- `src/pages/Landing.tsx` — reescrita completa das seções, copy e estrutura
 
-Alternativa simples: manter os stats mostrando `totalCount` como total, e os outros como "N/A" ou removê-los temporariamente, já que a contagem exata exigiria queries separadas.
+### Copy principles aplicados
 
-**Decisão pragmática**: manter os 4 cards mas mostrar apenas "Total" com `totalCount`. Os outros 3 cards mostram a contagem dos leads da página atual com label "(nesta página)".
-
-### 7. Paginação no rodapé (após linha 566, depois do `</Table>`)
-```tsx
-<div className="flex items-center justify-between p-4 border-t border-border/30">
-  <p className="text-xs text-muted-foreground">
-    {totalCount} leads no total — Página {currentPage + 1} de {Math.max(1, Math.ceil(totalCount / PAGE_SIZE))}
-  </p>
-  <div className="flex gap-2">
-    <Button variant="outline" size="sm" className="rounded-xl"
-      disabled={currentPage === 0}
-      onClick={() => setCurrentPage(p => p - 1)}>
-      Anterior
-    </Button>
-    <Button variant="outline" size="sm" className="rounded-xl"
-      disabled={(currentPage + 1) * PAGE_SIZE >= totalCount}
-      onClick={() => setCurrentPage(p => p + 1)}>
-      Próxima
-    </Button>
-  </div>
-</div>
-```
-
-### 8. Os 7 pontos que chamam `fetchLeads()`
-Mantidos como estão (linhas 163, 178, 211, 228, 259, 332, 357). Cada um agora chama a nova versão que respeita os filtros e página corrente.
-
-### 9. Quick filter chips (linhas 420-436)
-Os counts nos chips não estarão mais disponíveis client-side. Remover os `(count)` dos labels ou mostrar apenas para o filtro ativo usando `totalCount`.
-
-### Resumo das mudanças
-- **fetchLeads**: query única com LIMIT/OFFSET + filtros server-side + `count: "exact"`
-- **useMemo removido**: `filtered` → `leads` em todo o template
-- **useEffect**: depende de `currentPage`, `searchQuery`, `statusFilter`, `sourceFilter`, `quickFilter`
-- **Debounce**: no searchQuery para evitar queries excessivas
-- **Paginação**: controles Anterior/Próxima no rodapé da tabela
-- **Stats e chips**: adaptados para usar `totalCount` em vez de contagem client-side
-- Nenhuma outra lógica alterada
+- **Dor antes da solução** — mostrar o problema real antes de apresentar o produto
+- **Especificidade** — usar números reais (R$ 600/mês, < 48h de setup, 24/7)
+- **Um CTA por fold** — não competir com múltiplos botões
+- **Prova > Promessa** — features concretas ao invés de adjetivos vagos
 
