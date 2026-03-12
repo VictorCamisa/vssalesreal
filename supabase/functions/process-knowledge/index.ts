@@ -7,16 +7,20 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
+// Supabase client
+const supabaseAdmin = createClient(
+  Deno.env.get("SUPABASE_URL")!,
+  Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
+);
+
 function chunkText(text: string, maxChunkSize = 1500, overlap = 200): string[] {
   const chunks: string[] = [];
-  // Split by paragraphs first
   const paragraphs = text.split(/\n\s*\n/);
   let current = "";
 
   for (const para of paragraphs) {
     if ((current + "\n\n" + para).length > maxChunkSize && current.length > 0) {
       chunks.push(current.trim());
-      // Keep overlap from end of current chunk
       const words = current.split(/\s+/);
       const overlapWords = words.slice(-Math.floor(overlap / 5));
       current = overlapWords.join(" ") + "\n\n" + para;
@@ -26,7 +30,6 @@ function chunkText(text: string, maxChunkSize = 1500, overlap = 200): string[] {
   }
   if (current.trim()) chunks.push(current.trim());
 
-  // If no paragraph breaks, chunk by sentences
   if (chunks.length === 1 && chunks[0].length > maxChunkSize) {
     const bigText = chunks[0];
     chunks.length = 0;
@@ -58,7 +61,6 @@ serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
-    // === Auth check ===
     const authHeader = req.headers.get("Authorization");
     if (!authHeader?.startsWith("Bearer ")) {
       return new Response(JSON.stringify({ error: "Unauthorized" }),
@@ -71,7 +73,6 @@ serve(async (req) => {
         { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-    // === Get user org ===
     const { data: profile } = await supabaseAdmin
       .from("profiles").select("org_id").eq("user_id", user.id).single();
     if (!profile?.org_id) {
@@ -82,7 +83,6 @@ serve(async (req) => {
     const { doc_id } = await req.json();
     if (!doc_id) throw new Error("doc_id is required");
 
-    // Fetch the document
     const { data: doc, error: docError } = await supabaseAdmin
       .from("ai_knowledge_docs")
       .select("*")
@@ -91,16 +91,13 @@ serve(async (req) => {
 
     if (docError || !doc) throw new Error("Document not found");
 
-    // === Verify org ownership ===
     if (doc.org_id !== profile.org_id) {
       return new Response(JSON.stringify({ error: "Forbidden" }),
         { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-    // Chunk the document
     const chunks = chunkText(doc.content);
 
-    // Generate keywords and summary via AI
     const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -138,14 +135,12 @@ Regras:
     const aiData = await aiResponse.json();
     const rawContent = aiData.choices?.[0]?.message?.content || "";
 
-    // Parse AI response - handle potential markdown wrapping
     let parsed: { summary: string; keywords: string[] };
     try {
       const cleanJson = rawContent.replace(/```json?\s*/g, "").replace(/```/g, "").trim();
       parsed = JSON.parse(cleanJson);
     } catch {
       console.error("Failed to parse AI response:", rawContent);
-      // Fallback: extract basic keywords from content
       const words = doc.content.toLowerCase().split(/\W+/).filter((w: string) => w.length > 3);
       const freq: Record<string, number> = {};
       words.forEach((w: string) => { freq[w] = (freq[w] || 0) + 1; });
@@ -156,18 +151,15 @@ Regras:
       };
     }
 
-    // Generate per-chunk keywords for more precise retrieval
     const chunksWithMeta = chunks.map((chunk, i) => ({
       index: i,
       text: chunk,
-      // Simple keyword extraction per chunk
       local_keywords: chunk.toLowerCase()
         .split(/\W+/)
         .filter((w: string) => w.length > 3)
         .reduce((acc: Record<string, number>, w: string) => { acc[w] = (acc[w] || 0) + 1; return acc; }, {} as Record<string, number>),
     }));
 
-    // Update the document with processed data
     const { error: updateError } = await supabaseAdmin
       .from("ai_knowledge_docs")
       .update({
@@ -179,6 +171,40 @@ Regras:
       .eq("id", doc_id);
 
     if (updateError) throw updateError;
+
+    // Generate embedding via Google API
+    const GOOGLE_API_KEY = Deno.env.get("GOOGLE_API_KEY");
+    if (GOOGLE_API_KEY) {
+      try {
+        const embeddingResponse = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/text-embedding-004:embedContent?key=${GOOGLE_API_KEY}`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              model: "models/text-embedding-004",
+              content: { parts: [{ text: doc.content.substring(0, 10000) }] },
+            }),
+          }
+        );
+
+        if (embeddingResponse.ok) {
+          const embData = await embeddingResponse.json();
+          const vector = embData?.embedding?.values;
+          if (vector?.length === 768) {
+            await supabaseAdmin
+              .from("ai_knowledge_docs")
+              .update({ embedding: JSON.stringify(vector) } as any)
+              .eq("id", doc_id);
+            console.log("Embedding generated and saved for doc:", doc_id);
+          }
+        } else {
+          console.error("Embedding API error:", embeddingResponse.status, await embeddingResponse.text());
+        }
+      } catch (embErr) {
+        console.error("Embedding generation failed:", embErr);
+      }
+    }
 
     return new Response(
       JSON.stringify({ success: true, chunks_count: chunks.length, keywords_count: parsed.keywords.length }),
