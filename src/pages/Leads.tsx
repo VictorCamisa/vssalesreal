@@ -74,6 +74,21 @@ export default function Leads() {
   const [converting, setConverting] = useState(false);
   const [detailLead, setDetailLead] = useState<Lead | null>(null);
   const [enrichingId, setEnrichingId] = useState<string | null>(null);
+  const [currentPage, setCurrentPage] = useState(0);
+  const [totalCount, setTotalCount] = useState(0);
+  const PAGE_SIZE = 50;
+
+  // Debounce search
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const debounceRef = useRef<ReturnType<typeof setTimeout>>();
+  const handleSearchChange = (value: string) => {
+    setSearchQuery(value);
+    clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      setDebouncedSearch(value);
+      setCurrentPage(0);
+    }, 400);
+  };
 
   // Add lead dialog
   const [addOpen, setAddOpen] = useState(false);
@@ -83,58 +98,44 @@ export default function Leads() {
   const fetchLeads = async () => {
     if (!profile?.org_id) return;
     setLoading(true);
-    
-    // Fetch all leads without limit using pagination
-    let allLeads: Lead[] = [];
-    let from = 0;
-    const pageSize = 1000;
-    let hasMore = true;
-    
-    while (hasMore) {
-      const { data } = await supabase
-        .from("leads_raw")
-        .select("id, name, phone, email, source, status, tags, created_at, enrichment_data")
-        .eq("org_id", profile.org_id)
-        .order("created_at", { ascending: false })
-        .range(from, from + pageSize - 1);
-      
-      if (data && data.length > 0) {
-        allLeads = [...allLeads, ...data];
-        from += pageSize;
-        hasMore = data.length === pageSize;
-      } else {
-        hasMore = false;
-      }
+
+    let query = supabase
+      .from("leads_raw")
+      .select("id, name, phone, email, source, status, tags, created_at, enrichment_data", { count: "exact" })
+      .eq("org_id", profile.org_id)
+      .order("created_at", { ascending: false })
+      .range(currentPage * PAGE_SIZE, (currentPage + 1) * PAGE_SIZE - 1);
+
+    // Server-side filters
+    if (debouncedSearch) {
+      query = query.or(`name.ilike.%${debouncedSearch}%,phone.ilike.%${debouncedSearch}%,email.ilike.%${debouncedSearch}%`);
     }
-    
-    setLeads(allLeads);
+    if (statusFilter !== "all") {
+      query = query.eq("status", statusFilter);
+    }
+    if (sourceFilter !== "all") {
+      query = query.eq("source", sourceFilter);
+    }
+    if (quickFilter === "enriched") {
+      query = query.not("enrichment_data", "is", null);
+    } else if (quickFilter === "pending") {
+      query = query.is("enrichment_data", null);
+    } else if (quickFilter === "converted") {
+      query = query.eq("status", "converted");
+    }
+
+    const { data, count } = await query;
+    setLeads(data || []);
+    setTotalCount(count || 0);
     setLoading(false);
   };
 
-  useEffect(() => { fetchLeads(); }, [profile?.org_id]);
+  useEffect(() => { fetchLeads(); }, [profile?.org_id, currentPage, debouncedSearch, statusFilter, sourceFilter, quickFilter]);
 
   const enrichedCount = leads.filter(l => l.status === "enriched").length;
   const prospectedCount = leads.filter(l => l.status === "pending").length;
   const convertedCount = leads.filter(l => l.status === "converted").length;
-  const conversionRate = leads.length > 0 ? ((convertedCount / leads.length) * 100).toFixed(1) : "0";
-
-  const filtered = useMemo(() => {
-    return leads.filter((l) => {
-      const matchSearch = !searchQuery ||
-        l.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        l.phone?.includes(searchQuery) ||
-        l.email?.toLowerCase().includes(searchQuery.toLowerCase());
-      const matchStatus = statusFilter === "all" || l.status === statusFilter;
-      const matchSource = sourceFilter === "all" || l.source === sourceFilter;
-
-      let matchQuick = true;
-      if (quickFilter === "enriched") matchQuick = l.status === "enriched";
-      else if (quickFilter === "pending") matchQuick = l.status === "pending";
-      else if (quickFilter === "converted") matchQuick = l.status === "converted";
-
-      return matchSearch && matchStatus && matchSource && matchQuick;
-    });
-  }, [leads, searchQuery, statusFilter, sourceFilter, quickFilter]);
+  const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
 
   const toggleSelect = (id: string) => {
     setSelected((prev) => {
