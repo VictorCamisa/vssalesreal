@@ -143,7 +143,7 @@ serve(async (req) => {
       }
 
       const systemPrompt = `Você é um assistente de vendas via WhatsApp.
-${aiConfig.system_prompt || "Seja educado, prestativo e profissional."}
+${scenario.system_prompt || "Seja educado, prestativo e profissional."}
 
 SITUAÇÃO: O lead "${conv.push_name || 'cliente'}" não respondeu há ${Math.round(minutesSince)} minutos.
 Este é o ${stepLabel}.
