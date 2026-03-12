@@ -478,28 +478,47 @@ O lead está respondendo à mensagem enviada pelo disparo. Continue naturalmente
     const systemMsg = conversationMessages.find((m: any) => m.role === "system")?.content || "";
     const nonSystemMessages = conversationMessages.filter((m: any) => m.role !== "system");
 
-    const aiResponse = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "x-api-key": ANTHROPIC_API_KEY,
-        "anthropic-version": "2023-06-01",
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "claude-haiku-3-5-20251001",
-        system: systemMsg,
-        messages: nonSystemMessages,
-        max_tokens: 1024,
-        temperature,
-      }),
-    });
+    const ANTHROPIC_MODELS = [
+      "claude-3-5-haiku-20241022",
+      "claude-3-5-haiku-latest",
+      "claude-3-haiku-20240307",
+    ];
 
-    if (!aiResponse.ok) {
-      console.error("AI error:", aiResponse.status, await aiResponse.text());
+    let aiData: any = null;
+    for (const model of ANTHROPIC_MODELS) {
+      try {
+        const aiResponse = await fetch("https://api.anthropic.com/v1/messages", {
+          method: "POST",
+          headers: {
+            "x-api-key": ANTHROPIC_API_KEY,
+            "anthropic-version": "2023-06-01",
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            model,
+            system: systemMsg,
+            messages: nonSystemMessages,
+            max_tokens: 1024,
+            temperature,
+          }),
+        });
+
+        if (aiResponse.ok) {
+          aiData = await aiResponse.json();
+          console.log(`AI model ${model} succeeded`);
+          break;
+        }
+        console.warn(`AI model ${model} failed: ${aiResponse.status}`);
+      } catch (err) {
+        console.warn(`AI model ${model} error: ${err.message}`);
+      }
+    }
+
+    if (!aiData) {
+      console.error("AI error: All Anthropic models failed.");
       return new Response(JSON.stringify({ error: "AI failed" }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-    const aiData = await aiResponse.json();
     let reply = aiData.content?.[0]?.text || "";
     if (!reply) {
       return new Response(JSON.stringify({ error: "Empty AI response" }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
