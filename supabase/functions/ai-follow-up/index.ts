@@ -21,12 +21,12 @@ serve(async (req) => {
 
     // Find all conversations that need follow-up:
     // - Not paused (lead hasn't replied since last follow-up)
-    // - Has an ai_config_id linked
+    // - Has a scenario_key linked
     const { data: conversations, error: convErr } = await supabaseAdmin
       .from("conversation_tracker")
       .select("*")
       .eq("follow_up_paused", false)
-      .not("ai_config_id", "is", null);
+      .not("scenario_key", "is", null);
 
     if (convErr) {
       console.error("Error fetching conversations:", convErr);
