@@ -117,11 +117,11 @@ export default function Leads() {
       query = query.eq("source", sourceFilter as any);
     }
     if (quickFilter === "enriched") {
-      query = query.not("enrichment_data", "is", null);
+      query = query.eq("status", "enriched" as any);
     } else if (quickFilter === "pending") {
-      query = query.is("enrichment_data", null);
+      query = query.eq("status", "pending" as any);
     } else if (quickFilter === "converted") {
-      query = query.eq("status", "converted");
+      query = query.eq("status", "converted" as any);
     }
 
     const { data, count } = await query;
