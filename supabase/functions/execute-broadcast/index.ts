@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { isInCooldown, registerContact } from "../_shared/contact-cooldown.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
