@@ -154,8 +154,8 @@ export function AgentSimulator({ orgId }: { orgId: string }) {
   const [profile, setProfile] = useState<LeadProfile>(DEFAULT_PROFILE);
   const [showProfile, setShowProfile] = useState(true);
   const [displayBlocks, setDisplayBlocks] = useState<{ role: string; blocks: BlockMessage[] }[]>([]);
-  const [selectedAgent, setSelectedAgent] = useState<string>(""); // ai_config_id
-  const [agents, setAgents] = useState<{ id: string; role: string; instance: string }[]>([]);
+  const [selectedAgent, setSelectedAgent] = useState<string>(""); // scenario_key
+  const [agents, setAgents] = useState<{ scenario_key: string; name: string }[]>([]);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const SIMULATE_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/simulate-seller`;
