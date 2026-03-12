@@ -211,12 +211,10 @@ ${!useEmoji ? "- NUNCA use emojis. ZERO emojis." : ""}
     ].filter(Boolean).join("\n");
 
     let anthropicModels = [
-      "claude-haiku-3-5-20251001",
       "claude-3-5-haiku-20241022",
       "claude-3-5-haiku-latest",
       "claude-3-haiku-20240307",
       "claude-3-sonnet-20240229",
-      "claude-3-opus-20240229",
     ];
 
     if (broadcast.ai_enabled && ANTHROPIC_API_KEY) {
