@@ -180,7 +180,7 @@ REGRAS:
               { role: "user", content: `Gere a mensagem de follow-up #${nextStep} para ${conv.push_name || "o lead"}.` },
             ],
             max_tokens: 1024,
-            temperature: scenario.temperature ? Number(scenario.temperature) : 0.7,
+            temperature: Math.max(0.2, Math.min(Number(scenario.temperature) ?? 0.35, 0.45)),
           }),
         });
 

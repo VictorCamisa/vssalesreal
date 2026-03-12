@@ -487,7 +487,7 @@ ${!useEmoji ? "- ZERO EMOJIS. Remova qualquer emoji antes de enviar." : ""}
     const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY");
     if (!ANTHROPIC_API_KEY) throw new Error("ANTHROPIC_API_KEY not configured");
 
-    const temperature = Number(scenario.temperature) || 0.7;
+    const temperature = Math.max(0.2, Math.min(Number(scenario.temperature) ?? 0.3, 0.45));
 
     // Extract system message from conversation
     const systemMsg = conversationMessages.find((m: any) => m.role === "system")?.content || "";
