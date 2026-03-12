@@ -127,7 +127,7 @@ const VIEW_TABS = [
   { key: "cs", label: "CS", icon: Headphones, stageFilter: "cs", description: "Sucesso do cliente" },
 ];
 
-type Stage = { id: string; name: string; stage_order: number };
+type Stage = { id: string; name: string; stage_order: number; stage_key: string | null };
 type Opportunity = {
   id: string;
   stage_id: string;
@@ -287,7 +287,7 @@ export default function CRM() {
     if (!profile?.org_id) return;
     setLoading(true);
     const [stagesRes, oppsRes] = await Promise.all([
-      supabase.from("crm_stages").select("id, name, stage_order").eq("org_id", profile.org_id).order("stage_order"),
+      supabase.from("crm_stages").select("id, name, stage_order, stage_key").eq("org_id", profile.org_id).order("stage_order"),
       supabase.from("opportunities").select("id, stage_id, value, probability, notes, automation_status, personalized_message, message_sent_at, lead_id, lead:leads_raw(name, phone, email, enrichment_data)").eq("org_id", profile.org_id),
     ]);
 
@@ -296,7 +296,7 @@ export default function CRM() {
       const stagesToInsert = PIPELINE_STAGES.map((s, i) => ({
         org_id: profile.org_id!, name: s.name, stage_order: i,
       }));
-      const { data: newStages } = await supabase.from("crm_stages").insert(stagesToInsert).select("id, name, stage_order").order("stage_order");
+      const { data: newStages } = await supabase.from("crm_stages").insert(stagesToInsert).select("id, name, stage_order, stage_key").order("stage_order");
       currentStages = newStages ?? [];
     }
 
@@ -315,8 +315,7 @@ export default function CRM() {
   const stageMap = useMemo(() => {
     const map = new Map<string, typeof PIPELINE_STAGES[0]>();
     stages.forEach((s) => {
-      const normalized = s.name.trim().toLowerCase();
-      const def = PIPELINE_STAGES.find(p => p.name.toLowerCase() === normalized);
+      const def = PIPELINE_STAGES.find(p => p.key === s.stage_key);
       if (def) map.set(s.id, def);
     });
     return map;

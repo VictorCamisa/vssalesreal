@@ -6,18 +6,6 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-const PIPELINE_STAGES = [
-  { key: "lead", name: "Lead", order: 0 },
-  { key: "enriched", name: "Enriquecidas", order: 1 },
-  { key: "contacted", name: "Contato Feito", order: 2 },
-  { key: "prospecting", name: "Em Prospecção", order: 3 },
-  { key: "qualified", name: "Qualificado", order: 4 },
-  { key: "scheduled", name: "Agendado", order: 5 },
-  { key: "proposal", name: "Reunião / Proposta", order: 6 },
-  { key: "won", name: "Ganho", order: 7 },
-  { key: "lost", name: "Perdido", order: 8 },
-];
-
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
@@ -43,47 +31,19 @@ Deno.serve(async (req) => {
       // Get CRM stages for this org
       const { data: stages } = await supabase
         .from("crm_stages")
-        .select("id, name, stage_order")
+        .select("id, name, stage_order, stage_key")
         .eq("org_id", orgId)
         .order("stage_order");
 
       if (!stages?.length) continue;
 
-      // Build stage lookup by normalized name
-      const stageByName = new Map<string, { id: string; name: string; order: number }>();
+      // Build stage lookup by stage_key (source of truth)
+      const stageByKey = new Map<string, string>();
       for (const s of stages) {
-        const normalized = s.name.trim().toLowerCase();
-        stageByName.set(normalized, { id: s.id, name: s.name, order: s.stage_order });
+        if (s.stage_key) stageByKey.set(s.stage_key, s.id);
       }
 
-      // Flexible stage matching — supports different naming conventions
-      const STAGE_ALIASES: Record<string, string[]> = {
-        lead: ["lead", "novo lead", "novo", "new lead", "new"],
-        enriched: ["enriquecidas", "enriquecida", "enriched", "enriquecido"],
-        contacted: ["contato feito", "contatado", "contacted", "contact made"],
-        prospecting: ["em prospecção", "prospecção", "prospecting", "qualificação"],
-        qualified: ["qualificado", "qualified"],
-        scheduled: ["agendado", "scheduled", "agendamento"],
-        proposal: ["reunião / proposta", "reunião/proposta", "proposta", "proposal", "negociação"],
-        won: ["ganho", "won", "fechado", "fechamento"],
-        lost: ["perdido", "lost"],
-      };
-
-      const findStageId = (key: string): string | null => {
-        const aliases = STAGE_ALIASES[key] || [];
-        for (const alias of aliases) {
-          const found = stageByName.get(alias);
-          if (found) return found.id;
-        }
-        // Fallback: try to match by order position
-        const def = PIPELINE_STAGES.find(p => p.key === key);
-        if (def) {
-          for (const [, stage] of stageByName) {
-            if (stage.order === def.order) return stage.id;
-          }
-        }
-        return null;
-      };
+      const findStageId = (key: string): string | null => stageByKey.get(key) || null;
 
       const leadStageId = findStageId("lead");
       const enrichedStageId = findStageId("enriched");
