@@ -379,7 +379,7 @@ export default function Leads() {
        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Leads</h1>
-          <p className="text-sm text-muted-foreground mt-1">Triagem e qualificação — {leads.length} leads</p>
+          <p className="text-sm text-muted-foreground mt-1">Triagem e qualificação — {totalCount} leads</p>
         </div>
         <div className="flex items-center gap-2">
           <label className="cursor-pointer">
