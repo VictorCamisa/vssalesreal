@@ -286,53 +286,52 @@ O lead está respondendo à mensagem enviada pelo disparo. Continue naturalmente
       companyContext = `\n\n--- EMPRESA ---\n${parts.join("\n")}\n--- FIM ---`;
     }
 
-    // ---- Smart knowledge retrieval ----
-    const queryWords = messageText.toLowerCase().split(/\W+/).filter((w: string) => w.length > 3);
-    const { data: kbDocs } = await supabaseAdmin
-      .from("ai_knowledge_docs")
-      .select("title, content, summary, keywords, chunks, processed")
-      .eq("org_id", orgId);
-
+    // ---- Semantic knowledge retrieval (RAG) ----
     let knowledgeContext = "";
-    if (kbDocs?.length) {
-      const scoredDocs = kbDocs.map((doc: any) => {
-        let score = 0;
-        if (doc.processed && doc.keywords?.length) {
-          for (const kw of doc.keywords) {
-            if (queryWords.some((qw: string) => kw.includes(qw) || qw.includes(kw))) score += 2;
+    try {
+      const GOOGLE_API_KEY = Deno.env.get("GOOGLE_API_KEY");
+      if (GOOGLE_API_KEY) {
+        const embResponse = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-001:embedContent?key=${GOOGLE_API_KEY}`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              model: "models/gemini-embedding-001",
+              content: { parts: [{ text: messageText }] },
+              outputDimensionality: 768,
+            }),
           }
-          const titleWords = doc.title.toLowerCase().split(/\W+/);
-          for (const tw of titleWords) {
-            if (queryWords.some((qw: string) => tw.includes(qw) || qw.includes(tw))) score += 3;
+        );
+
+        if (embResponse.ok) {
+          const embData = await embResponse.json();
+          const queryVector = embData?.embedding?.values;
+
+          if (queryVector?.length === 768) {
+            const { data: knowledgeDocs } = await supabaseAdmin.rpc(
+              "match_knowledge_docs",
+              {
+                query_embedding: JSON.stringify(queryVector),
+                match_org_id: orgId,
+                match_threshold: 0.5,
+                match_count: 5,
+              }
+            );
+
+            if (knowledgeDocs?.length) {
+              const contextParts = knowledgeDocs.map(
+                (doc: any) => `## ${doc.title}\n${doc.content.substring(0, 1500)}`
+              );
+              knowledgeContext = `\n\n--- BASE DE CONHECIMENTO ---\n${contextParts.join("\n\n")}\n--- FIM ---`;
+            }
           }
-        } else { score = 1; }
-        return { ...doc, score };
-      });
-      scoredDocs.sort((a: any, b: any) => b.score - a.score);
-      const relevantDocs = scoredDocs.filter((d: any) => d.score > 0).slice(0, 3);
-      const contextParts: string[] = [];
-      for (const doc of relevantDocs) {
-        if (doc.processed && doc.chunks?.length) {
-          const scoredChunks = doc.chunks.map((chunk: any) => {
-            let cs = 0;
-            const ct = (chunk.text || "").toLowerCase();
-            for (const qw of queryWords) { if (ct.includes(qw)) cs++; }
-            return { ...chunk, cs };
-          });
-          scoredChunks.sort((a: any, b: any) => b.cs - a.cs);
-          contextParts.push(`## ${doc.title}\n${scoredChunks.slice(0, 2).map((c: any) => c.text).join("\n\n")}`);
         } else {
-          contextParts.push(`## ${doc.title}\n${doc.content.substring(0, 1500)}`);
+          console.error("Embedding API error:", embResponse.status);
         }
       }
-      if (relevantDocs.length === 0 && kbDocs.length > 0) {
-        for (const doc of kbDocs.slice(0, 5)) {
-          contextParts.push(`## ${(doc as any).title}\n${(doc as any).summary || (doc as any).content.substring(0, 400)}`);
-        }
-      }
-      if (contextParts.length > 0) {
-        knowledgeContext = `\n\n--- BASE DE CONHECIMENTO ---\n${contextParts.join("\n\n")}\n--- FIM ---`;
-      }
+    } catch (ragErr) {
+      console.error("RAG retrieval failed:", ragErr);
     }
 
     // ---- Handoff keyword check ----
