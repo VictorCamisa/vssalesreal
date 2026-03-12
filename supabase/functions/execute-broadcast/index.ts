@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { isInCooldown, registerContact } from "../_shared/contact-cooldown.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -289,6 +290,15 @@ ${!useEmoji ? "- NUNCA use emojis. ZERO emojis." : ""}
         continue;
       }
 
+      // Cooldown check
+      const cleanPhoneForCooldown = lead.phone.replace(/\D/g, "");
+      if (await isInCooldown(supabase, cleanPhoneForCooldown, org_id)) {
+        await supabase.from("broadcast_leads").update({
+          status: "skipped", error_message: "Em cooldown",
+        }).eq("id", bl.id);
+        continue;
+      }
+
       // Generate or use template message
       let messageText = broadcast.message_template || "";
       if (messageText) {
@@ -390,6 +400,7 @@ ${!useEmoji ? "- NUNCA use emojis. ZERO emojis." : ""}
             }).eq("id", existingConv.id);
           }
 
+          await registerContact(supabase, cleanPhone, org_id, 24);
           sentCount++;
         } else {
           await supabase.from("broadcast_leads").update({

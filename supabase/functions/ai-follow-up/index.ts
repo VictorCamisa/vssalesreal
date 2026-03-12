@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { isInCooldown, registerContact } from "../_shared/contact-cooldown.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": Deno.env.get("ALLOWED_ORIGIN") || "https://vssalesreal.lovable.app",
@@ -117,6 +118,13 @@ serve(async (req) => {
         continue;
       }
 
+      // Cooldown check
+      const phone = conv.remote_jid.replace("@s.whatsapp.net", "");
+      if (await isInCooldown(supabaseAdmin, phone, conv.org_id)) {
+        console.log(`Skipping follow-up for ${phone}: in cooldown`);
+        continue;
+      }
+
       if (!evolutionUrl || !evolutionKey) {
         console.error(`Evolution API not configured`);
         continue;
@@ -195,7 +203,6 @@ REGRAS:
         if (!reply) continue;
 
         // Send via Evolution API — split into blocks for human-like delivery
-        const phone = conv.remote_jid.replace("@s.whatsapp.net", "");
         const blocks = reply.split(/---BLOCO---/i).map((b: string) => b.trim()).filter((b: string) => b.length > 0);
         const messageParts = blocks.length > 0 ? blocks : [reply];
 
@@ -239,6 +246,7 @@ REGRAS:
           })
           .eq("id", conv.id);
 
+        await registerContact(supabaseAdmin, phone, conv.org_id, 24);
         processed++;
         results.push({ conv_id: conv.id, status: "sent", step: nextStep, phone });
         console.log(`Follow-up #${nextStep} sent to ${phone} on instance ${conv.instance_name}`);

@@ -1,91 +1,79 @@
 
 
-# Plano: Integrar Cooldown nos 3 Edge Functions de Envio
+# Reconstrução Completa da Landing Page — VS SALES
 
-## Arquivos a criar/editar
+## Diagnóstico
 
-| Arquivo | Ação |
-|---------|------|
-| `supabase/functions/_shared/contact-cooldown.ts` | **Criar** — `isInCooldown` + `registerContact` |
-| `supabase/functions/execute-broadcast/index.ts` | Editar — check + register + skip |
-| `supabase/functions/ai-follow-up/index.ts` | Editar — check + register |
-| `supabase/functions/ai-whatsapp-hook/index.ts` | Editar — register only (não bloqueia inbound) |
+A landing page atual tem uma estrutura funcional, mas apresenta problemas críticos de copywriting, persuasão e design que a enfraquecem como ferramenta de conversão:
 
----
+1. **Copy genérica** — frases como "Prospecção. Qualificação. Fechamento." não comunicam valor real. Falta dor, urgência e diferenciação.
+2. **Seções repetitivas** — há dois comparativos (seção 2 e seção 5) que dizem quase a mesma coisa.
+3. **Prova social fraca** — um depoimento fictício de "Carlos Mendes" não convence ninguém.
+4. **Números inventados** — "12.400 leads qualificados" e "97% satisfação" sem contexto parecem falsos.
+5. **Falta de seções-chave** — não há: demonstração visual do produto, seção "Para quem é", garantia, ecossistema VS.
+6. **CTA disperso** — muitos CTAs competindo entre si sem hierarquia clara.
+7. **Cor inconsistente** — usa verde (#00FF88) em vários elementos quando a marca é azul.
 
-## 1. Criar `_shared/contact-cooldown.ts`
+## Plano de Reconstrução
 
-Exatamente como especificado — duas funções puras:
-- `isInCooldown(supabase, phone, orgId)` → `boolean`
-- `registerContact(supabase, phone, orgId, cooldownHours=24)` → `void` (upsert)
+### Estrutura de seções (nova ordem narrativa)
 
----
-
-## 2. `execute-broadcast/index.ts`
-
-**Importar** no topo:
-```typescript
-import { isInCooldown, registerContact } from "../_shared/contact-cooldown.ts";
+```text
+1. HERO — Headline de impacto + sub-headline com dor + CTA único forte
+2. BARRA DE CREDIBILIDADE — "Powered by VS Soluções Labs" + tecnologias
+3. O PROBLEMA — 4 cards de dor do gestor comercial (melhor copy)
+4. A SOLUÇÃO — O que é o VS SALES (com mockup/screenshot do dashboard)
+5. COMO FUNCIONA — 6 etapas do pipeline (mantido, refinado)
+6. PARA QUEM É — 3 perfis ideais (Startups, PMEs, Agências)
+7. DIFERENCIAIS — Grid de features com ícones e descrições curtas
+8. COMPARATIVO ÚNICO — Tabela Time Humano vs VS SALES (consolidado)
+9. PLANOS & PREÇOS — Cards dinâmicos do banco (mantido, refinado)
+10. GARANTIA — Seção de confiança ("7 dias grátis" ou "Sem contrato")
+11. FAQ — Perguntas frequentes (mantido, copy melhorada)
+12. CTA FINAL — Urgência + formulário de acesso antecipado
+13. FOOTER — Links + identidade VS Soluções
 ```
 
-**Antes do envio** (linha ~284, após check de `!lead?.phone`):
-```typescript
-const cleanPhone = lead.phone.replace(/\D/g, "");
-if (await isInCooldown(supabase, cleanPhone, org_id)) {
-  await supabase.from("broadcast_leads").update({
-    status: "skipped", error_message: "Em cooldown",
-  }).eq("id", bl.id);
-  continue;
-}
-```
+### Mudanças específicas
 
-**Após envio bem-sucedido** (linha ~393, depois do upsert conversation_tracker):
-```typescript
-await registerContact(supabase, cleanPhone, org_id, 24);
-```
+**Hero:**
+- Nova headline: "Sua equipe comercial inteira. Só que é IA." com sub "SDR, BDR e Closer autônomos. 24/7. Por R$ 600/mês."
+- Um único CTA principal: "Testar grátis por 7 dias"
+- Remover contadores genéricos do hero, mover para seção de credibilidade
+- Manter ParticleCanvas e animações stagger
 
----
+**Seção "Para Quem É" (nova):**
+- 3 cards: Startups B2B, PMEs com time enxuto, Agências que revendem
+- Cada card com cenário real de uso
 
-## 3. `ai-follow-up/index.ts`
+**Diferenciais (nova seção):**
+- Grid 2x3: Prospecção Autônoma, WhatsApp Nativo, CRM Inteligente, IA Treinável, Disparos em Massa, Agendamento Auto
+- Cada item com ícone + 2 linhas de copy
 
-**Importar** no topo.
+**Comparativo consolidado:**
+- Remover o comparativo duplicado da seção "O Problema"
+- Manter apenas a tabela da seção de planos, com visual mais impactante
 
-**Antes de enviar** (linha ~120, após check de `minutesSince < rule.delay_minutes`):
-```typescript
-const phone = conv.remote_jid.replace("@s.whatsapp.net", "");
-if (await isInCooldown(supabaseAdmin, phone, conv.org_id)) {
-  console.log(`Skipping follow-up for ${phone}: in cooldown`);
-  continue;
-}
-```
+**Prova social:**
+- Remover depoimento fictício
+- Substituir por métricas reais do sistema (operação 24/7, tempo de setup < 48h, etc.)
 
-Nota: a variável `phone` já é declarada na linha 198. Movo a declaração para antes do check de cooldown.
+**Cores:**
+- Substituir todo #00FF88 (verde) por variações de azul (#00D4FF, #0057FF)
+- Manter verde apenas para indicadores de "positivo" em comparativos
 
-**Após envio bem-sucedido** (linha ~243, depois do update conversation_tracker):
-```typescript
-await registerContact(supabaseAdmin, phone, conv.org_id, 24);
-```
+**Seção de Garantia (nova):**
+- "Sem contrato. Sem multa. Cancele quando quiser."
+- Ícones de segurança (Shield, Lock, CheckCircle)
 
----
+### Arquivos modificados
 
-## 4. `ai-whatsapp-hook/index.ts`
+- `src/pages/Landing.tsx` — reescrita completa das seções, copy e estrutura
 
-**Importar** no topo.
+### Copy principles aplicados
 
-**Apenas registrar** — não bloquear respostas inbound.
-
-**Após envio bem-sucedido** (linha ~668, dentro do `if (sendSuccess)`):
-```typescript
-await registerContact(supabaseAdmin, phone, orgId!, 24);
-```
-
-A variável `phone` já existe na linha 80.
-
----
-
-## O que NÃO muda
-
-- Nenhuma outra lógica dos 3 arquivos
-- Nenhuma tabela ou migration
-- Nenhum arquivo frontend
+- **Dor antes da solução** — mostrar o problema real antes de apresentar o produto
+- **Especificidade** — usar números reais (R$ 600/mês, < 48h de setup, 24/7)
+- **Um CTA por fold** — não competir com múltiplos botões
+- **Prova > Promessa** — features concretas ao invés de adjetivos vagos
 
