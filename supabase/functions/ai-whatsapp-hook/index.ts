@@ -423,7 +423,7 @@ ${!useEmoji ? "- ZERO EMOJIS. Remova qualquer emoji antes de enviar." : ""}
     // Context size control
     const MAX_SYSTEM_PROMPT_CHARS = 6000;
     const coreParts = antiHallucinationPrefix + scenario.system_prompt + "\n" + behaviorRules + broadcastContext;
-    const suffixParts = antiRepetitionReminder + antiInjectionGuard;
+    const suffixParts = antiInjectionGuard;
     const coreSize = coreParts.length + suffixParts.length;
     const originalSize = coreSize + companyContext.length + knowledgeContext.length;
 
