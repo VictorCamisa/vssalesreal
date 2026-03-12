@@ -154,8 +154,8 @@ export function AgentSimulator({ orgId }: { orgId: string }) {
   const [profile, setProfile] = useState<LeadProfile>(DEFAULT_PROFILE);
   const [showProfile, setShowProfile] = useState(true);
   const [displayBlocks, setDisplayBlocks] = useState<{ role: string; blocks: BlockMessage[] }[]>([]);
-  const [selectedAgent, setSelectedAgent] = useState<string>(""); // ai_config_id
-  const [agents, setAgents] = useState<{ id: string; role: string; instance: string }[]>([]);
+  const [selectedAgent, setSelectedAgent] = useState<string>(""); // scenario_key
+  const [agents, setAgents] = useState<{ scenario_key: string; name: string }[]>([]);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const SIMULATE_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/simulate-seller`;
@@ -163,18 +163,17 @@ export function AgentSimulator({ orgId }: { orgId: string }) {
   // Load available agents
   useEffect(() => {
     supabase
-      .from("ai_configs")
-      .select("id, config, instance_name")
+      .from("ai_scenarios")
+      .select("scenario_key, name")
       .eq("org_id", orgId)
-      .eq("config_type", "chatbot")
+      .eq("enabled", true)
       .then(({ data }) => {
         const agentList = (data || []).map((a: any) => ({
-          id: a.id,
-          role: a.config?.agent_role || "Chatbot",
-          instance: a.instance_name || "—",
+          scenario_key: a.scenario_key,
+          name: a.name,
         }));
         setAgents(agentList);
-        if (agentList.length > 0 && !selectedAgent) setSelectedAgent(agentList[0].id);
+        if (agentList.length > 0 && !selectedAgent) setSelectedAgent(agentList[0].scenario_key);
       });
   }, [orgId]);
 
@@ -249,7 +248,7 @@ Mensagem do lead: ${msg}`;
 
     await streamSimulation(
       SIMULATE_URL,
-      { messages: finalMsgs, ai_config_id: selectedAgent },
+      { messages: finalMsgs, scenario_key: selectedAgent },
       (full) => {
         fullReply = full;
         // Update streaming in messages
@@ -314,8 +313,8 @@ Mensagem do lead: ${msg}`;
             </SelectTrigger>
             <SelectContent>
               {agents.map(a => (
-                <SelectItem key={a.id} value={a.id}>
-                  {a.role} — {a.instance}
+                <SelectItem key={a.scenario_key} value={a.scenario_key}>
+                  {a.name}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -434,7 +433,7 @@ Mensagem do lead: ${msg}`;
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-sm font-semibold">
-              {agents.find(a => a.id === selectedAgent)?.role || "Agente IA"}
+              {agents.find(a => a.scenario_key === selectedAgent)?.name || "Agente IA"}
             </p>
             <p className="text-[10px] text-muted-foreground">
               {isLoading ? "digitando..." : "online"}
