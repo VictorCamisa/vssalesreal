@@ -364,7 +364,7 @@ export default function Leads() {
 
   const exportCSV = () => {
     const rows = [["Nome", "Telefone", "Email", "Fonte", "Status"]];
-    filtered.forEach((l) => rows.push([l.name || "", l.phone || "", l.email || "", sourceLabels[l.source] || l.source, statusLabels[l.status] || l.status]));
+    leads.forEach((l) => rows.push([l.name || "", l.phone || "", l.email || "", sourceLabels[l.source] || l.source, statusLabels[l.status] || l.status]));
     const csv = rows.map((r) => r.map((v) => `"${v.replace(/"/g, '""')}"`).join(",")).join("\n");
     const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
