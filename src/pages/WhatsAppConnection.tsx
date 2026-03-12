@@ -1,11 +1,7 @@
-import { useState, useEffect, useCallback } from "react";
-import { useAuth } from "@/contexts/AuthContext";
-import { supabase } from "@/integrations/supabase/client";
-import { useToast } from "@/hooks/use-toast";
-import { logActivity } from "@/lib/activityLogger";
+import { useState } from "react";
 import {
   Smartphone, QrCode, Wifi, WifiOff, Loader2, Plus, Trash2,
-  RefreshCw, CheckCircle2, AlertCircle, MessageCircle
+  RefreshCw, CheckCircle2, MessageCircle
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -14,129 +10,16 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
 import WhatsAppChatViewer from "@/components/whatsapp/WhatsAppChatViewer";
-
-type EvolutionInstance = {
-  name: string;
-  state: string;
-  owner: string | null;
-};
+import { useEvolutionInstances } from "@/hooks/useEvolutionInstances";
 
 export default function WhatsAppConnection() {
-  const { profile } = useAuth();
-  const { toast } = useToast();
+  const {
+    instances, instancesLoading, newInstanceName, setNewInstanceName,
+    creatingInstance, createInstance, deleteInstance, getQRCode, fetchInstances,
+    qrDialogOpen, setQrDialogOpen, qrCode, qrLoading, qrInstanceName, connectionStatus,
+  } = useEvolutionInstances();
 
-  const [instances, setInstances] = useState<EvolutionInstance[]>([]);
-  const [instancesLoading, setInstancesLoading] = useState(false);
   const [chatViewerInstance, setChatViewerInstance] = useState<string | null>(null);
-  const [newInstanceName, setNewInstanceName] = useState("");
-  const [creatingInstance, setCreatingInstance] = useState(false);
-  const [qrDialogOpen, setQrDialogOpen] = useState(false);
-  const [qrCode, setQrCode] = useState("");
-  const [qrLoading, setQrLoading] = useState(false);
-  const [qrInstanceName, setQrInstanceName] = useState("");
-  const [connectionStatus, setConnectionStatus] = useState<"waiting" | "connected" | "error">("waiting");
-
-  const fetchInstances = useCallback(async () => {
-    if (!profile?.org_id) return;
-    setInstancesLoading(true);
-    try {
-      const { data, error } = await supabase.functions.invoke("manage-evolution", {
-        body: { action: "list", org_id: profile.org_id },
-      });
-      if (error) throw error;
-      setInstances(data?.instances || []);
-    } catch { /* silently fail */ }
-    finally { setInstancesLoading(false); }
-  }, [profile?.org_id]);
-
-  useEffect(() => { fetchInstances(); }, [fetchInstances]);
-
-  const handleCreateInstance = async () => {
-    if (!profile?.org_id || !newInstanceName.trim()) return;
-    setCreatingInstance(true);
-    // Sanitize: remove spaces and special chars for Evolution API compatibility
-    const sanitizedName = newInstanceName.trim().replace(/[^a-zA-Z0-9_-]/g, "_").replace(/_+/g, "_").replace(/^_|_$/g, "");
-    if (!sanitizedName) {
-      toast({ title: "Nome inválido", description: "Use letras, números, - ou _", variant: "destructive" });
-      setCreatingInstance(false);
-      return;
-    }
-    try {
-      const { data, error } = await supabase.functions.invoke("manage-evolution", {
-        body: { action: "create", org_id: profile.org_id, instance_name: sanitizedName },
-      });
-      if (error) throw error;
-      toast({ title: "Instância criada!", description: `${newInstanceName} pronta para conexão.` });
-      logActivity({ action: "whatsapp_instancia_criada", description: `Instância "${newInstanceName}" criada` });
-      if (data?.qrcode?.base64 || data?.qrcode) {
-        const qr = typeof data.qrcode === "string" ? data.qrcode : data.qrcode.base64;
-        if (qr) { setQrCode(qr); setQrInstanceName(newInstanceName.trim()); setConnectionStatus("waiting"); setQrDialogOpen(true); }
-      }
-      setNewInstanceName("");
-      await fetchInstances();
-    } catch (error: any) {
-      toast({ title: "Erro ao criar instância", description: error.message, variant: "destructive" });
-      logActivity({ action: "whatsapp_instancia_criada", description: `Falha ao criar instância "${newInstanceName}"`, success: false, errorMessage: error.message });
-    } finally { setCreatingInstance(false); }
-  };
-
-  const handleGetQR = async (instanceName: string) => {
-    if (!profile?.org_id) return;
-    setQrLoading(true); setQrInstanceName(instanceName); setQrDialogOpen(true); setQrCode(""); setConnectionStatus("waiting");
-    try {
-      const { data, error } = await supabase.functions.invoke("manage-evolution", {
-        body: { action: "qrcode", org_id: profile.org_id, instance_name: instanceName },
-      });
-      if (error) throw error;
-      setQrCode(data?.qrcode || "");
-    } catch (error: any) {
-      toast({ title: "Erro ao obter QR Code", description: error.message, variant: "destructive" });
-      setQrDialogOpen(false);
-    } finally { setQrLoading(false); }
-  };
-
-  const handleDeleteInstance = async (instanceName: string) => {
-    if (!profile?.org_id) return;
-    try {
-      const { error } = await supabase.functions.invoke("manage-evolution", {
-        body: { action: "delete", org_id: profile.org_id, instance_name: instanceName },
-      });
-      if (error) throw error;
-      toast({ title: "Instância removida" });
-      await fetchInstances();
-    } catch (error: any) {
-      toast({ title: "Erro", description: error.message, variant: "destructive" });
-    }
-  };
-
-  // Poll status while QR dialog is open
-  useEffect(() => {
-    if (!qrDialogOpen || !qrInstanceName || !profile?.org_id) return;
-    let qrRefreshCount = 0;
-    const statusInterval = setInterval(async () => {
-      try {
-        const { data } = await supabase.functions.invoke("manage-evolution", {
-          body: { action: "status", org_id: profile.org_id, instance_name: qrInstanceName },
-        });
-        if (data?.state === "open") {
-          setConnectionStatus("connected");
-          toast({ title: "✅ WhatsApp conectado!", description: `Instância ${qrInstanceName} online.` });
-          logActivity({ action: "whatsapp_conectado", description: `WhatsApp conectado na instância "${qrInstanceName}"` });
-          setTimeout(() => { setQrDialogOpen(false); fetchInstances(); }, 1500);
-        }
-      } catch { /* ignore */ }
-      qrRefreshCount++;
-      if (qrRefreshCount % 8 === 0) {
-        try {
-          const { data } = await supabase.functions.invoke("manage-evolution", {
-            body: { action: "qrcode", org_id: profile.org_id, instance_name: qrInstanceName },
-          });
-          if (data?.qrcode) setQrCode(data.qrcode);
-        } catch { /* ignore */ }
-      }
-    }, 3000);
-    return () => clearInterval(statusInterval);
-  }, [qrDialogOpen, qrInstanceName, profile?.org_id]);
 
   const getStatusInfo = (state: string) => {
     switch (state) {
@@ -197,9 +80,9 @@ export default function WhatsAppConnection() {
                   value={newInstanceName}
                   onChange={(e) => setNewInstanceName(e.target.value)}
                   className="rounded-xl bg-secondary/30 border-border/30"
-                  onKeyDown={(e) => e.key === "Enter" && handleCreateInstance()}
+                  onKeyDown={(e) => e.key === "Enter" && createInstance()}
                 />
-                <Button onClick={handleCreateInstance} disabled={creatingInstance || !newInstanceName.trim()} className="rounded-xl gradient-primary shrink-0 gap-2">
+                <Button onClick={createInstance} disabled={creatingInstance || !newInstanceName.trim()} className="rounded-xl gradient-primary shrink-0 gap-2">
                   {creatingInstance ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
                   Criar
                 </Button>
@@ -215,7 +98,7 @@ export default function WhatsAppConnection() {
           <h3 className="font-semibold">Suas Instâncias</h3>
           <div className="flex gap-2">
             {hasConnected && (
-              <Button variant="outline" size="sm" className="rounded-xl gap-2 text-xs" onClick={() => { setCreatingInstance(false); setNewInstanceName(""); }}>
+              <Button variant="outline" size="sm" className="rounded-xl gap-2 text-xs" onClick={() => setNewInstanceName("")}>
                 <Plus className="h-3.5 w-3.5" /> Nova instância
               </Button>
             )}
@@ -233,9 +116,9 @@ export default function WhatsAppConnection() {
               value={newInstanceName}
               onChange={(e) => setNewInstanceName(e.target.value)}
               className="rounded-xl bg-secondary/30 border-border/30"
-              onKeyDown={(e) => e.key === "Enter" && handleCreateInstance()}
+              onKeyDown={(e) => e.key === "Enter" && createInstance()}
             />
-            <Button onClick={handleCreateInstance} disabled={creatingInstance || !newInstanceName.trim()} className="rounded-xl gradient-primary shrink-0 gap-2">
+            <Button onClick={createInstance} disabled={creatingInstance || !newInstanceName.trim()} className="rounded-xl gradient-primary shrink-0 gap-2">
               {creatingInstance ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
               Criar
             </Button>
@@ -275,11 +158,11 @@ export default function WhatsAppConnection() {
                        </Button>
                      )}
                      {inst.state !== "open" && (
-                       <Button variant="outline" size="sm" className="rounded-xl text-xs gap-1" onClick={() => handleGetQR(inst.name)}>
+                       <Button variant="outline" size="sm" className="rounded-xl text-xs gap-1" onClick={() => getQRCode(inst.name)}>
                          <QrCode className="h-3.5 w-3.5" /> Conectar
                        </Button>
                      )}
-                     <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive" onClick={() => handleDeleteInstance(inst.name)}>
+                     <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive" onClick={() => deleteInstance(inst.name)}>
                        <Trash2 className="h-3.5 w-3.5" />
                      </Button>
                    </div>
