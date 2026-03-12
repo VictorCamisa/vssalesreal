@@ -296,6 +296,7 @@ Deno.serve(async (req) => {
 
       const userInst = getUserInstances().filter((n) => n !== instance_name);
       await setUserInstances(userInst);
+      await supabaseAdmin.from("integration_instances").delete().eq("instance_name", instance_name);
 
       return json({ success: true });
     }
