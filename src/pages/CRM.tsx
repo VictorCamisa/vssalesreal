@@ -315,8 +315,7 @@ export default function CRM() {
   const stageMap = useMemo(() => {
     const map = new Map<string, typeof PIPELINE_STAGES[0]>();
     stages.forEach((s) => {
-      const normalized = s.name.trim().toLowerCase();
-      const def = PIPELINE_STAGES.find(p => p.name.toLowerCase() === normalized);
+      const def = PIPELINE_STAGES.find(p => p.key === s.stage_key);
       if (def) map.set(s.id, def);
     });
     return map;
