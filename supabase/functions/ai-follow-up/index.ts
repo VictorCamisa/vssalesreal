@@ -66,15 +66,18 @@ serve(async (req) => {
     const evolutionKey = Deno.env.get("EVOLUTION_API_KEY") || "";
     const orgIds = [...new Set(conversations.map((c: any) => c.org_id))];
 
-    // Get AI configs for system prompts
-    const { data: aiConfigs } = await supabaseAdmin
-      .from("ai_configs")
+    // Get AI scenarios for system prompts
+    const scenarioKeys = [...new Set(conversations.map((c: any) => c.scenario_key).filter(Boolean))];
+    const { data: aiScenarios } = await supabaseAdmin
+      .from("ai_scenarios")
       .select("*")
-      .in("id", configIds);
+      .in("org_id", orgIds)
+      .in("scenario_key", scenarioKeys);
 
-    const aiConfigById: Record<string, any> = {};
-    for (const cfg of aiConfigs || []) {
-      aiConfigById[cfg.id] = cfg;
+    // Index scenarios by "org_id::scenario_key"
+    const scenarioByKey: Record<string, any> = {};
+    for (const sc of aiScenarios || []) {
+      scenarioByKey[`${sc.org_id}::${sc.scenario_key}`] = sc;
     }
 
     // Get company profiles for context
