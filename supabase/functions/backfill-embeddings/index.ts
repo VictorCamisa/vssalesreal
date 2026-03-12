@@ -110,9 +110,9 @@ serve(async (req) => {
         processed++;
         console.log(`✓ Embedded: ${doc.title} (${processed}/${docs.length})`);
 
-        // Rate limit: wait 200ms between requests
+        // Rate limit: wait 2s between requests (free tier)
         if (processed < docs.length) {
-          await new Promise(r => setTimeout(r, 200));
+          await new Promise(r => setTimeout(r, 2000));
         }
       } catch (docErr) {
         failed++;
