@@ -682,6 +682,35 @@ export type Database = {
           },
         ]
       }
+      contact_cooldown: {
+        Row: {
+          cooldown_hours: number
+          last_contacted_at: string
+          org_id: string
+          phone: string
+        }
+        Insert: {
+          cooldown_hours?: number
+          last_contacted_at?: string
+          org_id: string
+          phone: string
+        }
+        Update: {
+          cooldown_hours?: number
+          last_contacted_at?: string
+          org_id?: string
+          phone?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "contact_cooldown_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       conversation_tracker: {
         Row: {
           ai_config_id: string | null
