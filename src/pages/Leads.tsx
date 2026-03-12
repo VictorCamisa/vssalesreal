@@ -433,6 +433,7 @@ export default function Leads() {
                 : "border-border/50 hover:border-primary/30 text-muted-foreground hover:text-foreground"
             }`}>
             {f.label}{f.key === quickFilter ? ` (${totalCount})` : ""}
+          </button>
         ))}
       </div>
 
