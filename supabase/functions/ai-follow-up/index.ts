@@ -203,7 +203,6 @@ REGRAS:
         if (!reply) continue;
 
         // Send via Evolution API — split into blocks for human-like delivery
-        const phone = conv.remote_jid.replace("@s.whatsapp.net", "");
         const blocks = reply.split(/---BLOCO---/i).map((b: string) => b.trim()).filter((b: string) => b.length > 0);
         const messageParts = blocks.length > 0 ? blocks : [reply];
 
