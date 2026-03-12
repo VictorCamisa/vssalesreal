@@ -163,18 +163,17 @@ export function AgentSimulator({ orgId }: { orgId: string }) {
   // Load available agents
   useEffect(() => {
     supabase
-      .from("ai_configs")
-      .select("id, config, instance_name")
+      .from("ai_scenarios")
+      .select("scenario_key, name")
       .eq("org_id", orgId)
-      .eq("config_type", "chatbot")
+      .eq("enabled", true)
       .then(({ data }) => {
         const agentList = (data || []).map((a: any) => ({
-          id: a.id,
-          role: a.config?.agent_role || "Chatbot",
-          instance: a.instance_name || "—",
+          scenario_key: a.scenario_key,
+          name: a.name,
         }));
         setAgents(agentList);
-        if (agentList.length > 0 && !selectedAgent) setSelectedAgent(agentList[0].id);
+        if (agentList.length > 0 && !selectedAgent) setSelectedAgent(agentList[0].scenario_key);
       });
   }, [orgId]);
 
