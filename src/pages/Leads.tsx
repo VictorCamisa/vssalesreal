@@ -400,10 +400,10 @@ export default function Leads() {
       {/* Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {[
-          { label: "Total", value: leads.length, icon: Users, color: "text-primary", bg: "bg-primary/10" },
-          { label: "Prospectados", value: prospectedCount, icon: Target, color: "text-chart-4", bg: "bg-chart-4/10" },
-          { label: "Enriquecidos", value: enrichedCount, icon: Sparkles, color: "text-primary", bg: "bg-primary/10" },
-          { label: "Em Comercial", value: convertedCount, icon: Zap, color: "text-success", bg: "bg-success/10" },
+          { label: "Total", value: totalCount, icon: Users, color: "text-primary", bg: "bg-primary/10" },
+          { label: "Prospectados", value: prospectedCount, icon: Target, color: "text-chart-4", bg: "bg-chart-4/10", sub: "nesta página" },
+          { label: "Enriquecidos", value: enrichedCount, icon: Sparkles, color: "text-primary", bg: "bg-primary/10", sub: "nesta página" },
+          { label: "Em Comercial", value: convertedCount, icon: Zap, color: "text-success", bg: "bg-success/10", sub: "nesta página" },
         ].map(m => (
           <div key={m.label} className="glass-card p-5 hover:shadow-card transition-shadow">
             <div className="flex items-center justify-between mb-3">
