@@ -128,7 +128,7 @@ Deno.serve(async (req) => {
     const scenarioKey = (broadcast as any).scenario_key || "broadcast_own_base";
     let scenarioPrompt = "";
     let maxBlocks = 2;
-    let maxCharsPerBlock = 200;
+    let maxCharsPerBlock = 500;
     let useEmoji = true;
     let scenarioTemperature = 0.4;
 
