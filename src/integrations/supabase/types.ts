@@ -120,6 +120,7 @@ export type Database = {
           chunks: Json | null
           content: string
           created_at: string
+          embedding: string | null
           file_url: string | null
           id: string
           keywords: string[] | null
@@ -133,6 +134,7 @@ export type Database = {
           chunks?: Json | null
           content?: string
           created_at?: string
+          embedding?: string | null
           file_url?: string | null
           id?: string
           keywords?: string[] | null
@@ -146,6 +148,7 @@ export type Database = {
           chunks?: Json | null
           content?: string
           created_at?: string
+          embedding?: string | null
           file_url?: string | null
           id?: string
           keywords?: string[] | null
@@ -1285,6 +1288,20 @@ export type Database = {
       }
       is_org_admin: { Args: { p_org_id: string }; Returns: boolean }
       is_org_member: { Args: { p_org_id: string }; Returns: boolean }
+      match_knowledge_docs: {
+        Args: {
+          match_count?: number
+          match_org_id: string
+          match_threshold?: number
+          query_embedding: string
+        }
+        Returns: {
+          content: string
+          id: string
+          similarity: number
+          title: string
+        }[]
+      }
     }
     Enums: {
       app_role: "admin" | "member"
