@@ -45,12 +45,19 @@ serve(async (req) => {
         { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-    // Fetch all docs without embedding
+    // Parse optional batch_size from body
+    let batch_size = 10;
+    try {
+      const body = await req.json();
+      if (body?.batch_size) batch_size = Math.min(body.batch_size, 50);
+    } catch {}
+
+    // Fetch docs without embedding
     const { data: docs, error: fetchError } = await supabaseAdmin
       .from("ai_knowledge_docs")
       .select("id, title, content")
       .is("embedding", null)
-      .limit(500);
+      .limit(batch_size);
 
     if (fetchError) throw fetchError;
     if (!docs || docs.length === 0) {
