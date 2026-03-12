@@ -1,79 +1,59 @@
 
 
-# Reconstrução Completa da Landing Page — VS SALES
+## Plano: Migrar chamadas AI do gateway Lovable para Anthropic API direta
 
-## Diagnóstico
+### Pré-requisito: Secret ANTHROPIC_API_KEY
 
-A landing page atual tem uma estrutura funcional, mas apresenta problemas críticos de copywriting, persuasão e design que a enfraquecem como ferramenta de conversão:
+O secret `ANTHROPIC_API_KEY` **não existe** no projeto. Preciso adicioná-lo antes de implementar as mudanças.
 
-1. **Copy genérica** — frases como "Prospecção. Qualificação. Fechamento." não comunicam valor real. Falta dor, urgência e diferenciação.
-2. **Seções repetitivas** — há dois comparativos (seção 2 e seção 5) que dizem quase a mesma coisa.
-3. **Prova social fraca** — um depoimento fictício de "Carlos Mendes" não convence ninguém.
-4. **Números inventados** — "12.400 leads qualificados" e "97% satisfação" sem contexto parecem falsos.
-5. **Falta de seções-chave** — não há: demonstração visual do produto, seção "Para quem é", garantia, ecossistema VS.
-6. **CTA disperso** — muitos CTAs competindo entre si sem hierarquia clara.
-7. **Cor inconsistente** — usa verde (#00FF88) em vários elementos quando a marca é azul.
+### Diferenças de formato OpenAI → Anthropic
 
-## Plano de Reconstrução
-
-### Estrutura de seções (nova ordem narrativa)
+A Anthropic API tem formato diferente do OpenAI-compatible gateway:
 
 ```text
-1. HERO — Headline de impacto + sub-headline com dor + CTA único forte
-2. BARRA DE CREDIBILIDADE — "Powered by VS Soluções Labs" + tecnologias
-3. O PROBLEMA — 4 cards de dor do gestor comercial (melhor copy)
-4. A SOLUÇÃO — O que é o VS SALES (com mockup/screenshot do dashboard)
-5. COMO FUNCIONA — 6 etapas do pipeline (mantido, refinado)
-6. PARA QUEM É — 3 perfis ideais (Startups, PMEs, Agências)
-7. DIFERENCIAIS — Grid de features com ícones e descrições curtas
-8. COMPARATIVO ÚNICO — Tabela Time Humano vs VS SALES (consolidado)
-9. PLANOS & PREÇOS — Cards dinâmicos do banco (mantido, refinado)
-10. GARANTIA — Seção de confiança ("7 dias grátis" ou "Sem contrato")
-11. FAQ — Perguntas frequentes (mantido, copy melhorada)
-12. CTA FINAL — Urgência + formulário de acesso antecipado
-13. FOOTER — Links + identidade VS Soluções
+OpenAI (atual):
+  POST /v1/chat/completions
+  Authorization: Bearer {key}
+  { model, messages: [{role:"system",...}, ...], temperature }
+  Response: choices[0].message.content
+
+Anthropic (novo):
+  POST /v1/messages
+  x-api-key: {key}
+  anthropic-version: 2023-06-01
+  { model, system: "...", messages: [...sem system...], max_tokens, temperature }
+  Response: content[0].text
 ```
 
-### Mudanças específicas
+### Alterações por arquivo
 
-**Hero:**
-- Nova headline: "Sua equipe comercial inteira. Só que é IA." com sub "SDR, BDR e Closer autônomos. 24/7. Por R$ 600/mês."
-- Um único CTA principal: "Testar grátis por 7 dias"
-- Remover contadores genéricos do hero, mover para seção de credibilidade
-- Manter ParticleCanvas e animações stagger
+**1. `supabase/functions/ai-whatsapp-hook/index.ts`**
+- Linha 492-493: Trocar `LOVABLE_API_KEY` por `ANTHROPIC_API_KEY`
+- Linhas 497-501: Substituir fetch ao gateway por fetch à Anthropic API
+  - Extrair `system` do array de messages (primeiro item role=system)
+  - Enviar como campo top-level `system`
+  - Adicionar `max_tokens: 1024`
+  - Headers: `x-api-key`, `anthropic-version: 2023-06-01`
+  - Model: `claude-haiku-3-5-20251001`
+- Linha 509: Trocar `choices[0].message.content` por `content[0].text`
 
-**Seção "Para Quem É" (nova):**
-- 3 cards: Startups B2B, PMEs com time enxuto, Agências que revendem
-- Cada card com cenário real de uso
+**2. `supabase/functions/execute-broadcast/index.ts`**
+- Linha 26: Trocar `LOVABLE_API_KEY` por `ANTHROPIC_API_KEY`
+- Linha 302: Ajustar condição para checar `ANTHROPIC_API_KEY`
+- Linhas 306-320: Substituir fetch ao gateway por Anthropic API (mesmo padrão)
+  - `system` = `fullSystemPrompt`, messages = só o user message
+  - Model: `claude-haiku-3-5-20251001`
+- Linha 323: Trocar `choices[0].message.content` por `content[0].text`
 
-**Diferenciais (nova seção):**
-- Grid 2x3: Prospecção Autônoma, WhatsApp Nativo, CRM Inteligente, IA Treinável, Disparos em Massa, Agendamento Auto
-- Cada item com ícone + 2 linhas de copy
+**3. `supabase/functions/ai-follow-up/index.ts`**
+- Linhas 19-20: Trocar `LOVABLE_API_KEY` por `ANTHROPIC_API_KEY`
+- Linhas 169-183: Substituir fetch ao gateway por Anthropic API
+  - Extrair system prompt, enviar só user message no array
+  - Model: `claude-haiku-3-5-20251001`
+- Linha 191: Trocar `choices[0].message.content` por `content[0].text`
 
-**Comparativo consolidado:**
-- Remover o comparativo duplicado da seção "O Problema"
-- Manter apenas a tabela da seção de planos, com visual mais impactante
-
-**Prova social:**
-- Remover depoimento fictício
-- Substituir por métricas reais do sistema (operação 24/7, tempo de setup < 48h, etc.)
-
-**Cores:**
-- Substituir todo #00FF88 (verde) por variações de azul (#00D4FF, #0057FF)
-- Manter verde apenas para indicadores de "positivo" em comparativos
-
-**Seção de Garantia (nova):**
-- "Sem contrato. Sem multa. Cancele quando quiser."
-- Ícones de segurança (Shield, Lock, CheckCircle)
-
-### Arquivos modificados
-
-- `src/pages/Landing.tsx` — reescrita completa das seções, copy e estrutura
-
-### Copy principles aplicados
-
-- **Dor antes da solução** — mostrar o problema real antes de apresentar o produto
-- **Especificidade** — usar números reais (R$ 600/mês, < 48h de setup, 24/7)
-- **Um CTA por fold** — não competir com múltiplos botões
-- **Prova > Promessa** — features concretas ao invés de adjetivos vagos
+### Resumo
+- 1 secret a adicionar: `ANTHROPIC_API_KEY`
+- 3 arquivos editados, ~3 trechos cada
+- Nenhuma outra lógica alterada
 
