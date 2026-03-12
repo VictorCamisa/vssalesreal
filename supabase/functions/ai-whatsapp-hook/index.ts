@@ -668,6 +668,7 @@ O lead está respondendo à mensagem enviada pelo disparo. Continue naturalmente
 
     if (sendSuccess) {
       await supabaseAdmin.from("conversation_tracker").update({ last_bot_msg_at: new Date().toISOString() }).eq("org_id", orgId).eq("instance_name", instanceName).eq("remote_jid", remoteJid);
+      await registerContact(supabaseAdmin, phone, orgId!, 24);
     }
 
     return new Response(JSON.stringify({ success: true, reply }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });

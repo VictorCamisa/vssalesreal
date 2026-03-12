@@ -246,6 +246,7 @@ REGRAS:
           })
           .eq("id", conv.id);
 
+        await registerContact(supabaseAdmin, phone, conv.org_id, 24);
         processed++;
         results.push({ conv_id: conv.id, status: "sent", step: nextStep, phone });
         console.log(`Follow-up #${nextStep} sent to ${phone} on instance ${conv.instance_name}`);

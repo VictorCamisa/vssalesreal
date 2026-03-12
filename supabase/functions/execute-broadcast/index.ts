@@ -400,6 +400,7 @@ ${!useEmoji ? "- NUNCA use emojis. ZERO emojis." : ""}
             }).eq("id", existingConv.id);
           }
 
+          await registerContact(supabase, cleanPhone, org_id, 24);
           sentCount++;
         } else {
           await supabase.from("broadcast_leads").update({
