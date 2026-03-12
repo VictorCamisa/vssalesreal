@@ -127,7 +127,7 @@ const VIEW_TABS = [
   { key: "cs", label: "CS", icon: Headphones, stageFilter: "cs", description: "Sucesso do cliente" },
 ];
 
-type Stage = { id: string; name: string; stage_order: number };
+type Stage = { id: string; name: string; stage_order: number; stage_key: string | null };
 type Opportunity = {
   id: string;
   stage_id: string;
