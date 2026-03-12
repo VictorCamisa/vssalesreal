@@ -118,6 +118,13 @@ serve(async (req) => {
         continue;
       }
 
+      // Cooldown check
+      const phone = conv.remote_jid.replace("@s.whatsapp.net", "");
+      if (await isInCooldown(supabaseAdmin, phone, conv.org_id)) {
+        console.log(`Skipping follow-up for ${phone}: in cooldown`);
+        continue;
+      }
+
       if (!evolutionUrl || !evolutionKey) {
         console.error(`Evolution API not configured`);
         continue;
