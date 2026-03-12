@@ -144,7 +144,7 @@ Deno.serve(async (req) => {
       if (scenario) {
         const beh = (scenario.behavior || {}) as any;
         maxBlocks = Number(beh.max_blocks) || 2;
-        maxCharsPerBlock = Number(beh.max_chars_per_block) || 200;
+        maxCharsPerBlock = Number(beh.max_chars_per_block) || 500;
         useEmoji = beh.use_emoji !== false;
         scenarioTemperature = Math.max(0.2, Math.min(Number(scenario.temperature) ?? 0.3, 0.45));
       }
