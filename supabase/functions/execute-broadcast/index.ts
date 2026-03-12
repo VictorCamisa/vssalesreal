@@ -202,7 +202,8 @@ ${!useEmoji ? "- NUNCA use emojis. ZERO emojis." : ""}
       companyContext ? `\n--- CONTEXTO DA EMPRESA ---\n${companyContext}` : "",
       knowledgeContext,
       `\nREGRAS DE FORMATO:
-- Divida a mensagem em EXATAMENTE ${maxBlocks} blocos curtos (máximo ${maxCharsPerBlock} caracteres cada).
+- Divida a mensagem em EXATAMENTE ${maxBlocks} blocos curtos e COMPLETOS (máximo ${maxCharsPerBlock} caracteres cada).
+- Cada bloco deve terminar em frase completa. NUNCA corte no meio de uma frase.
 - Separe cada bloco com ---BLOCO--- numa linha isolada.
 - NUNCA invente informações. Use APENAS dados fornecidos acima.
 - Escreva de forma NATURAL para WhatsApp.
