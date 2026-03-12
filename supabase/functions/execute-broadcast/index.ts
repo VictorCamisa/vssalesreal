@@ -208,7 +208,7 @@ ${!useEmoji ? "- NUNCA use emojis. ZERO emojis." : ""}
       "claude-3-5-haiku-latest",
       "claude-3-haiku-20240307",
       "claude-3-sonnet-20240229",
-      "claude-3-sonnet-20240229",
+      "claude-3-opus-20240229",
     ];
 
     if (broadcast.ai_enabled && ANTHROPIC_API_KEY) {
