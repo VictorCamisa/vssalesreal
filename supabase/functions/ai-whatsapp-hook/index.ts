@@ -33,17 +33,18 @@ serve(async (req) => {
     const supabaseAdmin = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
 
     // ---- Helper: save message ----
-    const saveMessage = async (orgId: string, instName: string, jid: string, fromMe: boolean, text: string, pName?: string, msgId?: string) => {
+    const saveMessage = async (orgId: string, instName: string, jid: string, fromMe: boolean, text: string, pName?: string, msgId?: string): Promise<{ inserted: boolean; msgId: string | null }> => {
       try {
         const finalMsgId = msgId || `msg_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-        await supabaseAdmin.from("chat_messages").insert({
+        const { data } = await supabaseAdmin.from("chat_messages").upsert({
           org_id: orgId, instance_name: instName, remote_jid: jid, from_me: fromMe,
           message_text: text, push_name: pName || null,
           message_id: finalMsgId,
           timestamp: new Date().toISOString(),
-        });
-        return finalMsgId;
-      } catch (e) { console.error("saveMessage error:", e); return null; }
+        }, { onConflict: "message_id", ignoreDuplicates: true }).select("id");
+        const inserted = (data?.length ?? 0) > 0;
+        return { inserted, msgId: finalMsgId };
+      } catch (e) { console.error("saveMessage error:", e); return { inserted: false, msgId: null }; }
     };
 
     // ---- Find org via instance ----
@@ -62,7 +63,11 @@ serve(async (req) => {
     }
 
     // Save incoming message
-    await saveMessage(orgId, instanceName, remoteJid, false, messageText, pushName, messageData.key?.id || null);
+    const saveResult = await saveMessage(orgId, instanceName, remoteJid, false, messageText, pushName, messageData.key?.id || null);
+    if (!saveResult.inserted) {
+      console.log(`Message already processed: ${saveResult.msgId}`);
+      return new Response(JSON.stringify({ status: "already_processed" }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
 
     // ---- Check if any scenario is enabled for this org ----
     const { data: scenarios } = await supabaseAdmin
