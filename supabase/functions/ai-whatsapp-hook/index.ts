@@ -63,7 +63,11 @@ serve(async (req) => {
     }
 
     // Save incoming message
-    await saveMessage(orgId, instanceName, remoteJid, false, messageText, pushName, messageData.key?.id || null);
+    const saveResult = await saveMessage(orgId, instanceName, remoteJid, false, messageText, pushName, messageData.key?.id || null);
+    if (!saveResult.inserted) {
+      console.log(`Message already processed: ${saveResult.msgId}`);
+      return new Response(JSON.stringify({ status: "already_processed" }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
 
     // ---- Check if any scenario is enabled for this org ----
     const { data: scenarios } = await supabaseAdmin
