@@ -564,6 +564,24 @@ export default function Leads() {
               ))}
             </TableBody>
           </Table>
+          {/* Pagination */}
+          <div className="flex items-center justify-between p-4 border-t border-border/30">
+            <p className="text-xs text-muted-foreground">
+              {totalCount} leads no total — Página {currentPage + 1} de {totalPages}
+            </p>
+            <div className="flex gap-2">
+              <Button variant="outline" size="sm" className="rounded-xl"
+                disabled={currentPage === 0}
+                onClick={() => setCurrentPage(p => p - 1)}>
+                Anterior
+              </Button>
+              <Button variant="outline" size="sm" className="rounded-xl"
+                disabled={(currentPage + 1) * PAGE_SIZE >= totalCount}
+                onClick={() => setCurrentPage(p => p + 1)}>
+                Próxima
+              </Button>
+            </div>
+          </div>
         </div>
       )}
 
