@@ -122,8 +122,8 @@ serve(async (req) => {
         continue;
       }
 
-      const aiConfig = aiConfigById[conv.ai_config_id];
-      if (!aiConfig?.enabled) continue;
+      const scenario = scenarioByKey[`${conv.org_id}::${conv.scenario_key}`];
+      if (!scenario?.enabled) continue;
 
       // Generate follow-up message using AI
       const contextHint = rule.context_hint || "reativar a conversa de forma natural";
