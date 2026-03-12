@@ -514,7 +514,7 @@ export default function Leads() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filtered.map((lead) => (
+              {leads.map((lead) => (
                 <TableRow key={lead.id} className={`border-border/20 transition-colors ${selected.has(lead.id) ? "bg-primary/5" : "hover:bg-secondary/30"}`}>
                   <TableCell><Checkbox checked={selected.has(lead.id)} onCheckedChange={() => toggleSelect(lead.id)} /></TableCell>
                   <TableCell>
