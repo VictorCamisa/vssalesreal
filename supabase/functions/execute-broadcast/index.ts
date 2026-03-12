@@ -202,6 +202,48 @@ ${!useEmoji ? "- NUNCA use emojis. ZERO emojis." : ""}
 - NÃO coloque a resposta entre aspas.`,
     ].filter(Boolean).join("\n");
 
+    let anthropicModels = [
+      "claude-haiku-3-5-20251001",
+      "claude-3-5-haiku-20241022",
+      "claude-3-5-haiku-latest",
+      "claude-3-haiku-20240307",
+      "claude-3-sonnet-20240229",
+      "claude-3-sonnet-20240229",
+    ];
+
+    if (broadcast.ai_enabled && ANTHROPIC_API_KEY) {
+      try {
+        const modelsResp = await fetch("https://api.anthropic.com/v1/models", {
+          method: "GET",
+          headers: {
+            "x-api-key": ANTHROPIC_API_KEY,
+            "anthropic-version": "2023-06-01",
+          },
+        });
+
+        if (modelsResp.ok) {
+          const modelsData = await modelsResp.json();
+          const available = ((modelsData?.data || []) as any[])
+            .map((m) => m?.id)
+            .filter((id): id is string => typeof id === "string" && id.length > 0);
+
+          if (available.length > 0) {
+            const preferred = anthropicModels.filter((id) => available.includes(id));
+            if (preferred.length > 0) {
+              anthropicModels = preferred;
+            } else {
+              const haiku = available.find((id) => id.toLowerCase().includes("haiku"));
+              anthropicModels = haiku ? [haiku, ...available.filter((id) => id !== haiku)] : available;
+            }
+          }
+        } else {
+          console.warn("Could not list Anthropic models:", modelsResp.status, await modelsResp.text());
+        }
+      } catch (e) {
+        console.warn("Anthropic models discovery failed:", e);
+      }
+    }
+
     // --- Get ONLY pending leads, limited to BATCH_SIZE ---
     const { data: bLeads } = await supabase
       .from("broadcast_leads")
