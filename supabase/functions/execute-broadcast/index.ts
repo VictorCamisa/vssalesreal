@@ -275,9 +275,22 @@ ${!useEmoji ? "- NUNCA use emojis. ZERO emojis." : ""}
       blocks = blocks.slice(0, maxBlocks);
       blocks = blocks.map(block => {
         if (block.length > maxCharsPerBlock) {
-          const cut = block.substring(0, maxCharsPerBlock);
-          const lastSpace = cut.lastIndexOf(" ");
-          return lastSpace > maxCharsPerBlock * 0.7 ? cut.substring(0, lastSpace) : cut;
+          // Try to cut at end of sentence first
+          const truncated = block.substring(0, maxCharsPerBlock);
+          const lastSentenceEnd = Math.max(
+            truncated.lastIndexOf(". "),
+            truncated.lastIndexOf("! "),
+            truncated.lastIndexOf("? "),
+            truncated.lastIndexOf(".\n"),
+            truncated.lastIndexOf("!\n"),
+            truncated.lastIndexOf("?\n"),
+          );
+          if (lastSentenceEnd > maxCharsPerBlock * 0.5) {
+            return truncated.substring(0, lastSentenceEnd + 1).trim();
+          }
+          // Fallback: cut at last space
+          const lastSpace = truncated.lastIndexOf(" ");
+          return lastSpace > maxCharsPerBlock * 0.5 ? truncated.substring(0, lastSpace).trim() : truncated.trim();
         }
         return block;
       });
