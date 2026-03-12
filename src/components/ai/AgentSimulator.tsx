@@ -313,8 +313,8 @@ Mensagem do lead: ${msg}`;
             </SelectTrigger>
             <SelectContent>
               {agents.map(a => (
-                <SelectItem key={a.id} value={a.id}>
-                  {a.role} — {a.instance}
+                <SelectItem key={a.scenario_key} value={a.scenario_key}>
+                  {a.name}
                 </SelectItem>
               ))}
             </SelectContent>
