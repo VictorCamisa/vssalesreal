@@ -299,28 +299,30 @@ ${!useEmoji ? "- NUNCA use emojis. ZERO emojis." : ""}
       }
 
       // AI generation fallback
-      if (broadcast.ai_enabled && !messageText && LOVABLE_API_KEY && fullSystemPrompt) {
+      if (broadcast.ai_enabled && !messageText && ANTHROPIC_API_KEY && fullSystemPrompt) {
         try {
           const leadFirstName = lead.name?.split(" ")[0] || "";
           const leadContext = leadFirstName ? `Lead: ${leadFirstName}` : "Lead sem nome identificado";
-          const aiResp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+          const aiResp = await fetch("https://api.anthropic.com/v1/messages", {
             method: "POST",
             headers: {
-              Authorization: `Bearer ${LOVABLE_API_KEY}`,
+              "x-api-key": ANTHROPIC_API_KEY,
+              "anthropic-version": "2023-06-01",
               "Content-Type": "application/json",
             },
             body: JSON.stringify({
-              model: "google/gemini-3-flash-preview",
+              model: "claude-haiku-3-5-20251001",
+              system: fullSystemPrompt,
               messages: [
-                { role: "system", content: fullSystemPrompt },
                 { role: "user", content: `Crie UMA mensagem de primeiro contato para: ${leadContext}. ${broadcast.description ? `Contexto da campanha: ${broadcast.description}` : ""}. Use EXATAMENTE ${maxBlocks} blocos. Retorne APENAS os blocos separados por ---BLOCO---, sem aspas.` },
               ],
+              max_tokens: 1024,
               temperature: scenarioTemperature,
             }),
           });
           if (aiResp.ok) {
             const aiData = await aiResp.json();
-            messageText = (aiData.choices?.[0]?.message?.content || "").trim();
+            messageText = (aiData.content?.[0]?.text || "").trim();
             messageText = messageText.replace(/^[""](.*)[""]$/s, "$1").trim();
             if (!useEmoji) {
               messageText = messageText.replace(/[\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{1F000}-\u{1F02F}\u{1F0A0}-\u{1F0FF}\u{1F100}-\u{1F64F}\u{1F680}-\u{1F6FF}\u{1FA00}-\u{1FA6F}\u{1FA70}-\u{1FAFF}\u{FE00}-\u{FE0F}\u{200D}\u{20E3}\u{E0020}-\u{E007F}]/gu, "").trim();

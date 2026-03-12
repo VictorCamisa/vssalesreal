@@ -166,18 +166,20 @@ REGRAS:
 - Responda APENAS com a mensagem, sem explicação`;
 
       try {
-        const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+        const aiResponse = await fetch("https://api.anthropic.com/v1/messages", {
           method: "POST",
           headers: {
-            Authorization: `Bearer ${LOVABLE_API_KEY}`,
+            "x-api-key": ANTHROPIC_API_KEY,
+            "anthropic-version": "2023-06-01",
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            model: "google/gemini-3-flash-preview",
+            model: "claude-haiku-3-5-20251001",
+            system: systemPrompt,
             messages: [
-              { role: "system", content: systemPrompt },
               { role: "user", content: `Gere a mensagem de follow-up #${nextStep} para ${conv.push_name || "o lead"}.` },
             ],
+            max_tokens: 1024,
             temperature: scenario.temperature ? Number(scenario.temperature) : 0.7,
           }),
         });
@@ -188,7 +190,7 @@ REGRAS:
         }
 
         const aiData = await aiResponse.json();
-        const reply = aiData.choices?.[0]?.message?.content?.trim() || "";
+        const reply = aiData.content?.[0]?.text?.trim() || "";
 
         if (!reply) continue;
 
