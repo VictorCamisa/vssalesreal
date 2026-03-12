@@ -1,18 +1,38 @@
 
 
-## Plano: Edge Function `migrate-api-keys`
+## Plano: Normalizar temperature da IA nos 3 módulos
 
-Função temporária one-shot para criptografar API keys legadas em texto plano.
+Três edições cirúrgicas, uma por arquivo. Nenhuma outra lógica alterada.
 
-### Arquivo: `supabase/functions/migrate-api-keys/index.ts`
+### 1. `supabase/functions/execute-broadcast/index.ts` (linha 141)
+Substituir:
+```
+scenarioTemperature = Math.min(Number(scenario.temperature) || 0.7, 0.4);
+```
+Por:
+```
+scenarioTemperature = Math.max(0.2, Math.min(Number(scenario.temperature) ?? 0.3, 0.45));
+```
 
-- Importa `encrypt` de `../_shared/crypto.ts`
-- Verifica header `x-internal-secret` contra `BROADCAST_INTERNAL_SECRET` (já existe nos secrets)
-- Usa `supabaseAdmin` (service role) para buscar todas as `integrations`
-- Filtra registros onde `api_key` não é null, não é vazio, e **não contém `:`** (plain-text)
-- Para cada um, chama `encrypt(api_key, ENCRYPTION_KEY)` e faz update
-- Retorna `{ migrated, skipped, errors }` com detalhes
-- Não precisa de `config.toml` entry (default `verify_jwt = true` é ok pois a autenticação é via header interno)
+### 2. `supabase/functions/ai-whatsapp-hook/index.ts` (linha 490)
+Substituir:
+```
+const temperature = Number(scenario.temperature) || 0.7;
+```
+Por:
+```
+const temperature = Math.max(0.2, Math.min(Number(scenario.temperature) ?? 0.3, 0.45));
+```
 
-Após execução, a função será deletada via ferramenta.
+### 3. `supabase/functions/ai-follow-up/index.ts` (linha 183)
+Substituir:
+```
+temperature: scenario.temperature ? Number(scenario.temperature) : 0.7,
+```
+Por:
+```
+temperature: Math.max(0.2, Math.min(Number(scenario.temperature) ?? 0.35, 0.45)),
+```
+
+Todas as funções passam a operar dentro do range **[0.2, 0.45]**, com defaults ligeiramente diferentes conforme solicitado (0.3, 0.3, 0.35). Deploy automático após edição.
 
