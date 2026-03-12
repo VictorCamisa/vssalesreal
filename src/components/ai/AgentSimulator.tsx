@@ -433,7 +433,7 @@ Mensagem do lead: ${msg}`;
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-sm font-semibold">
-              {agents.find(a => a.id === selectedAgent)?.role || "Agente IA"}
+              {agents.find(a => a.scenario_key === selectedAgent)?.name || "Agente IA"}
             </p>
             <p className="text-[10px] text-muted-foreground">
               {isLoading ? "digitando..." : "online"}
