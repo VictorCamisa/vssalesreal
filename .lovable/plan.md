@@ -1,48 +1,79 @@
 
 
-# Por que o lead não recebe resposta
+# Reconstrução Completa da Landing Page — VS SALES
 
-## Problemas Encontrados
+## Diagnóstico
 
-### 1. Modelo Anthropic inválido no `ai-whatsapp-hook` (CRÍTICO)
+A landing page atual tem uma estrutura funcional, mas apresenta problemas críticos de copywriting, persuasão e design que a enfraquecem como ferramenta de conversão:
 
-**Linha 489** de `supabase/functions/ai-whatsapp-hook/index.ts`:
+1. **Copy genérica** — frases como "Prospecção. Qualificação. Fechamento." não comunicam valor real. Falta dor, urgência e diferenciação.
+2. **Seções repetitivas** — há dois comparativos (seção 2 e seção 5) que dizem quase a mesma coisa.
+3. **Prova social fraca** — um depoimento fictício de "Carlos Mendes" não convence ninguém.
+4. **Números inventados** — "12.400 leads qualificados" e "97% satisfação" sem contexto parecem falsos.
+5. **Falta de seções-chave** — não há: demonstração visual do produto, seção "Para quem é", garantia, ecossistema VS.
+6. **CTA disperso** — muitos CTAs competindo entre si sem hierarquia clara.
+7. **Cor inconsistente** — usa verde (#00FF88) em vários elementos quando a marca é azul.
+
+## Plano de Reconstrução
+
+### Estrutura de seções (nova ordem narrativa)
+
+```text
+1. HERO — Headline de impacto + sub-headline com dor + CTA único forte
+2. BARRA DE CREDIBILIDADE — "Powered by VS Soluções Labs" + tecnologias
+3. O PROBLEMA — 4 cards de dor do gestor comercial (melhor copy)
+4. A SOLUÇÃO — O que é o VS SALES (com mockup/screenshot do dashboard)
+5. COMO FUNCIONA — 6 etapas do pipeline (mantido, refinado)
+6. PARA QUEM É — 3 perfis ideais (Startups, PMEs, Agências)
+7. DIFERENCIAIS — Grid de features com ícones e descrições curtas
+8. COMPARATIVO ÚNICO — Tabela Time Humano vs VS SALES (consolidado)
+9. PLANOS & PREÇOS — Cards dinâmicos do banco (mantido, refinado)
+10. GARANTIA — Seção de confiança ("7 dias grátis" ou "Sem contrato")
+11. FAQ — Perguntas frequentes (mantido, copy melhorada)
+12. CTA FINAL — Urgência + formulário de acesso antecipado
+13. FOOTER — Links + identidade VS Soluções
 ```
-model: "claude-haiku-3-5-20251001"
-```
 
-Este é o **mesmo modelo inexistente** que foi corrigido no `execute-broadcast`, mas a correção **não foi aplicada aqui**. Toda chamada à API Anthropic retorna 404, a função loga "AI error: 404" e retorna sem enviar nada ao lead.
+### Mudanças específicas
 
-Diferente do `execute-broadcast`, aqui não há fallback — é uma chamada direta sem retry.
+**Hero:**
+- Nova headline: "Sua equipe comercial inteira. Só que é IA." com sub "SDR, BDR e Closer autônomos. 24/7. Por R$ 600/mês."
+- Um único CTA principal: "Testar grátis por 7 dias"
+- Remover contadores genéricos do hero, mover para seção de credibilidade
+- Manter ParticleCanvas e animações stagger
 
-**Correção:** Aplicar o mesmo sistema de fallback com lista de modelos válidos, priorizando `claude-3-5-haiku-20241022`.
+**Seção "Para Quem É" (nova):**
+- 3 cards: Startups B2B, PMEs com time enxuto, Agências que revendem
+- Cada card com cenário real de uso
 
-### 2. Sem logs = webhook pode não estar chegando
+**Diferenciais (nova seção):**
+- Grid 2x3: Prospecção Autônoma, WhatsApp Nativo, CRM Inteligente, IA Treinável, Disparos em Massa, Agendamento Auto
+- Cada item com ícone + 2 linhas de copy
 
-Os logs do `ai-whatsapp-hook` estão completamente vazios. Isso pode significar:
-- A instância do Evolution API foi criada **antes** do webhook ser configurado automaticamente
-- O webhook falhou silenciosamente durante a criação
+**Comparativo consolidado:**
+- Remover o comparativo duplicado da seção "O Problema"
+- Manter apenas a tabela da seção de planos, com visual mais impactante
 
-**Correção:** Não é um problema de código — o webhook já é reconfigurado automaticamente quando o status é verificado (linhas 201-219 do `manage-evolution`). Basta o usuário verificar o status da instância na interface, ou chamar a action `setup-webhook` manualmente.
+**Prova social:**
+- Remover depoimento fictício
+- Substituir por métricas reais do sistema (operação 24/7, tempo de setup < 48h, etc.)
 
-### 3. CORS hardcoded no `manage-evolution`
+**Cores:**
+- Substituir todo #00FF88 (verde) por variações de azul (#00D4FF, #0057FF)
+- Manter verde apenas para indicadores de "positivo" em comparativos
 
-Mesmo problema já corrigido em `scrape-leads` e `ai-follow-up` — origem fixa que bloqueia o preview.
+**Seção de Garantia (nova):**
+- "Sem contrato. Sem multa. Cancele quando quiser."
+- Ícones de segurança (Shield, Lock, CheckCircle)
 
-**Correção:** Aplicar a mesma lógica de multi-origem.
+### Arquivos modificados
 
----
+- `src/pages/Landing.tsx` — reescrita completa das seções, copy e estrutura
 
-## Plano de Implementação
+### Copy principles aplicados
 
-### Tarefa 1: Adicionar fallback de modelos no `ai-whatsapp-hook`
-**Arquivo:** `supabase/functions/ai-whatsapp-hook/index.ts`
-- **Linhas 481-500**: Substituir chamada única ao modelo inválido por loop de fallback com lista `["claude-3-5-haiku-20241022", "claude-3-5-haiku-latest", "claude-3-haiku-20240307"]`
-- Mesmo padrão já usado no `execute-broadcast`
-
-### Tarefa 2: Corrigir CORS no `manage-evolution`
-**Arquivo:** `supabase/functions/manage-evolution/index.ts`
-- **Linhas 3-7**: Substituir origin hardcoded pela lógica de `allowedOrigins` + `corsOrigin` dinâmico (mesmo padrão de `scrape-leads`)
-
-**Total: 2 arquivos editados.**
+- **Dor antes da solução** — mostrar o problema real antes de apresentar o produto
+- **Especificidade** — usar números reais (R$ 600/mês, < 48h de setup, 24/7)
+- **Um CTA por fold** — não competir com múltiplos botões
+- **Prova > Promessa** — features concretas ao invés de adjetivos vagos
 
