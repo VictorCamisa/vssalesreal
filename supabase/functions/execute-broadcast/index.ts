@@ -357,12 +357,6 @@ ${!useEmoji ? "- NUNCA use emojis. ZERO emojis." : ""}
           const leadContext = leadFirstName ? `Lead: ${leadFirstName}` : "Lead sem nome identificado";
           const prompt = `Crie UMA mensagem de primeiro contato para: ${leadContext}. ${broadcast.description ? `Contexto da campanha: ${broadcast.description}` : ""}. Use EXATAMENTE ${maxBlocks} blocos. Retorne APENAS os blocos separados por ---BLOCO---, sem aspas.`;
 
-          const anthropicModels = [
-            "claude-haiku-3-5-20251001",
-            "claude-3-5-haiku-20241022",
-            "claude-3-5-haiku-latest",
-            "claude-3-haiku-20240307",
-          ];
 
           let lastAnthropicError = "";
           for (const model of anthropicModels) {
