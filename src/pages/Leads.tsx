@@ -441,7 +441,7 @@ export default function Leads() {
         <div className="relative flex-1">
           <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
           <Input placeholder="Buscar por nome, telefone ou email..." value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)} className="pl-10 rounded-xl bg-secondary/30 border-border/30" />
+            onChange={(e) => handleSearchChange(e.target.value)} className="pl-10 rounded-xl bg-secondary/30 border-border/30" />
         </div>
         <Select value={statusFilter} onValueChange={setStatusFilter}>
           <SelectTrigger className="w-[150px] rounded-xl bg-secondary/30 border-border/30"><SelectValue placeholder="Status" /></SelectTrigger>
