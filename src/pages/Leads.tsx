@@ -453,7 +453,7 @@ export default function Leads() {
             <SelectItem value="discarded">Descartado</SelectItem>
           </SelectContent>
         </Select>
-        <Select value={sourceFilter} onValueChange={setSourceFilter}>
+        <Select value={sourceFilter} onValueChange={(v) => { setSourceFilter(v); setCurrentPage(0); }}>
           <SelectTrigger className="w-[130px] rounded-xl bg-secondary/30 border-border/30"><SelectValue placeholder="Fonte" /></SelectTrigger>
           <SelectContent className="rounded-xl">
             <SelectItem value="all">Todas</SelectItem>
