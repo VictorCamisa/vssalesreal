@@ -315,24 +315,47 @@ ${!useEmoji ? "- NUNCA use emojis. ZERO emojis." : ""}
           const leadContext = leadFirstName ? `Lead: ${leadFirstName}` : "Lead sem nome identificado";
           const prompt = `Crie UMA mensagem de primeiro contato para: ${leadContext}. ${broadcast.description ? `Contexto da campanha: ${broadcast.description}` : ""}. Use EXATAMENTE ${maxBlocks} blocos. Retorne APENAS os blocos separados por ---BLOCO---, sem aspas.`;
 
-          const aiResp = await fetch("https://api.anthropic.com/v1/messages", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "x-api-key": ANTHROPIC_API_KEY,
-              "anthropic-version": "2023-06-01",
-            },
-            body: JSON.stringify({
-              model: "claude-3-5-haiku-20241022",
-              system: fullSystemPrompt,
-              max_tokens: 1000,
-              messages: [{ role: "user", content: prompt }],
-            }),
-          });
-          if (aiResp.ok) {
-            const aiData = await aiResp.json();
-            messageText = (aiData.content?.[0]?.text || "").trim();
-            messageText = messageText.replace(/^[""](.*)[""]$/s, "$1").trim();
+          const anthropicModels = [
+            "claude-haiku-3-5-20251001",
+            "claude-3-5-haiku-20241022",
+            "claude-3-5-haiku-latest",
+            "claude-3-haiku-20240307",
+          ];
+
+          let lastAnthropicError = "";
+          for (const model of anthropicModels) {
+            const aiResp = await fetch("https://api.anthropic.com/v1/messages", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                "x-api-key": ANTHROPIC_API_KEY,
+                "anthropic-version": "2023-06-01",
+              },
+              body: JSON.stringify({
+                model,
+                system: fullSystemPrompt,
+                max_tokens: 1000,
+                messages: [{ role: "user", content: prompt }],
+              }),
+            });
+
+            if (aiResp.ok) {
+              const aiData = await aiResp.json();
+              messageText = (aiData.content?.[0]?.text || "").trim();
+              break;
+            }
+
+            const errorText = await aiResp.text();
+            lastAnthropicError = `${model} -> ${aiResp.status} ${errorText}`;
+            if (aiResp.status !== 404) break;
+          }
+
+          if (!messageText && lastAnthropicError) {
+            console.error("Anthropic API error:", lastAnthropicError);
+          }
+
+          if (messageText) {
+            messageText = messageText.replace(/^['"](.*)['"]$/s, "$1").trim();
             if (!useEmoji) {
               messageText = messageText.replace(/[\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{1F000}-\u{1F02F}\u{1F0A0}-\u{1F0FF}\u{1F100}-\u{1F64F}\u{1F680}-\u{1F6FF}\u{1FA00}-\u{1FA6F}\u{1FA70}-\u{1FAFF}\u{FE00}-\u{FE0F}\u{200D}\u{20E3}\u{E0020}-\u{E007F}]/gu, "").trim();
             }
@@ -341,8 +364,6 @@ ${!useEmoji ? "- NUNCA use emojis. ZERO emojis." : ""}
             } else {
               messageText = messageText.replace(/\[Nome\]\s*/gi, "");
             }
-          } else {
-            console.error("Anthropic API error:", aiResp.status, await aiResp.text());
           }
         } catch (e) {
           console.error("AI generation error:", e);
