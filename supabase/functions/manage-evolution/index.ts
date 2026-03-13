@@ -13,8 +13,9 @@ const json = (data: unknown, status = 200) =>
   });
 
 Deno.serve(async (req) => {
-  const corsHeaders = getCorsHeaders(req);
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+
+  console.log("[manage-evolution] Request received");
 
   try {
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
