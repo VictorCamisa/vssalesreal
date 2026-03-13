@@ -27,9 +27,9 @@ import MySeller from "./pages/MySeller";
 const queryClient = new QueryClient();
 
 function AppRoutes() {
-  const { user, loading, profileLoading } = useAuth();
+  const { user, loading } = useAuth();
 
-  if (loading || profileLoading) {
+  if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
         <div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
