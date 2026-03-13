@@ -30,8 +30,8 @@ const AuthContext = createContext<AuthContextType>({
 
 export const useAuth = () => useContext(AuthContext);
 
-const PROFILE_TIMEOUT_MS = 15000;
-const AUTH_INIT_TIMEOUT_MS = 12000;
+const PROFILE_TIMEOUT_MS = 10000;
+const AUTH_INIT_TIMEOUT_MS = 8000;
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
@@ -39,6 +39,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
   const [profileLoading, setProfileLoading] = useState(false);
+  const [initialized, setInitialized] = useState(false);
 
   const fetchProfile = async (userId: string) => {
     setProfileLoading(true);
@@ -74,35 +75,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.warn("Auth init timeout: liberando loading para evitar travamento.");
       setLoading(false);
       setProfileLoading(false);
+      setInitialized(true);
     }, AUTH_INIT_TIMEOUT_MS);
 
-    const handleSession = async (nextSession: Session | null) => {
-      if (!isActive) return;
-
-      setSession(nextSession);
-      setUser(nextSession?.user ?? null);
-
-      if (nextSession?.user) {
-        await fetchProfile(nextSession.user.id);
-      } else {
-        setProfile(null);
-      }
-
-      if (isActive) {
-        setLoading(false);
-      }
-    };
-
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (_event, nextSession) => {
-      await handleSession(nextSession);
-    });
-
+    // Only process session once via getSession; onAuthStateChange handles subsequent changes
     supabase.auth
       .getSession()
-      .then(async ({ data: { session } }) => {
-        await handleSession(session);
+      .then(async ({ data: { session: initialSession } }) => {
+        if (!isActive) return;
+
+        setSession(initialSession);
+        setUser(initialSession?.user ?? null);
+
+        if (initialSession?.user) {
+          await fetchProfile(initialSession.user.id);
+        }
+
+        if (isActive) {
+          setLoading(false);
+          setInitialized(true);
+        }
       })
       .catch((error) => {
         console.error("Erro ao carregar sessão:", error);
@@ -112,14 +104,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setProfile(null);
         setLoading(false);
         setProfileLoading(false);
+        setInitialized(true);
       });
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(async (_event, nextSession) => {
+      if (!isActive || !initialized) return;
+
+      setSession(nextSession);
+      setUser(nextSession?.user ?? null);
+
+      if (nextSession?.user) {
+        await fetchProfile(nextSession.user.id);
+      } else {
+        setProfile(null);
+      }
+    });
 
     return () => {
       isActive = false;
       clearTimeout(authInitTimeout);
       subscription.unsubscribe();
     };
-  }, []);
+  }, [initialized]);
 
   const signOut = async () => {
     await supabase.auth.signOut();
