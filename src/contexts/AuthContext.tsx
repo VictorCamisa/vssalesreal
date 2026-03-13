@@ -39,11 +39,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
   const [profileLoading, setProfileLoading] = useState(false);
-  const [initialized, setInitialized] = useState(false);
 
   const fetchProfile = async (userId: string) => {
     setProfileLoading(true);
-
     try {
       const result = await Promise.race([
         supabase.from("profiles").select("*").eq("user_id", userId).maybeSingle(),
@@ -51,13 +49,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setTimeout(() => resolve({ data: null, error: new Error("PROFILE_TIMEOUT") }), PROFILE_TIMEOUT_MS),
         ),
       ]);
-
       if (result.error) {
         console.error("Erro ao buscar perfil:", result.error.message);
         setProfile(null);
         return;
       }
-
       setProfile(result.data);
     } catch (error) {
       console.error("Falha inesperada ao buscar perfil:", error);
@@ -69,48 +65,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let isActive = true;
+    let hasInitialized = false;
 
     const authInitTimeout = setTimeout(() => {
       if (!isActive) return;
-      console.warn("Auth init timeout: liberando loading para evitar travamento.");
+      console.warn("Auth init timeout: liberando loading.");
       setLoading(false);
       setProfileLoading(false);
-      setInitialized(true);
+      hasInitialized = true;
     }, AUTH_INIT_TIMEOUT_MS);
-
-    // Only process session once via getSession; onAuthStateChange handles subsequent changes
-    supabase.auth
-      .getSession()
-      .then(async ({ data: { session: initialSession } }) => {
-        if (!isActive) return;
-
-        setSession(initialSession);
-        setUser(initialSession?.user ?? null);
-
-        if (initialSession?.user) {
-          await fetchProfile(initialSession.user.id);
-        }
-
-        if (isActive) {
-          setLoading(false);
-          setInitialized(true);
-        }
-      })
-      .catch((error) => {
-        console.error("Erro ao carregar sessão:", error);
-        if (!isActive) return;
-        setSession(null);
-        setUser(null);
-        setProfile(null);
-        setLoading(false);
-        setProfileLoading(false);
-        setInitialized(true);
-      });
 
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (_event, nextSession) => {
-      if (!isActive || !initialized) return;
+      if (!isActive) return;
+
+      // Skip duplicate processing during init — getSession handles it
+      if (!hasInitialized && _event === "INITIAL_SESSION") return;
 
       setSession(nextSession);
       setUser(nextSession?.user ?? null);
@@ -122,12 +93,39 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     });
 
+    supabase.auth
+      .getSession()
+      .then(async ({ data: { session: initialSession } }) => {
+        if (!isActive) return;
+        setSession(initialSession);
+        setUser(initialSession?.user ?? null);
+
+        if (initialSession?.user) {
+          await fetchProfile(initialSession.user.id);
+        }
+
+        if (isActive) {
+          setLoading(false);
+          hasInitialized = true;
+        }
+      })
+      .catch((error) => {
+        console.error("Erro ao carregar sessão:", error);
+        if (!isActive) return;
+        setSession(null);
+        setUser(null);
+        setProfile(null);
+        setLoading(false);
+        setProfileLoading(false);
+        hasInitialized = true;
+      });
+
     return () => {
       isActive = false;
       clearTimeout(authInitTimeout);
       subscription.unsubscribe();
     };
-  }, [initialized]);
+  }, []);
 
   const signOut = async () => {
     await supabase.auth.signOut();
