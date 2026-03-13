@@ -474,16 +474,17 @@ O lead está respondendo à mensagem enviada pelo disparo. Continue naturalmente
 
     const temperature = Math.max(0.2, Math.min(Number(scenario.temperature) ?? 0.3, 0.45));
 
-    const MODELS_TO_TRY = [
-      "google/gemini-2.5-flash",
-      "openai/gpt-5-mini",
-    ];
+    // Models to try: Lovable AI Gateway first, then Anthropic direct
+    const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY");
 
     let reply = "";
     let aiSuccess = false;
-    for (const model of MODELS_TO_TRY) {
+
+    // --- Attempt 1: Lovable AI Gateway models ---
+    const GATEWAY_MODELS = ["google/gemini-2.5-flash", "openai/gpt-5-mini"];
+    for (const model of GATEWAY_MODELS) {
       try {
-        const aiResponse = await fetch("https://api.lovable.dev/v1/chat/completions", {
+        const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
           method: "POST",
           headers: {
             "Authorization": `Bearer ${LOVABLE_API_KEY}`,
@@ -509,6 +510,44 @@ O lead está respondendo à mensagem enviada pelo disparo. Continue naturalmente
         console.warn(`AI model ${model} failed: ${aiResponse.status}`);
       } catch (err) {
         console.warn(`AI model ${model} error: ${err.message}`);
+      }
+    }
+
+    // --- Attempt 2: Anthropic Claude 3.5 Haiku (direct) ---
+    if (!aiSuccess && ANTHROPIC_API_KEY) {
+      try {
+        console.log("Trying Anthropic claude-3-5-haiku-20241022...");
+        const anthropicResponse = await fetch("https://api.anthropic.com/v1/messages", {
+          method: "POST",
+          headers: {
+            "x-api-key": ANTHROPIC_API_KEY,
+            "anthropic-version": "2023-06-01",
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            model: "claude-3-5-haiku-20241022",
+            max_tokens: 1024,
+            temperature,
+            system: conversationMessages[0]?.role === "system" ? conversationMessages[0].content : "",
+            messages: conversationMessages.filter((m: any) => m.role !== "system").map((m: any) => ({
+              role: m.role,
+              content: m.content,
+            })),
+          }),
+        });
+
+        if (anthropicResponse.ok) {
+          const anthropicData = await anthropicResponse.json();
+          reply = anthropicData.content?.[0]?.text || "";
+          if (reply) {
+            console.log("Anthropic claude-3-5-haiku succeeded");
+            aiSuccess = true;
+          }
+        } else {
+          console.warn(`Anthropic failed: ${anthropicResponse.status}`);
+        }
+      } catch (err) {
+        console.warn(`Anthropic error: ${err.message}`);
       }
     }
 
