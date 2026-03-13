@@ -5,9 +5,16 @@ const allowedOrigins = [
   Deno.env.get("ALLOWED_ORIGIN") || "",
 ];
 
+function isAllowedOrigin(origin: string): boolean {
+  if (allowedOrigins.includes(origin)) return true;
+  if (/^https:\/\/[a-z0-9-]+\.lovableproject\.com$/.test(origin)) return true;
+  if (/^https:\/\/[a-z0-9-]+-preview--[a-z0-9-]+\.lovable\.app$/.test(origin)) return true;
+  return false;
+}
+
 function getCorsHeaders(req: Request) {
   const origin = req.headers.get("origin") || "";
-  const corsOrigin = allowedOrigins.includes(origin) ? origin : allowedOrigins[0];
+  const corsOrigin = isAllowedOrigin(origin) ? origin : allowedOrigins[0];
   return {
     "Access-Control-Allow-Origin": corsOrigin,
     "Access-Control-Allow-Headers":
