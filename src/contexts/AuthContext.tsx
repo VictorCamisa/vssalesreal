@@ -65,64 +65,57 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let isActive = true;
-    let hasInitialized = false;
 
-    const authInitTimeout = setTimeout(() => {
+    // 1. Restore session from storage first
+    supabase.auth.getSession().then(async ({ data: { session: initialSession } }) => {
       if (!isActive) return;
-      console.warn("Auth init timeout: liberando loading.");
-      setLoading(false);
-      setProfileLoading(false);
-      hasInitialized = true;
-    }, AUTH_INIT_TIMEOUT_MS);
+      setSession(initialSession);
+      setUser(initialSession?.user ?? null);
 
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (_event, nextSession) => {
-      if (!isActive) return;
-
-      // Skip duplicate processing during init — getSession handles it
-      if (!hasInitialized && _event === "INITIAL_SESSION") return;
-
-      setSession(nextSession);
-      setUser(nextSession?.user ?? null);
-
-      if (nextSession?.user) {
-        await fetchProfile(nextSession.user.id);
-      } else {
-        setProfile(null);
+      if (initialSession?.user) {
+        // Fire and forget — don't block loading on profile
+        fetchProfile(initialSession.user.id);
       }
+
+      setLoading(false);
+    }).catch((error) => {
+      console.error("Erro ao carregar sessão:", error);
+      if (!isActive) return;
+      setSession(null);
+      setUser(null);
+      setProfile(null);
+      setLoading(false);
     });
 
-    supabase.auth
-      .getSession()
-      .then(async ({ data: { session: initialSession } }) => {
+    // 2. Listen for subsequent auth changes (sign in/out, token refresh)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (_event, nextSession) => {
         if (!isActive) return;
-        setSession(initialSession);
-        setUser(initialSession?.user ?? null);
 
-        if (initialSession?.user) {
-          await fetchProfile(initialSession.user.id);
+        setSession(nextSession);
+        setUser(nextSession?.user ?? null);
+
+        if (nextSession?.user) {
+          fetchProfile(nextSession.user.id);
+        } else {
+          setProfile(null);
         }
 
-        if (isActive) {
-          setLoading(false);
-          hasInitialized = true;
-        }
-      })
-      .catch((error) => {
-        console.error("Erro ao carregar sessão:", error);
-        if (!isActive) return;
-        setSession(null);
-        setUser(null);
-        setProfile(null);
+        // Ensure loading is cleared on any auth event
         setLoading(false);
-        setProfileLoading(false);
-        hasInitialized = true;
-      });
+      }
+    );
+
+    // Safety timeout
+    const authTimeout = setTimeout(() => {
+      if (!isActive) return;
+      setLoading(false);
+      setProfileLoading(false);
+    }, AUTH_INIT_TIMEOUT_MS);
 
     return () => {
       isActive = false;
-      clearTimeout(authInitTimeout);
+      clearTimeout(authTimeout);
       subscription.unsubscribe();
     };
   }, []);
