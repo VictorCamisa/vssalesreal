@@ -30,8 +30,8 @@ const AuthContext = createContext<AuthContextType>({
 
 export const useAuth = () => useContext(AuthContext);
 
-const PROFILE_TIMEOUT_MS = 15000;
-const AUTH_INIT_TIMEOUT_MS = 12000;
+const PROFILE_TIMEOUT_MS = 10000;
+const AUTH_INIT_TIMEOUT_MS = 8000;
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
@@ -42,7 +42,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const fetchProfile = async (userId: string) => {
     setProfileLoading(true);
-
     try {
       const result = await Promise.race([
         supabase.from("profiles").select("*").eq("user_id", userId).maybeSingle(),
@@ -50,13 +49,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setTimeout(() => resolve({ data: null, error: new Error("PROFILE_TIMEOUT") }), PROFILE_TIMEOUT_MS),
         ),
       ]);
-
       if (result.error) {
         console.error("Erro ao buscar perfil:", result.error.message);
         setProfile(null);
         return;
       }
-
       setProfile(result.data);
     } catch (error) {
       console.error("Falha inesperada ao buscar perfil:", error);
@@ -68,16 +65,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let isActive = true;
+    let hasInitialized = false;
 
     const authInitTimeout = setTimeout(() => {
       if (!isActive) return;
-      console.warn("Auth init timeout: liberando loading para evitar travamento.");
+      console.warn("Auth init timeout: liberando loading.");
       setLoading(false);
       setProfileLoading(false);
+      hasInitialized = true;
     }, AUTH_INIT_TIMEOUT_MS);
 
-    const handleSession = async (nextSession: Session | null) => {
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(async (_event, nextSession) => {
       if (!isActive) return;
+
+      // Skip duplicate processing during init — getSession handles it
+      if (!hasInitialized && _event === "INITIAL_SESSION") return;
 
       setSession(nextSession);
       setUser(nextSession?.user ?? null);
@@ -87,22 +91,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       } else {
         setProfile(null);
       }
-
-      if (isActive) {
-        setLoading(false);
-      }
-    };
-
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (_event, nextSession) => {
-      await handleSession(nextSession);
     });
 
     supabase.auth
       .getSession()
-      .then(async ({ data: { session } }) => {
-        await handleSession(session);
+      .then(async ({ data: { session: initialSession } }) => {
+        if (!isActive) return;
+        setSession(initialSession);
+        setUser(initialSession?.user ?? null);
+
+        if (initialSession?.user) {
+          await fetchProfile(initialSession.user.id);
+        }
+
+        if (isActive) {
+          setLoading(false);
+          hasInitialized = true;
+        }
       })
       .catch((error) => {
         console.error("Erro ao carregar sessão:", error);
@@ -112,6 +117,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setProfile(null);
         setLoading(false);
         setProfileLoading(false);
+        hasInitialized = true;
       });
 
     return () => {
