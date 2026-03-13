@@ -30,8 +30,8 @@ const AuthContext = createContext<AuthContextType>({
 
 export const useAuth = () => useContext(AuthContext);
 
-const PROFILE_TIMEOUT_MS = 10000;
-const AUTH_INIT_TIMEOUT_MS = 8000;
+const PROFILE_TIMEOUT_MS = 5000;
+const AUTH_INIT_TIMEOUT_MS = 5000;
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
