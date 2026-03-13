@@ -468,45 +468,43 @@ O lead está respondendo à mensagem enviada pelo disparo. Continue naturalmente
     // Add current message
     conversationMessages.push({ role: "user", content: `[MENSAGEM DO USUÁRIO] [${pushName}]: ${messageText} [/MENSAGEM DO USUÁRIO]` });
 
-    // ---- Call AI ----
-    const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY");
-    if (!ANTHROPIC_API_KEY) throw new Error("ANTHROPIC_API_KEY not configured");
+    // ---- Call AI via Lovable AI Gateway ----
+    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+    if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY not configured");
 
     const temperature = Math.max(0.2, Math.min(Number(scenario.temperature) ?? 0.3, 0.45));
 
-    // Extract system message from conversation
-    const systemMsg = conversationMessages.find((m: any) => m.role === "system")?.content || "";
-    const nonSystemMessages = conversationMessages.filter((m: any) => m.role !== "system");
-
-    const ANTHROPIC_MODELS = [
-      "claude-3-5-haiku-20241022",
-      "claude-3-5-haiku-latest",
-      "claude-3-haiku-20240307",
+    const MODELS_TO_TRY = [
+      "google/gemini-2.5-flash",
+      "openai/gpt-5-mini",
     ];
 
-    let aiData: any = null;
-    for (const model of ANTHROPIC_MODELS) {
+    let reply = "";
+    let aiSuccess = false;
+    for (const model of MODELS_TO_TRY) {
       try {
-        const aiResponse = await fetch("https://api.anthropic.com/v1/messages", {
+        const aiResponse = await fetch("https://api.lovable.dev/v1/chat/completions", {
           method: "POST",
           headers: {
-            "x-api-key": ANTHROPIC_API_KEY,
-            "anthropic-version": "2023-06-01",
+            "Authorization": `Bearer ${LOVABLE_API_KEY}`,
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
             model,
-            system: systemMsg,
-            messages: nonSystemMessages,
+            messages: conversationMessages,
             max_tokens: 1024,
             temperature,
           }),
         });
 
         if (aiResponse.ok) {
-          aiData = await aiResponse.json();
-          console.log(`AI model ${model} succeeded`);
-          break;
+          const aiData = await aiResponse.json();
+          reply = aiData.choices?.[0]?.message?.content || "";
+          if (reply) {
+            console.log(`AI model ${model} succeeded`);
+            aiSuccess = true;
+            break;
+          }
         }
         console.warn(`AI model ${model} failed: ${aiResponse.status}`);
       } catch (err) {
@@ -514,12 +512,10 @@ O lead está respondendo à mensagem enviada pelo disparo. Continue naturalmente
       }
     }
 
-    if (!aiData) {
-      console.error("AI error: All Anthropic models failed.");
+    if (!aiSuccess || !reply) {
+      console.error("AI error: All models failed.");
       return new Response(JSON.stringify({ error: "AI failed" }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
-
-    let reply = aiData.content?.[0]?.text || "";
     if (!reply) {
       return new Response(JSON.stringify({ error: "Empty AI response" }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
