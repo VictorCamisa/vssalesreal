@@ -404,6 +404,14 @@ O lead está respondendo à mensagem enviada pelo disparo. Continue naturalmente
         .filter(([_, count]) => count >= 2)
         .map(([phrase]) => phrase);
 
+      if (repeatedPhrases.length > 0) {
+        behaviorParts.push(`\nANTI-REPETIÇÃO (OBRIGATÓRIO):`);
+        behaviorParts.push(`As seguintes frases JÁ FORAM DITAS por você anteriormente. NÃO as repita de forma alguma. Reformule completamente usando outras palavras e trazendo informações NOVAS:`);
+        for (const phrase of repeatedPhrases.slice(0, 5)) {
+          behaviorParts.push(`- "${phrase.substring(0, 100)}"`);
+        }
+        behaviorParts.push(`Responda a pergunta atual do lead com informações DIFERENTES e RELEVANTES. Se não tiver mais informações, encaminhe para atendente humano.`);
+      }
     }
 
     const behaviorRules = behaviorParts.join("\n");
