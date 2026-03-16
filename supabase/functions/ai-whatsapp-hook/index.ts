@@ -138,8 +138,8 @@ O lead está respondendo à mensagem enviada pelo disparo. Continue naturalmente
     const delaySeconds = behavior.delay_seconds ?? 5;
     const contextWindow = behavior.context_window ?? 20;
     const splitMessages = behavior.split_messages !== false;
-    const maxBlocks = behavior.max_blocks ?? 3;
-    const maxCharsPerBlock = behavior.max_chars_per_block ?? 200;
+    const maxBlocks = behavior.max_blocks ?? 2;
+    const maxCharsPerBlock = behavior.max_chars_per_block ?? 400;
     const useEmoji = behavior.use_emoji !== false;
     const activeEngagement = behavior.active_engagement !== false;
     const hidePrices = behavior.hide_prices === true;
@@ -347,7 +347,9 @@ O lead está respondendo à mensagem enviada pelo disparo. Continue naturalmente
     }
 
     // ---- Greeting message for first contact ----
-    if (customerMsgCount === 1 && greetingMessage) {
+    // Only send greeting if this is truly the first message AND no prior bot messages exist
+    const isFirstContact = customerMsgCount === 1 && actualBotCount === 0;
+    if (isFirstContact && greetingMessage) {
       // Will be prepended to AI response below
     }
 
@@ -404,6 +406,14 @@ O lead está respondendo à mensagem enviada pelo disparo. Continue naturalmente
         .filter(([_, count]) => count >= 2)
         .map(([phrase]) => phrase);
 
+      if (repeatedPhrases.length > 0) {
+        behaviorParts.push(`\nANTI-REPETIÇÃO (OBRIGATÓRIO):`);
+        behaviorParts.push(`As seguintes frases JÁ FORAM DITAS por você anteriormente. NÃO as repita de forma alguma. Reformule completamente usando outras palavras e trazendo informações NOVAS:`);
+        for (const phrase of repeatedPhrases.slice(0, 5)) {
+          behaviorParts.push(`- "${phrase.substring(0, 100)}"`);
+        }
+        behaviorParts.push(`Responda a pergunta atual do lead com informações DIFERENTES e RELEVANTES. Se não tiver mais informações, encaminhe para atendente humano.`);
+      }
     }
 
     const behaviorRules = behaviorParts.join("\n");
@@ -636,7 +646,7 @@ O lead está respondendo à mensagem enviada pelo disparo. Continue naturalmente
 
     // Prepend greeting message on first contact
     let greetingBlock: string | null = null;
-    if (customerMsgCount === 1 && greetingMessage) {
+    if (isFirstContact && greetingMessage) {
       const cp = companyProfile as any;
       greetingBlock = greetingMessage
         .replace(/\{empresa\}/gi, cp?.company_name || "")
