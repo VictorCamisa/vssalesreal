@@ -138,8 +138,8 @@ O lead está respondendo à mensagem enviada pelo disparo. Continue naturalmente
     const delaySeconds = behavior.delay_seconds ?? 5;
     const contextWindow = behavior.context_window ?? 20;
     const splitMessages = behavior.split_messages !== false;
-    const maxBlocks = behavior.max_blocks ?? 3;
-    const maxCharsPerBlock = behavior.max_chars_per_block ?? 200;
+    const maxBlocks = behavior.max_blocks ?? 2;
+    const maxCharsPerBlock = behavior.max_chars_per_block ?? 400;
     const useEmoji = behavior.use_emoji !== false;
     const activeEngagement = behavior.active_engagement !== false;
     const hidePrices = behavior.hide_prices === true;
