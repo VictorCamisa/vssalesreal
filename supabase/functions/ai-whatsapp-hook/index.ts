@@ -347,7 +347,9 @@ O lead está respondendo à mensagem enviada pelo disparo. Continue naturalmente
     }
 
     // ---- Greeting message for first contact ----
-    if (customerMsgCount === 1 && greetingMessage) {
+    // Only send greeting if this is truly the first message AND no prior bot messages exist
+    const isFirstContact = customerMsgCount === 1 && actualBotCount === 0;
+    if (isFirstContact && greetingMessage) {
       // Will be prepended to AI response below
     }
 
