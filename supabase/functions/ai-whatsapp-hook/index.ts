@@ -646,7 +646,7 @@ O lead está respondendo à mensagem enviada pelo disparo. Continue naturalmente
 
     // Prepend greeting message on first contact
     let greetingBlock: string | null = null;
-    if (customerMsgCount === 1 && greetingMessage) {
+    if (isFirstContact && greetingMessage) {
       const cp = companyProfile as any;
       greetingBlock = greetingMessage
         .replace(/\{empresa\}/gi, cp?.company_name || "")
