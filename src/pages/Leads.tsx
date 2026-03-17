@@ -465,6 +465,28 @@ export default function Leads() {
           <Button size="sm" variant="outline" className="rounded-xl gap-2" onClick={exportCSV}>
             <Download className="h-3.5 w-3.5" /> Exportar
           </Button>
+          <AlertDialog open={deleteAllOpen} onOpenChange={setDeleteAllOpen}>
+            <AlertDialogTrigger asChild>
+              <Button size="sm" variant="outline" className="rounded-xl gap-2 text-destructive border-destructive/30 hover:bg-destructive/10">
+                <Trash2 className="h-3.5 w-3.5" /> Apagar Todos
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Apagar todos os leads?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  Esta ação irá remover permanentemente <strong>todos os {totalCount} leads</strong> da sua organização. Essa ação não pode ser desfeita.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                <AlertDialogAction onClick={handleDeleteAll} disabled={deletingAll} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                  {deletingAll ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Trash2 className="h-4 w-4 mr-2" />}
+                  Sim, apagar todos
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
           <Button size="sm" className="rounded-xl gap-2" onClick={() => setAddOpen(true)}>
             <Plus className="h-4 w-4" /> Novo Lead
           </Button>
