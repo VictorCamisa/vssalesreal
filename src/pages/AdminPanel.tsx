@@ -209,27 +209,56 @@ export default function AdminPanel() {
     setDiagnosing(true);
     setDiagnosis(null);
     try {
-      console.log("Iniciando diagnóstico para log:", log.id);
-      const { data, error } = await supabase.functions.invoke("ai-log-diagnose", {
-        body: { log_entry: log },
+      console.log("Iniciando diagnóstico via ai-chat para log:", log.id);
+      
+      const systemPrompt = `Você é um Engenheiro de SRE e Support Senior. 
+Analise este log de erro de uma aplicação SaaS e forneça um diagnóstico preciso.
+
+FORMATO DE RESPOSTA (Markdown):
+### 🔍 Diagnóstico
+[Explicação clara e concisa do que aconteceu]
+
+### 💡 Causa Provável
+[Identifique o motivo raiz]
+
+### 🛠️ Como Resolver
+[Passos exatos para corrigir]
+
+DADOS DO LOG:
+Ação: ${log.action}
+Descrição: ${log.description}
+Erro: ${log.error_message || "Sem mensagem direta"}
+Metadados: ${JSON.stringify(log.metadata || {})}
+Data: ${log.created_at}`;
+
+      const { data, error } = await supabase.functions.invoke("ai-chat", {
+        body: { 
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: "Por favor, diagnostique este erro." }
+          ],
+          org_id: log.organization_id || selectedOrgId,
+          mode: "assistant"
+        },
       });
       
-      if (error) {
-        console.error("Erro na invocação da função:", error);
-        throw error;
-      }
+      if (error) throw error;
       
-      if (!data || !data.diagnosis) {
-        console.warn("Resposta da função sem diagnóstico:", data);
+      // The ai-chat function returns the full response in a specific field, 
+      // based on existing code it likely returns a stream or a text field.
+      // Adjusting to common Lovable ai-chat response structure:
+      const diagnosisText = data?.choices?.[0]?.message?.content || data?.text || data?.response;
+      
+      if (!diagnosisText) {
         throw new Error("Não foi possível gerar um diagnóstico no momento.");
       }
       
-      setDiagnosis(data.diagnosis);
+      setDiagnosis(diagnosisText);
     } catch (err: any) {
-      console.error("Erro completo no diagnóstico:", err);
+      console.error("Erro no diagnóstico via ai-chat:", err);
       toast({ 
         title: "Erro na análise", 
-        description: err.message || "Ocorreu um erro ao processar o diagnóstico.", 
+        description: "Falha ao conectar com o serviço de IA. Verifique se a função 'ai-chat' está ativa.", 
         variant: "destructive" 
       });
     } finally {
