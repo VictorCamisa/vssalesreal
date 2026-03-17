@@ -234,12 +234,16 @@ Data: ${log.created_at}`;
       const { data: { session } } = await supabase.auth.getSession();
       const token = session?.access_token;
       
-      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-chat`, {
+      // Derive production URL and Key from the client directly to avoid import.meta.env issues
+      const supabaseUrl = (supabase as any).supabaseUrl;
+      const supabaseKey = (supabase as any).supabaseKey;
+
+      const response = await fetch(`${supabaseUrl}/functions/v1/ai-chat`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
-          apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+          apikey: supabaseKey,
         },
         body: JSON.stringify({ 
           messages: [
