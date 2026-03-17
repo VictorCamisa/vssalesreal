@@ -27,6 +27,10 @@ import {
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 
 type Lead = {
   id: string;
@@ -95,6 +99,8 @@ export default function Leads() {
   const [addOpen, setAddOpen] = useState(false);
   const [newLead, setNewLead] = useState({ name: "", phone: "", email: "" });
   const [addLoading, setAddLoading] = useState(false);
+  const [deleteAllOpen, setDeleteAllOpen] = useState(false);
+  const [deletingAll, setDeletingAll] = useState(false);
 
   const fetchLeads = async () => {
     if (!profile?.org_id) return;
@@ -412,6 +418,24 @@ export default function Leads() {
     } finally { setAddLoading(false); }
   };
 
+  const handleDeleteAll = async () => {
+    if (!profile?.org_id) return;
+    setDeletingAll(true);
+    try {
+      const { error } = await supabase.from("leads_raw").delete().eq("org_id", profile.org_id);
+      if (error) throw error;
+      toast({ title: "Todos os leads foram apagados!" });
+      logActivity({ action: "leads_apagados_todos", description: "Todos os leads da organização foram apagados" });
+      setSelected(new Set());
+      fetchLeads();
+    } catch (error: any) {
+      toast({ title: "Erro ao apagar", description: error.message, variant: "destructive" });
+    } finally {
+      setDeletingAll(false);
+      setDeleteAllOpen(false);
+    }
+  };
+
   const exportCSV = () => {
     const rows = [["Nome", "Telefone", "Email", "Fonte", "Status"]];
     leads.forEach((l) => rows.push([l.name || "", l.phone || "", l.email || "", sourceLabels[l.source] || l.source, statusLabels[l.status] || l.status]));
@@ -441,6 +465,28 @@ export default function Leads() {
           <Button size="sm" variant="outline" className="rounded-xl gap-2" onClick={exportCSV}>
             <Download className="h-3.5 w-3.5" /> Exportar
           </Button>
+          <AlertDialog open={deleteAllOpen} onOpenChange={setDeleteAllOpen}>
+            <AlertDialogTrigger asChild>
+              <Button size="sm" variant="outline" className="rounded-xl gap-2 text-destructive border-destructive/30 hover:bg-destructive/10">
+                <Trash2 className="h-3.5 w-3.5" /> Apagar Todos
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Apagar todos os leads?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  Esta ação irá remover permanentemente <strong>todos os {totalCount} leads</strong> da sua organização. Essa ação não pode ser desfeita.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                <AlertDialogAction onClick={handleDeleteAll} disabled={deletingAll} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                  {deletingAll ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Trash2 className="h-4 w-4 mr-2" />}
+                  Sim, apagar todos
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
           <Button size="sm" className="rounded-xl gap-2" onClick={() => setAddOpen(true)}>
             <Plus className="h-4 w-4" /> Novo Lead
           </Button>
