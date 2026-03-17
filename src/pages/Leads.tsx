@@ -266,72 +266,103 @@ export default function Leads() {
     }
   };
 
-  const handleCSVUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || !profile?.org_id) return;
-    const text = await file.text();
-    const lines = text.split(/\r?\n/).filter(l => l.trim());
-    if (lines.length < 2) return;
+  const normalizeHeader = (h: string) =>
+    h.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[_\s]+/g, " ").trim().replace(/^"|"$/g, "");
 
-    // Detect separator: ; or , or \t
-    const firstLine = lines[0];
-    const separator = firstLine.includes(";") ? ";" : firstLine.includes("\t") ? "\t" : ",";
+  const findCol = (headers: string[], possibleNames: string[]): number => {
+    const normalized = possibleNames.map(normalizeHeader);
+    for (const n of normalized) { const i = headers.indexOf(n); if (i !== -1) return i; }
+    for (const n of normalized) { const i = headers.findIndex(h => h.startsWith(n)); if (i !== -1) return i; }
+    for (const n of normalized) { const i = headers.findIndex(h => h.includes(n)); if (i !== -1) return i; }
+    return -1;
+  };
 
-    const normalizeHeader = (h: string) =>
-      h.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[_\s]+/g, " ").trim().replace(/^"|"$/g, "");
+  const parseRowsFromHeaders = (headers: string[], dataRows: Record<string, any>[]) => {
+    const nameIdx = findCol(headers, ["nome", "name", "nome completo", "full name", "contato", "contact", "cliente", "razao social", "empresa"]);
+    const phoneIdx = findCol(headers, ["telefone", "phone", "celular", "whatsapp", "tel", "fone", "numero"]);
+    const emailIdx = findCol(headers, ["email", "e-mail", "correio"]);
+    console.log("Import - headers:", headers, "nameIdx:", nameIdx, "phoneIdx:", phoneIdx, "emailIdx:", emailIdx);
 
-    const headers = firstLine.split(separator).map(normalizeHeader);
-
-    const findCol = (possibleNames: string[]): number => {
-      const normalized = possibleNames.map(normalizeHeader);
-      // Exact match
-      for (const n of normalized) { const i = headers.indexOf(n); if (i !== -1) return i; }
-      // Starts with
-      for (const n of normalized) { const i = headers.findIndex(h => h.startsWith(n)); if (i !== -1) return i; }
-      // Contains
-      for (const n of normalized) { const i = headers.findIndex(h => h.includes(n)); if (i !== -1) return i; }
-      return -1;
-    };
-
-    const nameIdx = findCol(["nome", "name", "nome completo", "full name", "contato", "contact", "cliente", "razao social", "empresa"]);
-    const phoneIdx = findCol(["telefone", "phone", "celular", "whatsapp", "tel", "fone", "numero"]);
-    const emailIdx = findCol(["email", "e-mail", "correio"]);
-
-    console.log("CSV Import - separator:", JSON.stringify(separator), "headers:", headers, "nameIdx:", nameIdx, "phoneIdx:", phoneIdx, "emailIdx:", emailIdx);
-
-    const rows = lines.slice(1).map(line => {
-      const values = line.split(separator).map(v => v.trim().replace(/^"|"$/g, ""));
-      const obj: any = { org_id: profile.org_id, source: "import" as const, status: "pending" as const };
+    return dataRows.map(row => {
+      const values = headers.map(h => {
+        const val = row[h];
+        return val != null ? String(val).trim() : "";
+      });
+      const obj: any = { org_id: profile!.org_id, source: "import" as const, status: "pending" as const };
       if (nameIdx !== -1 && values[nameIdx]) obj.name = values[nameIdx];
       if (phoneIdx !== -1 && values[phoneIdx]) obj.phone = values[phoneIdx];
       if (emailIdx !== -1 && values[emailIdx]) obj.email = values[emailIdx];
       return obj;
     }).filter(r => r.name || r.phone || r.email);
+  };
 
-    if (rows.length === 0) { toast({ title: "CSV vazio ou inválido", description: "Verifique se o arquivo possui colunas como 'Nome', 'Telefone' ou 'Email'.", variant: "destructive" }); return; }
-    
-    console.log("CSV Import - inserting", rows.length, "rows, first row:", JSON.stringify(rows[0]));
-    
-    const { data, error } = await supabase.from("leads_raw").insert(rows).select("id");
-    if (error) { 
-      console.error("CSV Import error:", error); 
-      toast({ title: "Erro ao importar", description: error.message, variant: "destructive" }); 
-      logActivity({ action: "leads_importados", description: "Falha na importação CSV", success: false, errorMessage: error.message }); 
-      return; 
+  const importLeads = async (rows: any[], fileType: string, inputEl?: HTMLInputElement) => {
+    if (rows.length === 0) {
+      toast({ title: "Arquivo vazio ou inválido", description: "Verifique se o arquivo possui colunas como 'Nome', 'Telefone', 'Celular' ou 'Email'.", variant: "destructive" });
+      return;
     }
-    
-    const insertedCount = data?.length || 0;
-    console.log("CSV Import - inserted", insertedCount, "rows");
-    
-    if (insertedCount === 0) {
+    console.log(`${fileType} Import - inserting`, rows.length, "rows, first row:", JSON.stringify(rows[0]));
+
+    const BATCH_SIZE = 500;
+    let totalInserted = 0;
+    for (let i = 0; i < rows.length; i += BATCH_SIZE) {
+      const batch = rows.slice(i, i + BATCH_SIZE);
+      const { data, error } = await supabase.from("leads_raw").insert(batch).select("id");
+      if (error) {
+        console.error(`${fileType} Import error:`, error);
+        toast({ title: "Erro ao importar", description: error.message, variant: "destructive" });
+        logActivity({ action: "leads_importados", description: `Falha na importação ${fileType}`, success: false, errorMessage: error.message });
+        return;
+      }
+      totalInserted += data?.length || 0;
+    }
+
+    if (totalInserted === 0) {
       toast({ title: "Nenhum lead foi inserido", description: "Verifique suas permissões ou tente novamente.", variant: "destructive" });
       return;
     }
-    
-    toast({ title: `${insertedCount} leads importados!` });
-    logActivity({ action: "leads_importados", description: `${insertedCount} leads importados via CSV` });
-    e.target.value = "";
+    toast({ title: `${totalInserted} leads importados!` });
+    logActivity({ action: "leads_importados", description: `${totalInserted} leads importados via ${fileType}` });
+    if (inputEl) inputEl.value = "";
     fetchLeads();
+  };
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !profile?.org_id) return;
+
+    const ext = file.name.split(".").pop()?.toLowerCase();
+
+    if (ext === "xlsx" || ext === "xls") {
+      const buffer = await file.arrayBuffer();
+      const wb = XLSX.read(buffer, { type: "array" });
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const jsonData = XLSX.utils.sheet_to_json<Record<string, any>>(ws, { defval: "" });
+      if (jsonData.length === 0) { toast({ title: "Planilha vazia", variant: "destructive" }); return; }
+      const headers = Object.keys(jsonData[0]).map(normalizeHeader);
+      const dataRows = jsonData.map(row => {
+        const mapped: Record<string, any> = {};
+        Object.entries(row).forEach(([k, v]) => { mapped[normalizeHeader(k)] = v; });
+        return mapped;
+      });
+      const rows = parseRowsFromHeaders(headers, dataRows);
+      await importLeads(rows, "XLSX", e.target);
+    } else {
+      const text = await file.text();
+      const lines = text.split(/\r?\n/).filter(l => l.trim());
+      if (lines.length < 2) return;
+      const firstLine = lines[0];
+      const separator = firstLine.includes(";") ? ";" : firstLine.includes("\t") ? "\t" : ",";
+      const headers = firstLine.split(separator).map(normalizeHeader);
+      const dataRows = lines.slice(1).map(line => {
+        const values = line.split(separator).map(v => v.trim().replace(/^"|"$/g, ""));
+        const mapped: Record<string, any> = {};
+        headers.forEach((h, i) => { mapped[h] = values[i] || ""; });
+        return mapped;
+      });
+      const rows = parseRowsFromHeaders(headers, dataRows);
+      await importLeads(rows, "CSV", e.target);
+    }
   };
 
   const handleAddLead = async () => {
