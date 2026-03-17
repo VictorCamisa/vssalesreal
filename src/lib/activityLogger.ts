@@ -42,9 +42,15 @@ export async function logActivity({
       description,
       success,
       error_message: errorMessage || null,
-      metadata,
+      metadata: {
+        ...metadata,
+        url: typeof window !== "undefined" ? window.location.href : null,
+        userAgent: typeof navigator !== "undefined" ? navigator.userAgent : null,
+        timestamp: new Date().toISOString(),
+      },
     });
-  } catch {
+  } catch (error) {
+    console.error("Failed to log activity:", error);
     // Silent fail - logging should never break the app
   }
 }

@@ -1,8 +1,20 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import vsLogo from "@/assets/vs-sales-logo.png";
+import {
+  AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer
+} from "recharts";
+import {
+  Drawer,
+  DrawerClose,
+  DrawerContent,
+  DrawerDescription,
+  DrawerFooter,
+  DrawerHeader,
+  DrawerTitle,
+} from "@/components/ui/drawer";
 import {
   Users, FileText, BarChart3, Settings, LogOut, Mail,
   Phone, Building2, TrendingUp, Activity, Database,
@@ -11,9 +23,11 @@ import {
   DollarSign, RefreshCw, UserPlus, Copy,
   Loader2, Trash2, User, ArrowLeft, Package, Plus,
   Target, Lightbulb, ShieldCheck, Globe, Instagram,
-  Linkedin, Facebook, MapPin, Upload, Sparkles, HelpCircle, Link2
+  Linkedin, Facebook, MapPin, Upload, Sparkles, HelpCircle, Link2,
+  ChevronRight, Calendar, Info, Clock, Terminal, Laptop
 } from "lucide-react";
 import { OrgDetailView } from "@/components/admin/OrgDetailView";
+import ReactMarkdown from "react-markdown";
 
 type Tab = "metrics" | "pending" | "users" | "leads" | "content" | "companies" | "logs" | "plans";
 
@@ -161,6 +175,13 @@ export default function AdminPanel() {
   const [plansLoading, setPlansLoading] = useState(false);
   const [editingPlan, setEditingPlan] = useState<any | null>(null);
   const [savingPlan, setSavingPlan] = useState(false);
+
+  // Log Detailed View & AI Diagnosis
+  const [selectedLog, setSelectedLog] = useState<any | null>(null);
+  const [diagnosis, setDiagnosis] = useState<string | null>(null);
+  const [diagnosing, setDiagnosing] = useState(false);
+  const [logTimeRange, setLogTimeRange] = useState<"1h" | "6h" | "24h" | "all">("1h");
+
   const { toast } = useToast();
   const navigate = useNavigate();
 
@@ -182,6 +203,59 @@ export default function AdminPanel() {
   useEffect(() => {
     if (tab === "logs") loadLogs();
   }, [tab]);
+
+  const diagnoseLog = async (log: any) => {
+    setDiagnosing(true);
+    setDiagnosis(null);
+    try {
+      const session = (await supabase.auth.getSession()).data.session;
+      const { data, error } = await supabase.functions.invoke("ai-log-diagnose", {
+        headers: { Authorization: `Bearer ${session?.access_token}` },
+        body: { log_entry: log },
+      });
+      if (error) throw error;
+      setDiagnosis(data.diagnosis);
+    } catch (err: any) {
+      toast({ title: "Erro na análise", description: err.message, variant: "destructive" });
+    }
+    setDiagnosing(false);
+  };
+
+  const chartData = useMemo(() => {
+    if (!activityLogs.length) return [];
+    
+    const groups: Record<string, { time: string; success: number; failure: number; timestamp: number }> = {};
+    
+    activityLogs.forEach(log => {
+      const date = new Date(log.created_at);
+      // Grouping logic based on granularity
+      const roundedDate = new Date(Math.floor(date.getTime() / (5 * 60 * 1000)) * (5 * 60 * 1000));
+      const timeStr = roundedDate.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+      
+      if (!groups[timeStr]) {
+        groups[timeStr] = { time: timeStr, success: 0, failure: 0, timestamp: roundedDate.getTime() };
+      }
+      
+      if (log.success) groups[timeStr].success++;
+      else groups[timeStr].failure++;
+    });
+    
+    return Object.values(groups).sort((a, b) => a.timestamp - b.timestamp);
+  }, [activityLogs]);
+
+  const filteredLogs = useMemo(() => {
+    return activityLogs.filter(log => {
+      if (logUserFilter !== "all" && log.user_id !== logUserFilter) return false;
+      if (logSearchQuery) {
+        const q = logSearchQuery.toLowerCase();
+        return (log.action || "").toLowerCase().includes(q) || 
+               (log.description || "").toLowerCase().includes(q) || 
+               (log.user_name || "").toLowerCase().includes(q) ||
+               (log.error_message || "").toLowerCase().includes(q);
+      }
+      return true;
+    });
+  }, [activityLogs, logUserFilter, logSearchQuery]);
 
   // Realtime subscription for logs
   useEffect(() => {
@@ -1489,29 +1563,96 @@ export default function AdminPanel() {
 
           {/* === LOGS TAB === */}
           {tab === "logs" && (
-            <div className="space-y-4">
+            <div className="space-y-6">
               <div className="flex items-center justify-between">
-                <h2 className="text-lg font-bold text-white">Logs de Atividade</h2>
-                <button onClick={loadLogs} className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[#0057FF]/10 text-[#00D4FF] text-xs font-medium hover:bg-[#0057FF]/20 transition-colors">
-                  <RefreshCw className={`h-3.5 w-3.5 ${logsLoading ? "animate-spin" : ""}`} /> Atualizar
-                </button>
+                <div>
+                  <h2 className="text-lg font-bold text-white">Centro de Diagnóstico</h2>
+                  <p className="text-xs text-gray-500">Monitoramento e análise de atividades em tempo real.</p>
+                </div>
+                <div className="flex items-center gap-3">
+                  <div className="flex items-center bg-[#0A0A14] border border-[#1a1a2e] rounded-lg p-1">
+                    {(["1h", "6h", "24h", "all"] as const).map((r) => (
+                      <button
+                        key={r}
+                        onClick={() => setLogTimeRange(r)}
+                        className={`px-3 py-1 rounded-md text-[10px] font-medium transition-all ${
+                          logTimeRange === r ? "bg-[#0057FF] text-white shadow-lg" : "text-gray-500 hover:text-white"
+                        }`}
+                      >
+                        {r.toUpperCase()}
+                      </button>
+                    ))}
+                  </div>
+                  <button onClick={loadLogs} className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[#0057FF]/10 text-[#00D4FF] text-xs font-medium hover:bg-[#0057FF]/20 transition-colors border border-[#00D4FF]/20">
+                    <RefreshCw className={`h-3.5 w-3.5 ${logsLoading ? "animate-spin" : ""}`} /> Atualizar
+                  </button>
+                </div>
+              </div>
+
+              {/* Activity Chart */}
+              <div className="h-[200px] w-full bg-[#0d0d18] border border-[#1a1a2e] rounded-2xl p-4 overflow-hidden relative group">
+                <div className="absolute top-4 right-4 z-10 flex gap-4">
+                  <div className="flex items-center gap-1.5">
+                    <div className="h-2 w-2 rounded-full bg-[#00FF88]" />
+                    <span className="text-[10px] text-gray-400">Sucesso</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <div className="h-2 w-2 rounded-full bg-[#FF4444]" />
+                    <span className="text-[10px] text-gray-400">Falha</span>
+                  </div>
+                </div>
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={chartData}>
+                    <defs>
+                      <linearGradient id="colorSuccess" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#00FF88" stopOpacity={0.3}/>
+                        <stop offset="95%" stopColor="#00FF88" stopOpacity={0}/>
+                      </linearGradient>
+                      <linearGradient id="colorFailure" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#FF4444" stopOpacity={0.3}/>
+                        <stop offset="95%" stopColor="#FF4444" stopOpacity={0}/>
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#1A1A2E" />
+                    <XAxis 
+                      dataKey="time" 
+                      stroke="#4B5563" 
+                      fontSize={10} 
+                      tickLine={false} 
+                      axisLine={false} 
+                    />
+                    <YAxis 
+                      stroke="#4B5563" 
+                      fontSize={10} 
+                      tickLine={false} 
+                      axisLine={false} 
+                      allowDecimals={false}
+                    />
+                    <RechartsTooltip 
+                      contentStyle={{ backgroundColor: "#0d0d18", border: "1px solid #1a1a2e", borderRadius: "12px", fontSize: "10px" }}
+                      itemStyle={{ fontSize: "10px" }}
+                    />
+                    <Area type="monotone" dataKey="success" stroke="#00FF88" fillOpacity={1} fill="url(#colorSuccess)" strokeWidth={2} />
+                    <Area type="monotone" dataKey="failure" stroke="#FF4444" fillOpacity={1} fill="url(#colorFailure)" strokeWidth={2} />
+                  </AreaChart>
+                </ResponsiveContainer>
               </div>
 
               {/* Filters */}
               <div className="flex gap-3">
                 <div className="relative flex-1">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-600" />
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-500" />
                   <input
                     value={logSearchQuery}
                     onChange={e => setLogSearchQuery(e.target.value)}
-                    placeholder="Buscar por ação ou descrição..."
-                    className="w-full h-9 pl-9 pr-3 rounded-lg bg-[#0A0A14] border border-[#1a1a2e] text-sm text-white placeholder:text-gray-700 focus:outline-none focus:border-[#00D4FF]/30"
+                    placeholder="Filtrar por ação, descrição, usuário ou erro..."
+                    className="w-full h-10 pl-9 pr-3 rounded-xl bg-[#0d0d18] border border-[#1a1a2e] text-sm text-white placeholder:text-gray-600 focus:outline-none focus:border-[#00D4FF]/30 transition-all font-inter"
                   />
                 </div>
                 <select
                   value={logUserFilter}
                   onChange={e => setLogUserFilter(e.target.value)}
-                  className="h-9 px-3 rounded-lg bg-[#0A0A14] border border-[#1a1a2e] text-sm text-white focus:outline-none focus:border-[#00D4FF]/30"
+                  className="h-10 px-4 rounded-xl bg-[#0d0d18] border border-[#1a1a2e] text-sm text-white focus:outline-none focus:border-[#00D4FF]/30 transition-all cursor-pointer"
                 >
                   <option value="all">Todos os usuários</option>
                   {Array.from(new Map(activityLogs.map(l => [l.user_id, l.user_name || l.user_email])).entries()).map(([uid, name]) => (
@@ -1522,90 +1663,280 @@ export default function AdminPanel() {
 
               {/* Log entries */}
               {logsLoading ? (
-                <div className="flex items-center justify-center py-16">
-                  <Loader2 className="h-6 w-6 animate-spin text-gray-600" />
+                <div className="flex items-center justify-center py-20">
+                  <div className="flex flex-col items-center gap-4">
+                    <Loader2 className="h-8 w-8 animate-spin text-[#00D4FF]" />
+                    <p className="text-xs text-gray-500 animate-pulse">Carregando logs...</p>
+                  </div>
                 </div>
               ) : (
                 <div className="space-y-2">
-                  {activityLogs
-                    .filter(log => {
-                      if (logUserFilter !== "all" && log.user_id !== logUserFilter) return false;
-                      if (logSearchQuery) {
-                        const q = logSearchQuery.toLowerCase();
-                        return (log.action || "").toLowerCase().includes(q) || (log.description || "").toLowerCase().includes(q) || (log.user_name || "").toLowerCase().includes(q);
-                      }
-                      return true;
-                    })
-                    .map(log => {
-                      const isSuccess = log.success;
-                      const statusColor = isSuccess ? "#00FF88" : "#FF4444";
-                      const StatusIcon = isSuccess ? CheckCircle2 : XCircle;
-                      const orgName = organizations.find(o => o.id === log.org_id)?.name;
+                  {filteredLogs.map(log => {
+                    const isSuccess = log.success;
+                    const statusColor = isSuccess ? "#00FF88" : "#FF4444";
+                    const StatusIcon = isSuccess ? CheckCircle2 : AlertCircle;
+                    const orgName = organizations.find(o => o.id === log.org_id)?.name;
 
-                      return (
+                    return (
+                      <div
+                        key={log.id}
+                        onClick={() => setSelectedLog(log)}
+                        className="group flex items-center gap-4 p-3 rounded-2xl border border-[#1a1a2e] bg-[#0d0d18]/60 hover:bg-[#0d0d18] hover:border-[#00D4FF]/30 transition-all cursor-pointer"
+                      >
                         <div
-                          key={log.id}
-                          className="flex items-start gap-3 p-3 rounded-xl border border-[#1a1a2e] bg-[#0d0d18] hover:border-[#1a1a2e]/80 transition-colors"
+                          className="h-10 w-10 rounded-xl flex items-center justify-center shrink-0 transition-transform group-hover:scale-105"
+                          style={{ background: `${statusColor}08`, border: `1px solid ${statusColor}15` }}
                         >
-                          <div
-                            className="h-8 w-8 rounded-lg flex items-center justify-center shrink-0 mt-0.5"
-                            style={{ background: `${statusColor}12` }}
-                          >
-                            <StatusIcon className="h-4 w-4" style={{ color: statusColor }} />
+                          <StatusIcon className="h-5 w-5" style={{ color: statusColor }} />
+                        </div>
+
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="text-sm font-semibold text-white truncate">{log.description}</span>
+                            <span
+                              className="text-[9px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider"
+                              style={{ background: `${statusColor}12`, color: statusColor, border: `1px solid ${statusColor}20` }}
+                            >
+                              {isSuccess ? "Ok" : "Erro"}
+                            </span>
+                            {!isSuccess && <Sparkles className="h-3 w-3 text-[#FFB800] animate-pulse" />}
                           </div>
 
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 mb-1">
-                              <span className="text-xs font-semibold text-white">{log.description}</span>
-                              <span
-                                className="text-[9px] px-1.5 py-0.5 rounded-full font-medium"
-                                style={{ background: `${statusColor}15`, color: statusColor, border: `1px solid ${statusColor}25` }}
-                              >
-                                {isSuccess ? "Sucesso" : "Falha"}
+                          <div className="flex items-center flex-wrap gap-x-4 gap-y-1 text-[11px] text-gray-500">
+                            <span className="flex items-center gap-1.5">
+                              <User className="h-3 w-3 text-gray-600" />
+                              {log.user_name || log.user_email || "—"}
+                            </span>
+                            {orgName && (
+                              <span className="flex items-center gap-1.5">
+                                <Building2 className="h-3 w-3 text-gray-600" />
+                                {orgName}
                               </span>
-                            </div>
-
-                            <div className="flex items-center gap-3 text-[10px] text-gray-500">
-                              <span className="flex items-center gap-1">
-                                <User className="h-3 w-3" />
-                                {log.user_name || log.user_email || "—"}
-                              </span>
-                              {orgName && (
-                                <span className="flex items-center gap-1">
-                                  <Building2 className="h-3 w-3" />
-                                  {orgName}
-                                </span>
-                              )}
-                              <span className="px-1.5 py-0.5 rounded bg-[#0057FF]/10 text-[#00D4FF]">
-                                {log.action}
-                              </span>
-                            </div>
-
-                            {!isSuccess && log.error_message && (
-                              <p className="mt-1.5 text-[10px] text-red-400 bg-red-400/[0.05] px-2 py-1 rounded">
-                                ⚠ {log.error_message}
-                              </p>
                             )}
+                            <span className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-[#0057FF]/05 text-[#00D4FF]/80 border border-[#0057FF]/10">
+                              <Terminal className="h-3 w-3" />
+                              {log.action}
+                            </span>
                           </div>
+                        </div>
 
-                          <span className="text-[10px] text-gray-600 shrink-0 whitespace-nowrap">
-                            {new Date(log.created_at).toLocaleDateString("pt-BR", {
-                              day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit",
-                            })}
+                        <div className="flex flex-col items-end gap-1 shrink-0">
+                          <span className="text-[11px] font-medium text-gray-400">
+                            {new Date(log.created_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
+                          </span>
+                          <span className="text-[9px] text-gray-600">
+                            {new Date(log.created_at).toLocaleDateString("pt-BR")}
                           </span>
                         </div>
-                      );
-                    })}
+                        
+                        <ChevronRight className="h-4 w-4 text-gray-700 group-hover:text-[#00D4FF] group-hover:translate-x-1 transition-all" />
+                      </div>
+                    );
+                  })}
 
-                  {activityLogs.length === 0 && (
-                    <div className="text-center py-16 text-gray-600">
-                      <Activity className="h-10 w-10 mx-auto mb-3 opacity-30" />
-                      <p className="text-sm">Nenhum log registrado ainda.</p>
-                      <p className="text-xs mt-1">As atividades dos usuários aparecerão aqui em tempo real.</p>
+                  {filteredLogs.length === 0 && (
+                    <div className="text-center py-20 bg-[#0d0d18] rounded-3xl border border-[#1a1a2e] border-dashed">
+                      <div className="h-16 w-16 bg-[#1a1a2e] rounded-2xl flex items-center justify-center mx-auto mb-4">
+                        <Activity className="h-8 w-8 text-gray-600 opacity-50" />
+                      </div>
+                      <p className="text-sm text-white font-medium">Nenhum log encontrado</p>
+                      <p className="text-xs text-gray-600 mt-1">Tente ajustar seus filtros ou busca.</p>
                     </div>
                   )}
                 </div>
               )}
+
+              {/* Log Detail Drawer */}
+              <Drawer open={!!selectedLog} onOpenChange={(open) => { if (!open) { setSelectedLog(null); setDiagnosis(null); } }}>
+                <DrawerContent className="bg-[#0d0d18] border-[#1a1a2e] text-white max-h-[90vh]">
+                  <div className="mx-auto w-full max-w-4xl overflow-y-auto overflow-x-hidden p-6">
+                    <DrawerHeader className="px-0">
+                      <div className="flex items-start justify-between">
+                        <div className="space-y-1">
+                          <DrawerTitle className="text-xl font-bold flex items-center gap-3">
+                             <div className={`h-8 w-8 rounded-lg flex items-center justify-center ${selectedLog?.success ? "bg-[#00FF88]/10 text-[#00FF88]" : "bg-[#FF4444]/10 text-[#FF4444]"}`}>
+                               {selectedLog?.success ? <CheckCircle2 className="h-5 w-5" /> : <AlertCircle className="h-5 w-5" />}
+                             </div>
+                             {selectedLog?.description}
+                          </DrawerTitle>
+                          <DrawerDescription className="text-gray-500 flex items-center gap-4">
+                            <span className="flex items-center gap-1.5"><Calendar className="h-3.5 w-3.5" /> {selectedLog && new Date(selectedLog.created_at).toLocaleString("pt-BR")}</span>
+                            <span className="flex items-center gap-1.5"><Terminal className="h-3.5 w-3.5" /> ID: {selectedLog?.id}</span>
+                          </DrawerDescription>
+                        </div>
+                        <DrawerClose className="h-10 w-10 rounded-xl bg-white/5 hover:bg-white/10 flex items-center justify-center transition-colors">
+                          <X className="h-5 w-5" />
+                        </DrawerClose>
+                      </div>
+                    </DrawerHeader>
+
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 py-6">
+                      <div className="lg:col-span-2 space-y-6">
+                        {/* Event Details */}
+                        <div className="space-y-4">
+                          <h4 className="text-sm font-bold text-[#00D4FF] uppercase tracking-widest flex items-center gap-2">
+                             <Info className="h-4 w-4" /> Detalhes do Evento
+                          </h4>
+                          <div className="grid grid-cols-2 gap-4">
+                            <div className="bg-white/5 border border-white/10 rounded-2xl p-4">
+                               <p className="text-[10px] text-gray-500 uppercase font-bold mb-1">Ação</p>
+                               <p className="text-sm font-medium">{selectedLog?.action}</p>
+                            </div>
+                            <div className="bg-white/5 border border-white/10 rounded-2xl p-4">
+                               <p className="text-[10px] text-gray-500 uppercase font-bold mb-1">Status</p>
+                               <div className="flex items-center gap-2">
+                                 <div className={`h-2 w-2 rounded-full ${selectedLog?.success ? "bg-[#00FF88]" : "bg-[#FF4444]"}`} />
+                                 <p className="text-sm font-medium">{selectedLog?.success ? "Sucesso" : "Falha"}</p>
+                               </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Error Analysis / Diagnosis */}
+                        <div className="space-y-4">
+                          <div className="flex items-center justify-between">
+                            <h4 className="text-sm font-bold text-[#FFB800] uppercase tracking-widest flex items-center gap-2">
+                               <Sparkles className="h-4 w-4" /> Inteligência VS
+                            </h4>
+                            {!diagnosis && !selectedLog?.success && (
+                              <button 
+                                onClick={() => diagnoseLog(selectedLog)}
+                                disabled={diagnosing}
+                                className="flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-[#FFB800] to-[#FF4444] text-black text-xs font-black hover:opacity-90 disabled:opacity-50 transition-all shadow-xl shadow-orange-500/20"
+                              >
+                                {diagnosing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Lightbulb className="h-3.5 w-3.5" />}
+                                DIAGNOSTICAR COM IA
+                              </button>
+                            )}
+                          </div>
+
+                          {diagnosing && (
+                            <div className="bg-[#FFB800]/5 border border-[#FFB800]/20 rounded-2xl p-8 text-center space-y-3">
+                               <Loader2 className="h-8 w-8 animate-spin text-[#FFB800] mx-auto" />
+                               <p className="text-sm font-bold text-white">Analisando root cause e propondo solução...</p>
+                               <p className="text-xs text-gray-500">Isso pode levar alguns segundos.</p>
+                            </div>
+                          )}
+
+                          {diagnosis ? (
+                            <div className="bg-white/5 border border-[#FFB800]/20 rounded-2xl p-6 prose prose-invert prose-sm max-w-none prose-headings:text-[#FFB800] prose-strong:text-white prose-p:text-gray-300">
+                               <ReactMarkdown>{diagnosis}</ReactMarkdown>
+                            </div>
+                          ) : !selectedLog?.success ? (
+                             <div className="bg-red-500/5 border border-red-500/20 rounded-2xl p-6">
+                               <div className="flex items-center gap-3 text-red-400 mb-3">
+                                 <AlertCircle className="h-5 w-5" />
+                                 <span className="font-bold text-sm">Mensagem do Sistema:</span>
+                               </div>
+                               <pre className="text-xs bg-black/40 p-4 rounded-xl border border-white/5 text-red-200 overflow-x-auto whitespace-pre-wrap">
+                                 {selectedLog?.error_message || "Ocorreu um erro desconhecido durante esta operação."}
+                               </pre>
+                             </div>
+                          ) : (
+                             <div className="bg-[#00FF88]/5 border border-[#00FF88]/20 rounded-2xl p-6 flex items-center gap-4">
+                               <CheckCircle2 className="h-10 w-10 text-[#00FF88] opacity-50" />
+                               <div>
+                                 <p className="text-sm font-bold text-white">Operação saudável</p>
+                                 <p className="text-xs text-gray-500">Nenhuma anomalia detectada nesta atividade.</p>
+                               </div>
+                             </div>
+                          )}
+                        </div>
+
+                        {/* Raw Metadata */}
+                        <div className="space-y-4">
+                          <h4 className="text-sm font-bold text-gray-400 uppercase tracking-widest flex items-center gap-2">
+                             <Database className="h-4 w-4" /> Metadados Brutos
+                          </h4>
+                          <pre className="text-[11px] bg-black/40 p-4 rounded-3xl border border-white/5 text-[#00D4FF]/80 overflow-x-auto font-mono custom-scrollbar">
+                            {JSON.stringify(selectedLog?.metadata, null, 2)}
+                          </pre>
+                        </div>
+                      </div>
+
+                      <div className="space-y-6">
+                        {/* Context Section */}
+                        <div className="bg-white/5 border border-white/10 rounded-3xl p-6 space-y-6">
+                          <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest">Contexto da Sessão</h4>
+                          
+                          <div className="space-y-4">
+                            <div className="flex items-start gap-3">
+                              <User className="h-4 w-4 text-[#00D4FF] mt-1" />
+                              <div className="min-w-0 flex-1">
+                                <p className="text-[10px] text-gray-500 uppercase font-bold">Usuário</p>
+                                <p className="text-xs font-medium text-white truncate">{selectedLog?.user_name || "Anônimo"}</p>
+                                <p className="text-[10px] text-gray-500 truncate">{selectedLog?.user_email}</p>
+                              </div>
+                            </div>
+
+                            <div className="flex items-start gap-3">
+                              <Building2 className="h-4 w-4 text-[#00D4FF] mt-1" />
+                              <div className="min-w-0 flex-1">
+                                <p className="text-[10px] text-gray-500 uppercase font-bold">Organização</p>
+                                <p className="text-xs font-medium text-white truncate">{organizations.find(o => o.id === selectedLog?.org_id)?.name || "N/A"}</p>
+                              </div>
+                            </div>
+
+                            {selectedLog?.metadata?.url && (
+                              <div className="flex items-start gap-3">
+                                <Globe className="h-4 w-4 text-[#00D4FF] mt-1" />
+                                <div className="min-w-0 flex-1">
+                                  <p className="text-[10px] text-gray-500 uppercase font-bold">URL de Origem</p>
+                                  <p className="text-xs font-medium text-white truncate" title={selectedLog.metadata.url}>
+                                    {selectedLog.metadata.url}
+                                  </p>
+                                </div>
+                              </div>
+                            )}
+
+                            {selectedLog?.metadata?.userAgent && (
+                              <div className="flex items-start gap-3">
+                                <Laptop className="h-4 w-4 text-[#00D4FF] mt-1" />
+                                <div className="min-w-0 flex-1">
+                                  <p className="text-[10px] text-gray-500 uppercase font-bold">Ambiente</p>
+                                  <p className="text-[10px] font-medium text-white break-words">
+                                    {selectedLog.metadata.userAgent}
+                                  </p>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Recent Activity Mini-timeline */}
+                        <div className="bg-white/5 border border-white/10 rounded-3xl p-6 space-y-4">
+                           <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest">Atividades Próximas</h4>
+                           <div className="space-y-3">
+                             {activityLogs
+                               .filter(l => l.user_id === selectedLog?.user_id && l.id !== selectedLog?.id)
+                               .slice(0, 3)
+                               .map(l => (
+                                 <div key={l.id} className="flex gap-3 relative pb-3 border-l border-white/10 pl-4 ml-2 last:pb-0">
+                                   <div className={`absolute top-0 -left-[5px] h-2 w-2 rounded-full \${l.success ? "bg-[#00FF88]" : "bg-[#FF4444]"}`} />
+                                   <div className="min-w-0">
+                                     <p className="text-[11px] font-bold text-white truncate">{l.description}</p>
+                                     <p className="text-[10px] text-gray-500">{new Date(l.created_at).toLocaleTimeString("pt-BR")}</p>
+                                   </div>
+                                 </div>
+                               ))}
+                             {activityLogs.filter(l => l.user_id === selectedLog?.user_id && l.id !== selectedLog?.id).length === 0 && (
+                               <p className="text-[10px] text-gray-500 italic">Nenhuma outra atividade recente.</p>
+                             )}
+                           </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <DrawerFooter className="p-6 pt-0 border-t border-white/5 mx-auto w-full max-w-4xl">
+                    <div className="w-full flex items-center justify-between">
+                       <p className="text-[10px] text-gray-600">Sistema VS SALES • Diagnostic Center v2.0</p>
+                       <DrawerClose className="px-6 py-2 rounded-xl bg-white/5 text-xs text-white hover:bg-white/10 transition-all font-bold">
+                         FECHAR
+                       </DrawerClose>
+                    </div>
+                  </DrawerFooter>
+                </DrawerContent>
+              </Drawer>
             </div>
           )}
         </div>
