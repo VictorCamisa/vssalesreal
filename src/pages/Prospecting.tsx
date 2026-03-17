@@ -169,10 +169,15 @@ export default function Prospecting() {
       toast({ title: "Prospecção concluída! 🎯", description: `${data?.count || 0} novos leads salvos de ${data?.total_found || 0} encontrados${dupMsg}` });
       resetWizard();
     } catch (error: any) {
+      console.error("Erro completo na prospecção (Nicho):", error);
       setScrapeJobs(prev => prev.map(j => j.id === jobId ? {
-        ...j, status: "failed" as const, error_message: error.message,
+        ...j, status: "failed" as const, error_message: error.message || "Erro desconhecido na prospecção",
       } : j));
-      toast({ title: "Erro na prospecção", description: error.message, variant: "destructive" });
+      toast({ 
+        title: "Erro na prospecção", 
+        description: error.message || "Falha ao invocar a função de busca. Verifique os logs do console.", 
+        variant: "destructive" 
+      });
     } finally { setScrapingLoading(false); }
   };
 
@@ -220,7 +225,12 @@ export default function Prospecting() {
       toast({ title: "Extração concluída!", description: desc });
       setSelectedGroupIds(new Set());
     } catch (error: any) {
-      toast({ title: "Erro na extração", description: error.message, variant: "destructive" });
+      console.error("Erro completo na extração (WhatsApp):", error);
+      toast({ 
+        title: "Erro na extração", 
+        description: error.message || "Falha na comunicação com o WhatsApp. Verifique se a instância está conectada.", 
+        variant: "destructive" 
+      });
   } finally { setEvolutionLoading(false); }
   };
 

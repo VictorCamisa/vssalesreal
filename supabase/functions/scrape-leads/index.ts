@@ -268,7 +268,7 @@ Responda APENAS com JSON válido:
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
+        model: "google/gemini-2.0-flash-exp",
         messages: [
           {
             role: "system",
@@ -281,8 +281,18 @@ Responda APENAS com JSON válido:
     });
 
     if (!aiResponse.ok) {
-      console.error("AI extraction error:", aiResponse.status, await aiResponse.text());
-      return json({ error: "Erro na extração por IA" }, 502);
+      const status = aiResponse.status;
+      const errorText = await aiResponse.text();
+      console.error("AI extraction error:", status, errorText);
+      
+      if (status === 402) {
+        return json({ error: "Créditos de IA esgotados. Verifique seu plano no Lovable." }, 402);
+      }
+      if (status === 429) {
+        return json({ error: "Limite de requisições do Google Gemini atingido. Tente novamente em 1 minuto." }, 429);
+      }
+      
+      return json({ error: `Erro na extração por IA: Status ${status}` }, 502);
     }
 
     const aiData = await aiResponse.json();

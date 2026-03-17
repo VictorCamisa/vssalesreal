@@ -141,7 +141,9 @@ Deno.serve(async (req) => {
         });
 
         if (!participantsResponse.ok) {
-          console.error(`Failed to get participants for ${groupId}`);
+          const errStatus = participantsResponse.status;
+          const errText = await participantsResponse.text();
+          console.error(`Failed to get participants for group ${groupId}:`, errStatus, errText);
           continue;
         }
 
