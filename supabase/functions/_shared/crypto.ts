@@ -31,6 +31,6 @@ export async function decrypt(encryptedText: string, keyHex: string): Promise<st
   const iv = hexToBytes(ivHex);
   const ciphertext = hexToBytes(ciphertextHex);
   const cryptoKey = await importKey(keyHex);
-  const decrypted = await crypto.subtle.decrypt({ name: "AES-GCM", iv }, cryptoKey, ciphertext);
+  const decrypted = await crypto.subtle.decrypt({ name: "AES-GCM", iv: iv.buffer as ArrayBuffer }, cryptoKey, ciphertext.buffer as ArrayBuffer);
   return new TextDecoder().decode(decrypted);
 }
