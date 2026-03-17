@@ -231,32 +231,48 @@ Erro: ${log.error_message || "Sem mensagem direta"}
 Metadados: ${JSON.stringify(log.metadata || {})}
 Data: ${log.created_at}`;
 
-      console.log("Chamando diagnóstico via simulate-seller (fallback robusto)...");
+      console.log("Iniciando diagnóstico via ai-chat...");
       
-      const { data, error } = await supabase.functions.invoke("simulate-seller", {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData?.session?.access_token;
+      const orgId = log.metadata?.org_id || log.organization_id || selectedOrgId;
+
+      if (!orgId) {
+        throw new Error("ID da organização não encontrado para este log.");
+      }
+
+      const { data, error } = await supabase.functions.invoke("ai-chat", {
+        headers: { 
+          Authorization: `Bearer ${token}` 
+        },
         body: { 
-          messages: [
-            { role: "system", content: systemPrompt },
-            { role: "user", content: "Por favor, diagnostique este erro agora." }
-          ]
+          messages: [{ role: "user", content: systemPrompt }],
+          org_id: orgId,
+          mode: "assistant"
         },
       });
 
       if (error) {
         console.error("Erro na invocação:", error);
-        throw new Error(`Falha na função: ${error.message}`);
+        throw new Error(`Erro na conexão com a IA: ${error.message}`);
       }
 
-      // simulate-seller returns a stream usually, but invoke might catch it as a string
-      // or as a complex object depending on the response.
-      console.log("Resposta recebida:", data);
+      console.log("Resposta do ai-chat recebida:", data);
       
-      const diagnosisText = typeof data === 'string' 
-        ? data 
-        : (data?.choices?.[0]?.message?.content || data?.text || data?.response || JSON.stringify(data));
+      // ai-chat can return a stream or a combined response depending on how invoke handles it
+      let diagnosisText = "";
+      if (typeof data === 'string') {
+        diagnosisText = data;
+      } else if (data?.choices?.[0]?.message?.content) {
+        diagnosisText = data.choices[0].message.content;
+      } else if (data?.diagnosis) {
+        diagnosisText = data.diagnosis;
+      } else {
+        diagnosisText = JSON.stringify(data);
+      }
       
-      if (!diagnosisText) {
-        throw new Error("A IA retornou uma resposta vazia.");
+      if (!diagnosisText || diagnosisText === "{}") {
+        throw new Error("A IA não retornou um diagnóstico válido.");
       }
       
       setDiagnosis(diagnosisText);
