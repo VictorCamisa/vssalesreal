@@ -231,81 +231,35 @@ Erro: ${log.error_message || "Sem mensagem direta"}
 Metadados: ${JSON.stringify(log.metadata || {})}
 Data: ${log.created_at}`;
 
-      const { data: { session } } = await supabase.auth.getSession();
-      const token = session?.access_token;
+      console.log("Chamando diagnóstico via simulate-seller (fallback robusto)...");
       
-      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || (supabase as any).supabaseUrl;
-      const supabaseKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || (supabase as any).supabaseKey;
-
-      if (!supabaseUrl || !supabaseKey) {
-        throw new Error("Configuração do Supabase não encontrada. Verifique as variáveis de ambiente.");
-      }
-
-      console.log("Conectando ao diagnóstico em:", `${supabaseUrl}/functions/v1/ai-chat`);
-
-      const response = await fetch(`${supabaseUrl}/functions/v1/ai-chat`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${token || ''}`,
-          "apikey": supabaseKey,
-        },
-        body: JSON.stringify({ 
+      const { data, error } = await supabase.functions.invoke("simulate-seller", {
+        body: { 
           messages: [
             { role: "system", content: systemPrompt },
-            { role: "user", content: "Por favor, diagnostique este erro." }
-          ],
-          org_id: log.organization_id || selectedOrgId,
-          mode: "assistant"
-        }),
+            { role: "user", content: "Por favor, diagnostique este erro agora." }
+          ]
+        },
       });
 
-      if (!response.ok) {
-        const errData = await response.json().catch(() => ({}));
-        throw new Error(errData.error || `Erro HTTP ${response.status}`);
+      if (error) {
+        console.error("Erro na invocação:", error);
+        throw new Error(`Falha na função: ${error.message}`);
       }
 
-      const reader = response.body?.getReader();
-      const decoder = new TextDecoder();
-      let buffer = "";
-      let accumulatedText = "";
-
-      if (!reader) throw new Error("Não foi possível iniciar o leitor de stream.");
-
-      while (true) {
-        const { done: readerDone, value } = await reader.read();
-        if (readerDone) break;
-        
-        buffer += decoder.decode(value, { stream: true });
-        
-        let lineIndex;
-        while ((lineIndex = buffer.indexOf("\n")) !== -1) {
-          let line = buffer.slice(0, lineIndex).trim();
-          buffer = buffer.slice(lineIndex + 1);
-          
-          if (!line.startsWith("data: ")) continue;
-          const jsonStr = line.replace("data: ", "").trim();
-          
-          if (jsonStr === "[DONE]") {
-            break;
-          }
-          
-          try {
-            const parsed = JSON.parse(jsonStr);
-            const content = parsed.choices?.[0]?.delta?.content || "";
-            if (content) {
-              accumulatedText += content;
-              setDiagnosis(accumulatedText);
-            }
-          } catch (e) {
-            // Ignorar chunks parciais
-          }
-        }
+      // simulate-seller returns a stream usually, but invoke might catch it as a string
+      // or as a complex object depending on the response.
+      console.log("Resposta recebida:", data);
+      
+      const diagnosisText = typeof data === 'string' 
+        ? data 
+        : (data?.choices?.[0]?.message?.content || data?.text || data?.response || JSON.stringify(data));
+      
+      if (!diagnosisText) {
+        throw new Error("A IA retornou uma resposta vazia.");
       }
       
-      if (!accumulatedText) {
-        throw new Error("A IA não retornou um diagnóstico.");
-      }
+      setDiagnosis(diagnosisText);
       
     } catch (err: any) {
       console.error("Erro fatal no diagnóstico:", err);
