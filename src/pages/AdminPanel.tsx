@@ -207,9 +207,9 @@ export default function AdminPanel() {
   const diagnoseLog = async (log: any) => {
     if (!log) return;
     setDiagnosing(true);
-    setDiagnosis(""); // Start with empty string for streaming
+    setDiagnosis("");
     try {
-      console.log("Iniciando diagnóstico via stream para log:", log.id);
+      console.log("Iniciando diagnóstico via fetch direto para log:", log.id);
       
       const systemPrompt = `Você é um Engenheiro de SRE e Support Senior. 
 Analise este log de erro de uma aplicação SaaS e forneça um diagnóstico preciso.
@@ -231,60 +231,78 @@ Erro: ${log.error_message || "Sem mensagem direta"}
 Metadados: ${JSON.stringify(log.metadata || {})}
 Data: ${log.created_at}`;
 
-      const { data, error } = await supabase.functions.invoke("ai-chat", {
-        body: { 
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      
+      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-chat`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+          apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+        },
+        body: JSON.stringify({ 
           messages: [
             { role: "system", content: systemPrompt },
             { role: "user", content: "Por favor, diagnostique este erro." }
           ],
           org_id: log.organization_id || selectedOrgId,
           mode: "assistant"
-        },
+        }),
       });
-      
-      if (error) throw error;
 
-      // Handle streaming response
-      const reader = data.getReader();
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(errData.error || `Erro HTTP ${response.status}`);
+      }
+
+      const reader = response.body?.getReader();
       const decoder = new TextDecoder();
-      let done = false;
+      let buffer = "";
       let accumulatedText = "";
 
-      while (!done) {
-        const { value, done: doneReading } = await reader.read();
-        done = doneReading;
-        const chunk = decoder.decode(value);
+      if (!reader) throw new Error("Não foi possível iniciar o leitor de stream.");
+
+      while (true) {
+        const { done: readerDone, value } = await reader.read();
+        if (readerDone) break;
         
-        // lovale ai-chat returns events in data: format
-        const lines = chunk.split("\n");
-        for (const line of lines) {
-          if (line.startsWith("data: ")) {
-            const dataStr = line.replace("data: ", "").trim();
-            if (dataStr === "[DONE]") {
-              done = true;
-              break;
-            }
-            try {
-              const parsed = JSON.parse(dataStr);
-              const content = parsed.choices?.[0]?.delta?.content || "";
+        buffer += decoder.decode(value, { stream: true });
+        
+        let lineIndex;
+        while ((lineIndex = buffer.indexOf("\n")) !== -1) {
+          let line = buffer.slice(0, lineIndex).trim();
+          buffer = buffer.slice(lineIndex + 1);
+          
+          if (!line.startsWith("data: ")) continue;
+          const jsonStr = line.replace("data: ", "").trim();
+          
+          if (jsonStr === "[DONE]") {
+            break;
+          }
+          
+          try {
+            const parsed = JSON.parse(jsonStr);
+            const content = parsed.choices?.[0]?.delta?.content || "";
+            if (content) {
               accumulatedText += content;
               setDiagnosis(accumulatedText);
-            } catch (e) {
-              // Ignore partial JSON chunks if they happen
             }
+          } catch (e) {
+            // Ignorar chunks parciais
           }
         }
       }
       
       if (!accumulatedText) {
-        throw new Error("Não foi possível gerar um diagnóstico no momento.");
+        throw new Error("A IA não retornou um diagnóstico.");
       }
       
     } catch (err: any) {
-      console.error("Erro no diagnóstico streaming:", err);
+      console.error("Erro fatal no diagnóstico:", err);
       toast({ 
         title: "Erro na análise", 
-        description: "Falha ao processar diagnóstico em tempo real. Tente novamente.", 
+        description: err.message || "Falha ao processar diagnóstico. Tente novamente.", 
         variant: "destructive" 
       });
     } finally {
