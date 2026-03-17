@@ -84,9 +84,16 @@ Seja direto, profissional e muito prático. Use português brasileiro.`;
     });
 
     if (!response.ok) {
+      const status = response.status;
+      if (status === 402) {
+        throw new Error("Créditos de IA esgotados no workspace. Por favor, adicione créditos para continuar.");
+      }
+      if (status === 429) {
+        throw new Error("Limite de requisições atingido. Tente novamente em alguns segundos.");
+      }
       const errorText = await response.text();
-      console.error("AI gateway error:", response.status, errorText);
-      throw new Error(`Erro no Gateway de IA: ${response.status}`);
+      console.error("AI gateway error:", status, errorText);
+      throw new Error(`Erro no Gateway de IA: ${status}`);
     }
 
     const aiResult = await response.json();

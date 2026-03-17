@@ -190,11 +190,44 @@ export default function AdminPanel() {
   // Load activity logs
   const loadLogs = async () => {
     setLogsLoading(true);
-    const { data } = await supabase
+    console.log("Iniciando carregamento de logs...");
+    
+    // Tenta carregar de activity_logs (tabela padrão)
+    let { data, error } = await supabase
       .from("activity_logs")
       .select("*")
       .order("created_at", { ascending: false })
       .limit(200);
+      
+    // Fallback para project_activity_logs se a primeira falhar
+    if (error) {
+      console.warn("Falha ao carregar activity_logs, tentando project_activity_logs:", error.message);
+      const { data: fallbackData, error: fallbackError } = await supabase
+        .from("project_activity_logs")
+        .select("*")
+        .order("created_at", { ascending: false })
+        .limit(200);
+        
+      if (fallbackError) {
+        console.error("Erro fatal ao carregar logs:", fallbackError);
+        toast({ 
+          title: "Erro ao carregar logs", 
+          description: "Não foi possível encontrar a tabela de logs no banco de dados.", 
+          variant: "destructive" 
+        });
+      } else {
+        data = fallbackData;
+        // Normaliza campos se necessário (action_type -> action)
+        if (data) {
+          data = data.map((l: any) => ({
+            ...l,
+            action: l.action || l.action_type,
+            success: l.success !== undefined ? l.success : true // Assume sucesso se não houver campo
+          }));
+        }
+      }
+    }
+    
     if (data) setActivityLogs(data);
     setLogsLoading(false);
   };
@@ -230,10 +263,14 @@ export default function AdminPanel() {
 
       console.log("Resposta do ai-log-diagnose recebida:", data);
       
+      if (data?.error) {
+        throw new Error(data.error);
+      }
+      
       const diagnosisText = data?.diagnosis;
       
       if (!diagnosisText) {
-        throw new Error("A IA não retornou um diagnóstico válido.");
+        throw new Error("A IA não retornou um diagnóstico válido. Verifique as configurações de créditos e gateway.");
       }
       
       setDiagnosis(diagnosisText);
