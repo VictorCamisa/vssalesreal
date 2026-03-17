@@ -99,6 +99,8 @@ export default function Leads() {
   const [addOpen, setAddOpen] = useState(false);
   const [newLead, setNewLead] = useState({ name: "", phone: "", email: "" });
   const [addLoading, setAddLoading] = useState(false);
+  const [deleteAllOpen, setDeleteAllOpen] = useState(false);
+  const [deletingAll, setDeletingAll] = useState(false);
 
   const fetchLeads = async () => {
     if (!profile?.org_id) return;
