@@ -234,16 +234,21 @@ Data: ${log.created_at}`;
       const { data: { session } } = await supabase.auth.getSession();
       const token = session?.access_token;
       
-      // Derive production URL and Key from the client directly to avoid import.meta.env issues
-      const supabaseUrl = (supabase as any).supabaseUrl;
-      const supabaseKey = (supabase as any).supabaseKey;
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || (supabase as any).supabaseUrl;
+      const supabaseKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || (supabase as any).supabaseKey;
+
+      if (!supabaseUrl || !supabaseKey) {
+        throw new Error("Configuração do Supabase não encontrada. Verifique as variáveis de ambiente.");
+      }
+
+      console.log("Conectando ao diagnóstico em:", `${supabaseUrl}/functions/v1/ai-chat`);
 
       const response = await fetch(`${supabaseUrl}/functions/v1/ai-chat`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-          apikey: supabaseKey,
+          "Authorization": `Bearer ${token || ''}`,
+          "apikey": supabaseKey,
         },
         body: JSON.stringify({ 
           messages: [
@@ -304,9 +309,12 @@ Data: ${log.created_at}`;
       
     } catch (err: any) {
       console.error("Erro fatal no diagnóstico:", err);
+      const isFetchError = err.message === "Failed to fetch";
       toast({ 
         title: "Erro na análise", 
-        description: err.message || "Falha ao processar diagnóstico. Tente novamente.", 
+        description: isFetchError 
+          ? "Erro de conexão (Failed to fetch). Isso geralmente indica bloqueio de CORS ou rede instável." 
+          : (err.message || "Falha ao processar diagnóstico. Tente novamente."), 
         variant: "destructive" 
       });
     } finally {
