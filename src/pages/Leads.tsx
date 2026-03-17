@@ -415,7 +415,7 @@ export default function Leads() {
         </div>
         <div className="flex items-center gap-2">
           <label className="cursor-pointer">
-            <input type="file" accept=".csv,.xlsx,.xls" onChange={handleFileUpload} className="hidden" />
+            <input type="file" accept=".csv,.xlsx,.xls,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel" onChange={handleFileUpload} className="hidden" />
             <Button variant="outline" size="sm" className="gap-2 rounded-xl" asChild>
               <span><Upload className="h-4 w-4" /> Importar</span>
             </Button>
