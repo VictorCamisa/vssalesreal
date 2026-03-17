@@ -279,9 +279,24 @@ export default function Leads() {
 
   const parseRowsFromHeaders = (headers: string[], dataRows: Record<string, any>[]) => {
     const nameIdx = findCol(headers, ["nome", "name", "nome completo", "full name", "contato", "contact", "cliente", "razao social", "empresa"]);
-    const phoneIdx = findCol(headers, ["telefone", "phone", "celular", "whatsapp", "tel", "fone", "numero"]);
     const emailIdx = findCol(headers, ["email", "e-mail", "correio"]);
-    console.log("Import - headers:", headers, "nameIdx:", nameIdx, "phoneIdx:", phoneIdx, "emailIdx:", emailIdx);
+    // Find ALL phone-like columns and pick the first non-empty value per row
+    const phoneNames = ["celular", "whatsapp", "telefone", "phone", "tel", "fone", "numero"];
+    const phoneIdxList = phoneNames.map(n => findCol(headers, [n])).filter(i => i !== -1);
+    // Deduplicate indices
+    const uniquePhoneIdxs = [...new Set(phoneIdxList)];
+    console.log("Import - headers:", headers, "nameIdx:", nameIdx, "phoneIdxs:", uniquePhoneIdxs, "emailIdx:", emailIdx);
+
+    const formatPhone = (phone: string) => {
+      const digits = phone.replace(/\D/g, "");
+      if (!digits) return "";
+      if (digits.startsWith("55") && digits.length >= 12) return `+${digits}`;
+      if (digits.length === 11 || digits.length === 10) return `+55${digits}`;
+      return phone;
+    };
+
+    const capitalizeName = (name: string) =>
+      name.replace(/\b\w/g, c => c.toUpperCase()).trim();
 
     return dataRows.map(row => {
       const values = headers.map(h => {
@@ -289,8 +304,11 @@ export default function Leads() {
         return val != null ? String(val).trim() : "";
       });
       const obj: any = { org_id: profile!.org_id, source: "import" as const, status: "pending" as const };
-      if (nameIdx !== -1 && values[nameIdx]) obj.name = values[nameIdx];
-      if (phoneIdx !== -1 && values[phoneIdx]) obj.phone = values[phoneIdx];
+      if (nameIdx !== -1 && values[nameIdx]) obj.name = capitalizeName(values[nameIdx]);
+      // Pick first non-empty phone from all phone columns
+      for (const pi of uniquePhoneIdxs) {
+        if (values[pi]) { obj.phone = formatPhone(values[pi]); break; }
+      }
       if (emailIdx !== -1 && values[emailIdx]) obj.email = values[emailIdx];
       return obj;
     }).filter(r => r.name || r.phone || r.email);
