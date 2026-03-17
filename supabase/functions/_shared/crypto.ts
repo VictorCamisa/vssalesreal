@@ -14,7 +14,7 @@ function bytesToHex(bytes: Uint8Array): string {
 
 async function importKey(keyHex: string): Promise<CryptoKey> {
   const rawKey = hexToBytes(keyHex);
-  return crypto.subtle.importKey("raw", rawKey, { name: "AES-GCM" }, false, ["encrypt", "decrypt"]);
+  return crypto.subtle.importKey("raw", rawKey.buffer as ArrayBuffer, { name: "AES-GCM" }, false, ["encrypt", "decrypt"]);
 }
 
 export async function encrypt(text: string, keyHex: string): Promise<string> {
@@ -31,6 +31,6 @@ export async function decrypt(encryptedText: string, keyHex: string): Promise<st
   const iv = hexToBytes(ivHex);
   const ciphertext = hexToBytes(ciphertextHex);
   const cryptoKey = await importKey(keyHex);
-  const decrypted = await crypto.subtle.decrypt({ name: "AES-GCM", iv }, cryptoKey, ciphertext);
+  const decrypted = await crypto.subtle.decrypt({ name: "AES-GCM", iv: iv.buffer as ArrayBuffer }, cryptoKey, ciphertext.buffer as ArrayBuffer);
   return new TextDecoder().decode(decrypted);
 }

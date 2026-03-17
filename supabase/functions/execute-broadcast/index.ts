@@ -41,7 +41,7 @@ Deno.serve(async (req) => {
       const token = authHeader.replace("Bearer ", "");
       let userId: string | null = null;
       try {
-        const { data: claims, error: claimsErr } = await supabaseUser.auth.getClaims(token);
+        const { data: claims, error: claimsErr } = await (supabaseUser.auth as any).getClaims(token);
         if (!claimsErr && claims?.claims) userId = claims.claims.sub as string;
       } catch { /* getClaims not available */ }
       if (!userId) {

@@ -519,7 +519,7 @@ O lead está respondendo à mensagem enviada pelo disparo. Continue naturalmente
         }
         console.warn(`AI model ${model} failed: ${aiResponse.status}`);
       } catch (err) {
-        console.warn(`AI model ${model} error: ${err.message}`);
+        console.warn(`AI model ${model} error: ${(err as Error).message}`);
       }
     }
 
@@ -557,7 +557,7 @@ O lead está respondendo à mensagem enviada pelo disparo. Continue naturalmente
           console.warn(`Anthropic failed: ${anthropicResponse.status}`);
         }
       } catch (err) {
-        console.warn(`Anthropic error: ${err.message}`);
+        console.warn(`Anthropic error: ${(err as Error).message}`);
       }
     }
 
@@ -653,7 +653,7 @@ O lead está respondendo à mensagem enviada pelo disparo. Continue naturalmente
         .replace(/\[Nome\]/gi, customerName || "")
         .replace(/\{nome\}/gi, customerName || "");
       // Strip emojis from greeting if disabled
-      if (!useEmoji) {
+      if (!useEmoji && greetingBlock) {
         greetingBlock = greetingBlock.replace(/[\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{1F000}-\u{1F02F}\u{1F0A0}-\u{1F0FF}\u{1F100}-\u{1F64F}\u{1F680}-\u{1F6FF}\u{1FA00}-\u{1FA6F}\u{1FA70}-\u{1FAFF}\u{FE00}-\u{FE0F}\u{200D}\u{20E3}\u{E0020}-\u{E007F}]/gu, "").trim();
       }
     }
