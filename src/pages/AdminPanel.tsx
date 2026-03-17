@@ -207,9 +207,9 @@ export default function AdminPanel() {
   const diagnoseLog = async (log: any) => {
     if (!log) return;
     setDiagnosing(true);
-    setDiagnosis(null);
+    setDiagnosis(""); // Start with empty string for streaming
     try {
-      console.log("Iniciando diagnóstico via ai-chat para log:", log.id);
+      console.log("Iniciando diagnóstico via stream para log:", log.id);
       
       const systemPrompt = `Você é um Engenheiro de SRE e Support Senior. 
 Analise este log de erro de uma aplicação SaaS e forneça um diagnóstico preciso.
@@ -243,22 +243,48 @@ Data: ${log.created_at}`;
       });
       
       if (error) throw error;
+
+      // Handle streaming response
+      const reader = data.getReader();
+      const decoder = new TextDecoder();
+      let done = false;
+      let accumulatedText = "";
+
+      while (!done) {
+        const { value, done: doneReading } = await reader.read();
+        done = doneReading;
+        const chunk = decoder.decode(value);
+        
+        // lovale ai-chat returns events in data: format
+        const lines = chunk.split("\n");
+        for (const line of lines) {
+          if (line.startsWith("data: ")) {
+            const dataStr = line.replace("data: ", "").trim();
+            if (dataStr === "[DONE]") {
+              done = true;
+              break;
+            }
+            try {
+              const parsed = JSON.parse(dataStr);
+              const content = parsed.choices?.[0]?.delta?.content || "";
+              accumulatedText += content;
+              setDiagnosis(accumulatedText);
+            } catch (e) {
+              // Ignore partial JSON chunks if they happen
+            }
+          }
+        }
+      }
       
-      // The ai-chat function returns the full response in a specific field, 
-      // based on existing code it likely returns a stream or a text field.
-      // Adjusting to common Lovable ai-chat response structure:
-      const diagnosisText = data?.choices?.[0]?.message?.content || data?.text || data?.response;
-      
-      if (!diagnosisText) {
+      if (!accumulatedText) {
         throw new Error("Não foi possível gerar um diagnóstico no momento.");
       }
       
-      setDiagnosis(diagnosisText);
     } catch (err: any) {
-      console.error("Erro no diagnóstico via ai-chat:", err);
+      console.error("Erro no diagnóstico streaming:", err);
       toast({ 
         title: "Erro na análise", 
-        description: "Falha ao conectar com o serviço de IA. Verifique se a função 'ai-chat' está ativa.", 
+        description: "Falha ao processar diagnóstico em tempo real. Tente novamente.", 
         variant: "destructive" 
       });
     } finally {
