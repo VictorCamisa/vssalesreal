@@ -418,6 +418,24 @@ export default function Leads() {
     } finally { setAddLoading(false); }
   };
 
+  const handleDeleteAll = async () => {
+    if (!profile?.org_id) return;
+    setDeletingAll(true);
+    try {
+      const { error } = await supabase.from("leads_raw").delete().eq("org_id", profile.org_id);
+      if (error) throw error;
+      toast({ title: "Todos os leads foram apagados!" });
+      logActivity({ action: "leads_apagados_todos", description: "Todos os leads da organização foram apagados" });
+      setSelected(new Set());
+      fetchLeads();
+    } catch (error: any) {
+      toast({ title: "Erro ao apagar", description: error.message, variant: "destructive" });
+    } finally {
+      setDeletingAll(false);
+      setDeleteAllOpen(false);
+    }
+  };
+
   const exportCSV = () => {
     const rows = [["Nome", "Telefone", "Email", "Fonte", "Status"]];
     leads.forEach((l) => rows.push([l.name || "", l.phone || "", l.email || "", sourceLabels[l.source] || l.source, statusLabels[l.status] || l.status]));
