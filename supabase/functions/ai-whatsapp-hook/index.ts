@@ -557,7 +557,7 @@ O lead está respondendo à mensagem enviada pelo disparo. Continue naturalmente
           console.warn(`Anthropic failed: ${anthropicResponse.status}`);
         }
       } catch (err) {
-        console.warn(`Anthropic error: ${err.message}`);
+        console.warn(`Anthropic error: ${(err as Error).message}`);
       }
     }
 
