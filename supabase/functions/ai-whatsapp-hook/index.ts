@@ -519,7 +519,7 @@ O lead está respondendo à mensagem enviada pelo disparo. Continue naturalmente
         }
         console.warn(`AI model ${model} failed: ${aiResponse.status}`);
       } catch (err) {
-        console.warn(`AI model ${model} error: ${err.message}`);
+        console.warn(`AI model ${model} error: ${(err as Error).message}`);
       }
     }
 
