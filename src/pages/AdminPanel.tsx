@@ -209,46 +209,17 @@ export default function AdminPanel() {
     setDiagnosing(true);
     setDiagnosis("");
     try {
-      console.log("Iniciando diagnóstico via fetch direto para log:", log.id);
-      
-      const systemPrompt = `Você é um Engenheiro de SRE e Support Senior. 
-Analise este log de erro de uma aplicação SaaS e forneça um diagnóstico preciso.
+      console.log("Iniciando diagnóstico via ai-log-diagnose para log:", log.id);
 
-FORMATO DE RESPOSTA (Markdown):
-### 🔍 Diagnóstico
-[Explicação clara e concisa do que aconteceu]
-
-### 💡 Causa Provável
-[Identifique o motivo raiz]
-
-### 🛠️ Como Resolver
-[Passos exatos para corrigir]
-
-DADOS DO LOG:
-Ação: ${log.action}
-Descrição: ${log.description}
-Erro: ${log.error_message || "Sem mensagem direta"}
-Metadados: ${JSON.stringify(log.metadata || {})}
-Data: ${log.created_at}`;
-
-      console.log("Iniciando diagnóstico via ai-chat...");
-      
       const { data: sessionData } = await supabase.auth.getSession();
       const token = sessionData?.session?.access_token;
-      const orgId = log.metadata?.org_id || log.organization_id || selectedOrgId;
 
-      if (!orgId) {
-        throw new Error("ID da organização não encontrado para este log.");
-      }
-
-      const { data, error } = await supabase.functions.invoke("ai-chat", {
+      const { data, error } = await supabase.functions.invoke("ai-log-diagnose", {
         headers: { 
           Authorization: `Bearer ${token}` 
         },
         body: { 
-          messages: [{ role: "user", content: systemPrompt }],
-          org_id: orgId,
-          mode: "assistant"
+          log_entry: log
         },
       });
 
@@ -257,21 +228,11 @@ Data: ${log.created_at}`;
         throw new Error(`Erro na conexão com a IA: ${error.message}`);
       }
 
-      console.log("Resposta do ai-chat recebida:", data);
+      console.log("Resposta do ai-log-diagnose recebida:", data);
       
-      // ai-chat can return a stream or a combined response depending on how invoke handles it
-      let diagnosisText = "";
-      if (typeof data === 'string') {
-        diagnosisText = data;
-      } else if (data?.choices?.[0]?.message?.content) {
-        diagnosisText = data.choices[0].message.content;
-      } else if (data?.diagnosis) {
-        diagnosisText = data.diagnosis;
-      } else {
-        diagnosisText = JSON.stringify(data);
-      }
+      const diagnosisText = data?.diagnosis;
       
-      if (!diagnosisText || diagnosisText === "{}") {
+      if (!diagnosisText) {
         throw new Error("A IA não retornou um diagnóstico válido.");
       }
       
