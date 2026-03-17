@@ -205,20 +205,36 @@ export default function AdminPanel() {
   }, [tab]);
 
   const diagnoseLog = async (log: any) => {
+    if (!log) return;
     setDiagnosing(true);
     setDiagnosis(null);
     try {
-      const session = (await supabase.auth.getSession()).data.session;
+      console.log("Iniciando diagnóstico para log:", log.id);
       const { data, error } = await supabase.functions.invoke("ai-log-diagnose", {
-        headers: { Authorization: `Bearer ${session?.access_token}` },
         body: { log_entry: log },
       });
-      if (error) throw error;
+      
+      if (error) {
+        console.error("Erro na invocação da função:", error);
+        throw error;
+      }
+      
+      if (!data || !data.diagnosis) {
+        console.warn("Resposta da função sem diagnóstico:", data);
+        throw new Error("Não foi possível gerar um diagnóstico no momento.");
+      }
+      
       setDiagnosis(data.diagnosis);
     } catch (err: any) {
-      toast({ title: "Erro na análise", description: err.message, variant: "destructive" });
+      console.error("Erro completo no diagnóstico:", err);
+      toast({ 
+        title: "Erro na análise", 
+        description: err.message || "Ocorreu um erro ao processar o diagnóstico.", 
+        variant: "destructive" 
+      });
+    } finally {
+      setDiagnosing(false);
     }
-    setDiagnosing(false);
   };
 
   const chartData = useMemo(() => {

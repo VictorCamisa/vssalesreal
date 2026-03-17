@@ -8,6 +8,7 @@ const corsHeaders = {
 };
 
 serve(async (req) => {
+  // Handle CORS preflight
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
@@ -15,12 +16,12 @@ serve(async (req) => {
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
 
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
-    const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
+    const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY") || Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
     // Verify caller is authenticated
     const authHeader = req.headers.get("authorization");
     if (!authHeader?.startsWith("Bearer ")) {
-      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+      return new Response(JSON.stringify({ error: "Unauthorized: Missing header" }), {
         status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
@@ -31,13 +32,17 @@ serve(async (req) => {
 
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     if (authError || !user) {
-      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+      console.error("Auth error:", authError);
+      return new Response(JSON.stringify({ error: "Unauthorized: Invalid session" }), {
         status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
     // Input data: the log entry
     const { log_entry } = await req.json();
+    if (!log_entry) throw new Error("Missing log_entry in request body");
+
+    console.log(`Diagnosing log: ${log_entry.id} - ${log_entry.action}`);
 
     const systemPrompt = `Você é um Engenheiro de SRE e Support Senior. 
 Sua tarefa é analisar um log de erro de uma aplicação SaaS e fornecer um diagnóstico preciso.
@@ -59,7 +64,7 @@ DADOS DO LOG:
 Ação: ${log_entry.action}
 Descrição: ${log_entry.description}
 Erro: ${log_entry.error_message || "Nenhuma mensagem de erro direta"}
-Metadados: ${JSON.stringify(log_entry.metadata, null, 2)}
+Metadados: ${JSON.stringify(log_entry.metadata || {}, null, 2)}
 Data: ${log_entry.created_at}
 Sucesso: ${log_entry.success}
 
@@ -72,16 +77,16 @@ Seja direto, profissional e muito prático. Use português brasileiro.`;
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "google/gemini-2.0-flash-001",
+        model: "google/gemini-3-flash-preview",
         messages: [{ role: "system", content: systemPrompt }],
-        temperature: 0.2,
+        temperature: 0.1,
       }),
     });
 
     if (!response.ok) {
       const errorText = await response.text();
       console.error("AI gateway error:", response.status, errorText);
-      throw new Error(`AI Gateway error: ${response.status}`);
+      throw new Error(`Erro no Gateway de IA: ${response.status}`);
     }
 
     const aiResult = await response.json();
@@ -93,7 +98,7 @@ Seja direto, profissional e muito prático. Use português brasileiro.`;
 
   } catch (e) {
     console.error("ai-log-diagnose error:", e);
-    return new Response(JSON.stringify({ error: e instanceof Error ? e.message : "Erro desconhecido" }), {
+    return new Response(JSON.stringify({ error: e instanceof Error ? e.message : "Erro interno no diagnóstico" }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
