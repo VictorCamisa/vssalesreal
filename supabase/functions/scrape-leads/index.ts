@@ -1,15 +1,8 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-const allowedOrigins = [
-  "https://vssalesreal.lovable.app",
-  Deno.env.get("ALLOWED_ORIGIN") || "",
-];
-
 function getCorsHeaders(req: Request) {
-  const origin = req.headers.get("origin") || "";
-  const corsOrigin = allowedOrigins.includes(origin) ? origin : allowedOrigins[0];
   return {
-    "Access-Control-Allow-Origin": corsOrigin,
+    "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Headers":
       "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
   };
