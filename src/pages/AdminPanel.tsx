@@ -199,33 +199,13 @@ export default function AdminPanel() {
       .order("created_at", { ascending: false })
       .limit(200);
       
-    // Fallback para project_activity_logs se a primeira falhar
     if (error) {
-      console.warn("Falha ao carregar activity_logs, tentando project_activity_logs:", error.message);
-      const { data: fallbackData, error: fallbackError } = await supabase
-        .from("project_activity_logs")
-        .select("*")
-        .order("created_at", { ascending: false })
-        .limit(200);
-        
-      if (fallbackError) {
-        console.error("Erro fatal ao carregar logs:", fallbackError);
-        toast({ 
-          title: "Erro ao carregar logs", 
-          description: "Não foi possível encontrar a tabela de logs no banco de dados.", 
-          variant: "destructive" 
-        });
-      } else {
-        data = fallbackData;
-        // Normaliza campos se necessário (action_type -> action)
-        if (data) {
-          data = data.map((l: any) => ({
-            ...l,
-            action: l.action || l.action_type,
-            success: l.success !== undefined ? l.success : true // Assume sucesso se não houver campo
-          }));
-        }
-      }
+      console.error("Erro ao carregar logs:", error);
+      toast({ 
+        title: "Erro ao carregar logs", 
+        description: error.message, 
+        variant: "destructive" 
+      });
     }
     
     if (data) setActivityLogs(data);
