@@ -1253,6 +1253,14 @@ function DetailDialog({
   scenarios: AiScenario[];
 }) {
   const [activeLeadTab, setActiveLeadTab] = useState<string>("all");
+  const [tick, setTick] = useState(0);
+
+  // Live ticker for countdown
+  useEffect(() => {
+    if (!broadcast || broadcast.status !== "running") return;
+    const interval = setInterval(() => setTick(t => t + 1), 1000);
+    return () => clearInterval(interval);
+  }, [broadcast?.status, broadcast?.id]);
 
   const statusCounts = useMemo(() => {
     if (!broadcast) return {};
@@ -1280,6 +1288,16 @@ function DetailDialog({
     return leads.filter(l => l.status === activeLeadTab);
   }, [leads, activeLeadTab]);
 
+  // Find next pending leads
+  const nextPendingLeads = useMemo(() => {
+    return leads.filter(l => l.status === "pending").slice(0, 3);
+  }, [leads]);
+
+  // Find last processed lead
+  const lastProcessedLead = useMemo(() => {
+    return leads.find(l => l.status === "sent" || l.status === "failed" || l.status === "skipped");
+  }, [leads]);
+
   if (!broadcast) return null;
   const cfg = STATUS_CONFIG[broadcast.status] || STATUS_CONFIG.draft;
   const scenarioLabel = SCENARIO_OPTIONS.find(s => s.value === broadcast.scenario_key);
@@ -1292,14 +1310,25 @@ function DetailDialog({
   const etaMin = Math.ceil(etaSeconds / 60);
   const etaStr = etaMin > 60 ? `${Math.floor(etaMin / 60)}h ${etaMin % 60}min` : `${etaMin} min`;
 
-  // Time elapsed
+  // Time elapsed (uses tick for live update)
+  void tick;
   const startedAt = broadcast.started_at ? new Date(broadcast.started_at) : null;
   const endedAt = broadcast.completed_at ? new Date(broadcast.completed_at) : null;
   const elapsed = startedAt ? (endedAt || new Date()).getTime() - startedAt.getTime() : 0;
   const elapsedMin = Math.floor(elapsed / 60000);
-  const elapsedStr = elapsedMin > 60 ? `${Math.floor(elapsedMin / 60)}h ${elapsedMin % 60}min` : `${elapsedMin} min`;
+  const elapsedSec = Math.floor((elapsed % 60000) / 1000);
+  const elapsedStr = elapsedMin > 60 ? `${Math.floor(elapsedMin / 60)}h ${elapsedMin % 60}min` : `${elapsedMin}min ${elapsedSec}s`;
 
   const successRate = processed > 0 ? ((broadcast.sent_count || 0) / processed * 100).toFixed(1) : "0";
+  const failRate = processed > 0 ? ((broadcast.failed_count || 0) / processed * 100).toFixed(1) : "0";
+
+  // Countdown to next message
+  const lastUpdateTime = broadcast.updated_at ? new Date(broadcast.updated_at).getTime() : Date.now();
+  const secsSinceUpdate = Math.floor((Date.now() - lastUpdateTime) / 1000);
+  const countdownToNext = Math.max(0, delayPerMsg - (secsSinceUpdate % delayPerMsg));
+
+  // Speed
+  const speed = elapsedMin > 0 ? (processed / elapsedMin).toFixed(1) : processed > 0 ? processed.toString() : "—";
 
   const leadStatusConfig: Record<string, { label: string; color: string }> = {
     pending: { label: "Pendente", color: "bg-muted text-muted-foreground" },
@@ -1339,19 +1368,50 @@ function DetailDialog({
                   <div className="absolute inset-0 rounded-full bg-primary" />
                 </div>
                 <span className="text-sm font-semibold">Disparo em execução</span>
-              </div>
-              <div className="flex items-center gap-4 text-xs text-muted-foreground">
-                <span className="flex items-center gap-1"><Timer className="h-3 w-3" />Decorrido: <strong className="text-foreground">{elapsedStr}</strong></span>
-                <span className="flex items-center gap-1"><Clock className="h-3 w-3" />Restante: <strong className="text-foreground">{etaStr}</strong></span>
-                <span className="flex items-center gap-1"><Gauge className="h-3 w-3" />Taxa sucesso: <strong className="text-foreground">{successRate}%</strong></span>
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-green-500/10 text-green-600 font-medium animate-pulse">
+                  Continuando automaticamente...
+                </span>
               </div>
             </div>
+
+            {/* Stats row */}
+            <div className="grid grid-cols-5 gap-2 text-center text-xs">
+              <div className="border rounded-md p-2 bg-background/60">
+                <Timer className="h-3 w-3 mx-auto mb-1 text-muted-foreground" />
+                <p className="font-bold text-foreground">{elapsedStr}</p>
+                <p className="text-[9px] text-muted-foreground">Decorrido</p>
+              </div>
+              <div className="border rounded-md p-2 bg-background/60">
+                <Clock className="h-3 w-3 mx-auto mb-1 text-muted-foreground" />
+                <p className="font-bold text-foreground">{etaStr}</p>
+                <p className="text-[9px] text-muted-foreground">Restante</p>
+              </div>
+              <div className="border rounded-md p-2 bg-background/60">
+                <Gauge className="h-3 w-3 mx-auto mb-1 text-muted-foreground" />
+                <p className="font-bold text-foreground">{speed}/min</p>
+                <p className="text-[9px] text-muted-foreground">Velocidade</p>
+              </div>
+              <div className="border rounded-md p-2 bg-background/60">
+                <TrendingUp className="h-3 w-3 mx-auto mb-1 text-green-600" />
+                <p className="font-bold text-green-600">{successRate}%</p>
+                <p className="text-[9px] text-muted-foreground">Sucesso</p>
+              </div>
+              <div className="border rounded-md p-2 bg-background/60">
+                <AlertCircle className="h-3 w-3 mx-auto mb-1 text-destructive" />
+                <p className="font-bold text-destructive">{failRate}%</p>
+                <p className="text-[9px] text-muted-foreground">Falhas</p>
+              </div>
+            </div>
+
+            {/* Progress bar */}
             <div className="relative">
               <Progress value={progress} className="h-5" />
               <div className="absolute inset-0 flex items-center justify-center">
                 <span className="text-xs font-bold text-white drop-shadow-md">{progress.toFixed(1)}% — {processed} de {total} processados</span>
               </div>
             </div>
+
+            {/* Counters */}
             <div className="grid grid-cols-4 gap-3">
               <div className="border rounded-md p-2 text-center bg-background/60">
                 <p className="text-lg font-bold">{processed}<span className="text-xs font-normal text-muted-foreground">/{total}</span></p>
@@ -1359,16 +1419,74 @@ function DetailDialog({
               </div>
               <div className="border rounded-md p-2 text-center bg-background/60">
                 <p className="text-lg font-bold text-green-600">{broadcast.sent_count || 0}</p>
-                <p className="text-[9px] text-muted-foreground uppercase tracking-wider">Enviados com sucesso</p>
+                <p className="text-[9px] text-muted-foreground uppercase tracking-wider">Enviados</p>
               </div>
               <div className="border rounded-md p-2 text-center bg-background/60">
-                <p className="text-lg font-bold text-red-500">{broadcast.failed_count || 0}</p>
+                <p className="text-lg font-bold text-destructive">{broadcast.failed_count || 0}</p>
                 <p className="text-[9px] text-muted-foreground uppercase tracking-wider">Falhas</p>
               </div>
               <div className="border rounded-md p-2 text-center bg-background/60">
                 <p className="text-lg font-bold text-muted-foreground">{remaining}</p>
                 <p className="text-[9px] text-muted-foreground uppercase tracking-wider">Na fila</p>
               </div>
+            </div>
+
+            {/* Next lead + countdown + activity */}
+            <div className="border rounded-md p-3 bg-background/80 space-y-2">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Radio className="h-3.5 w-3.5 text-primary animate-pulse" />
+                  <span className="text-xs font-semibold">Atividade em tempo real</span>
+                </div>
+                {remaining > 0 && (
+                  <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
+                    <span>Próximo envio em</span>
+                    <span className="font-mono font-bold text-primary bg-primary/10 px-1.5 py-0.5 rounded">
+                      ~{countdownToNext}s
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              {/* Last processed */}
+              {lastProcessedLead && (
+                <div className="flex items-center gap-2 text-xs">
+                  <span className="text-muted-foreground">Último:</span>
+                  <span className="font-medium">{lastProcessedLead.lead?.name || lastProcessedLead.lead?.phone || "—"}</span>
+                  <span className={`text-[10px] px-1.5 py-0.5 rounded-md font-medium ${lastProcessedLead.status === "sent" ? "bg-green-500/10 text-green-600" : "bg-destructive/10 text-destructive"}`}>
+                    {lastProcessedLead.status === "sent" ? "✓ Enviado" : lastProcessedLead.status === "failed" ? `✗ ${categorizeError(lastProcessedLead.error_message).label}` : lastProcessedLead.status}
+                  </span>
+                </div>
+              )}
+
+              {/* Next in queue */}
+              {nextPendingLeads.length > 0 && (
+                <div className="space-y-1">
+                  <span className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">Próximos na fila:</span>
+                  <div className="flex flex-wrap gap-1.5">
+                    {nextPendingLeads.map((l, i) => (
+                      <div key={l.id} className="flex items-center gap-1.5 text-[10px] px-2 py-1 rounded-md bg-secondary/80 border">
+                        <span className="font-mono text-muted-foreground">{i + 1}.</span>
+                        <span className="font-medium">{l.lead?.name || "Sem nome"}</span>
+                        <span className="text-muted-foreground font-mono">{l.lead?.phone || "—"}</span>
+                      </div>
+                    ))}
+                    {remaining > 3 && (
+                      <span className="text-[10px] text-muted-foreground self-center">+{remaining - 3} restantes</span>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Error continuation notice */}
+              {(broadcast.failed_count || 0) > 0 && remaining > 0 && (
+                <div className="flex items-center gap-2 text-[10px] bg-amber-500/10 text-amber-700 dark:text-amber-400 px-2.5 py-1.5 rounded-md border border-amber-500/20">
+                  <AlertCircle className="h-3 w-3 shrink-0" />
+                  <span>
+                    <strong>{broadcast.failed_count} erro{(broadcast.failed_count || 0) > 1 ? "s" : ""}</strong> encontrado{(broadcast.failed_count || 0) > 1 ? "s" : ""} — o disparo <strong>continua normalmente</strong> para os próximos {remaining} leads. Erros são pulados automaticamente.
+                  </span>
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -1393,7 +1511,6 @@ function DetailDialog({
               ))}
             </div>
 
-            {/* Progress bar for completed/paused */}
             {total > 0 && (
               <div className="space-y-1.5">
                 <div className="flex items-center justify-between text-xs text-muted-foreground">
@@ -1423,6 +1540,9 @@ function DetailDialog({
               <Badge variant="outline" className="ml-auto text-[10px] border-destructive/30 text-destructive">
                 {leads.filter(l => l.status === "failed" || l.status === "skipped").length} problemas
               </Badge>
+              {broadcast.status === "running" && remaining > 0 && (
+                <span className="text-[10px] text-green-600 font-medium">• Disparo continua</span>
+              )}
             </div>
             <div className="p-3 space-y-2">
               {errorBreakdown.map((group, i) => (
@@ -1472,13 +1592,9 @@ function DetailDialog({
           </div>
         </div>
 
-        {/* Leads Table with filter tabs */}
+        {/* Leads Table */}
         <div className="space-y-2">
-          <div className="flex items-center justify-between">
-            <p className="text-xs font-medium">Leads da Campanha</p>
-          </div>
-
-          {/* Status filter tabs */}
+          <p className="text-xs font-medium">Leads da Campanha</p>
           <div className="flex gap-1 flex-wrap">
             <button
               onClick={() => setActiveLeadTab("all")}
@@ -1512,7 +1628,8 @@ function DetailDialog({
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead className="text-[10px] w-[180px]">Lead</TableHead>
+                      <TableHead className="text-[10px] w-[30px]">#</TableHead>
+                      <TableHead className="text-[10px] w-[160px]">Lead</TableHead>
                       <TableHead className="text-[10px] w-[130px]">Contato</TableHead>
                       <TableHead className="text-[10px] w-[80px]">Origem</TableHead>
                       <TableHead className="text-[10px] w-[80px]">Status</TableHead>
@@ -1521,12 +1638,19 @@ function DetailDialog({
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {filteredLeads.map(bl => {
+                    {filteredLeads.map((bl, idx) => {
                       const sc = leadStatusConfig[bl.status] || { label: bl.status, color: "bg-muted text-muted-foreground" };
                       const errCat = bl.error_message ? categorizeError(bl.error_message) : null;
+                      const isNextUp = broadcast.status === "running" && bl.status === "pending" && nextPendingLeads[0]?.id === bl.id;
                       return (
-                        <TableRow key={bl.id}>
-                          <TableCell className="text-xs py-2 font-medium">{bl.lead?.name || "—"}</TableCell>
+                        <TableRow key={bl.id} className={isNextUp ? "bg-primary/5 border-l-2 border-l-primary" : ""}>
+                          <TableCell className="text-[10px] py-2 text-muted-foreground font-mono">
+                            {isNextUp ? <Radio className="h-3 w-3 text-primary animate-pulse" /> : idx + 1}
+                          </TableCell>
+                          <TableCell className="text-xs py-2 font-medium">
+                            {bl.lead?.name || "—"}
+                            {isNextUp && <span className="ml-1.5 text-[9px] text-primary font-normal">← próximo</span>}
+                          </TableCell>
                           <TableCell className="text-xs py-2 font-mono text-muted-foreground">{bl.lead?.phone || bl.lead?.email || "—"}</TableCell>
                           <TableCell className="text-xs py-2">
                             <Badge variant="secondary" className="text-[9px]">
@@ -1545,7 +1669,7 @@ function DetailDialog({
                             ) : bl.status === "sent" ? (
                               <span className="text-[10px] text-green-600">✓ Enviado com sucesso</span>
                             ) : bl.status === "pending" ? (
-                              <span className="text-[10px] text-muted-foreground">Aguardando processamento</span>
+                              <span className="text-[10px] text-muted-foreground">{isNextUp ? "Próximo a ser processado" : "Aguardando processamento"}</span>
                             ) : (
                               <span className="text-[10px] text-muted-foreground">—</span>
                             )}
