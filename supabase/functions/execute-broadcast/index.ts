@@ -252,13 +252,17 @@ ${!useEmoji ? "- NUNCA use emojis. ZERO emojis." : ""}
 
     if (broadcast.ai_enabled && ANTHROPIC_API_KEY) {
       try {
-        const modelsResp = await fetch("https://api.anthropic.com/v1/models", {
-          method: "GET",
-          headers: {
-            "x-api-key": ANTHROPIC_API_KEY,
-            "anthropic-version": "2023-06-01",
+        const modelsResp = await fetchWithTimeout(
+          "https://api.anthropic.com/v1/models",
+          {
+            method: "GET",
+            headers: {
+              "x-api-key": ANTHROPIC_API_KEY,
+              "anthropic-version": "2023-06-01",
+            },
           },
-        });
+          12000,
+        );
 
         if (modelsResp.ok) {
           const modelsData = await modelsResp.json();
