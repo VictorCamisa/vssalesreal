@@ -104,9 +104,13 @@ Deno.serve(async (req) => {
     // Helper: check if instance is online
     const isInstanceOnline = async (name: string): Promise<boolean> => {
       try {
-        const stResp = await fetch(`${EVOLUTION_API_URL}/instance/connectionState/${name}`, {
-          headers: { apikey: EVOLUTION_API_KEY },
-        });
+        const stResp = await fetchWithTimeout(
+          `${EVOLUTION_API_URL}/instance/connectionState/${name}`,
+          {
+            headers: { apikey: EVOLUTION_API_KEY },
+          },
+          12000,
+        );
         if (stResp.ok) {
           const stData = await stResp.json();
           return (stData.instance?.state || stData.state) === "open";
