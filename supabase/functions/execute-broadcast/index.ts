@@ -296,6 +296,7 @@ ${!useEmoji ? "- NUNCA use emojis. ZERO emojis." : ""}
       });
 
       let success = false;
+      let lastError = "";
       for (let i = 0; i < blocks.length; i++) {
         if (i > 0) {
           const baseDelay = Math.max(3000, blocks[i].length * 50);
@@ -310,10 +311,17 @@ ${!useEmoji ? "- NUNCA use emojis. ZERO emojis." : ""}
           await sendResp.json();
           success = true;
         } else {
-          console.error("Block send error:", sendResp.status, await sendResp.text());
+          const errBody = await sendResp.text();
+          lastError = `${sendResp.status}: ${errBody.substring(0, 200)}`;
+          console.error(`Block ${i+1} send error for ${phone}:`, sendResp.status, errBody.substring(0, 300));
+          // If number doesn't exist on WhatsApp, skip remaining blocks
+          if (errBody.includes('"exists":false') || errBody.includes("not registered")) {
+            lastError = "Número não tem WhatsApp";
+            break;
+          }
         }
       }
-      return success;
+      return { success, error: lastError };
     };
 
     let sentCount = 0;
@@ -436,8 +444,8 @@ ${!useEmoji ? "- NUNCA use emojis. ZERO emojis." : ""}
       // Send via Evolution API
       const cleanPhone = lead.phone.replace(/\D/g, "");
       try {
-        const success = await sendInBlocks(cleanPhone, messageText);
-        if (success) {
+        const result = await sendInBlocks(cleanPhone, messageText);
+        if (result.success) {
           const storedMsg = messageText.replace(/---BLOCO---/gi, "\n").trim();
           const sentAt = new Date().toISOString();
           await supabase.from("broadcast_leads").update({
@@ -479,7 +487,7 @@ ${!useEmoji ? "- NUNCA use emojis. ZERO emojis." : ""}
           sentCount++;
         } else {
           await supabase.from("broadcast_leads").update({
-            status: "failed", error_message: "API error: all blocks failed",
+            status: "failed", error_message: result.error || "Falha no envio",
           }).eq("id", bl.id);
           failCount++;
         }
@@ -488,6 +496,11 @@ ${!useEmoji ? "- NUNCA use emojis. ZERO emojis." : ""}
           status: "failed", error_message: e instanceof Error ? e.message : "Unknown error",
         }).eq("id", bl.id);
         failCount++;
+      }
+
+      // Update counts after each lead for real-time progress
+      if ((sentCount + failCount) % 3 === 0 || idx === bLeads.length - 1) {
+        await updateBroadcastCounts(supabase, broadcast_id);
       }
 
       // Delay between leads

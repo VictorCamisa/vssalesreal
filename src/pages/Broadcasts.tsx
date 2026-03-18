@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
@@ -128,6 +128,7 @@ export default function Broadcasts() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const orgId = profile?.org_id;
+  const pollRefs = useRef<Map<string, NodeJS.Timeout>>(new Map());
 
   const [activeTab, setActiveTab] = useState("all");
   const [searchQuery, setSearchQuery] = useState("");
@@ -146,7 +147,11 @@ export default function Broadcasts() {
       return (data as Broadcast[]) || [];
     },
     enabled: !!orgId,
-    staleTime: 60000,
+    refetchInterval: (query) => {
+      const data = query.state.data as Broadcast[] | undefined;
+      const hasRunning = data?.some(b => b.status === "running");
+      return hasRunning ? 5000 : 30000;
+    },
   });
 
   // ---- React Query: fetch scenarios ----
@@ -247,45 +252,27 @@ export default function Broadcasts() {
 
   const executeBroadcast = async (broadcastId: string) => {
     if (!orgId) return;
-    console.log("[BROADCAST] Iniciando disparo:", { broadcastId, orgId });
     try {
       const { data, error } = await supabase.functions.invoke("execute-broadcast", {
         body: { broadcast_id: broadcastId, org_id: orgId },
       });
-      console.log("[BROADCAST] Resposta da função:", { data, error });
-      if (error) {
-        console.error("[BROADCAST] Erro retornado:", error);
-        throw error;
-      }
+      if (error) throw error;
       if (data?.error) {
-        console.error("[BROADCAST] Erro no data:", data.error);
         toast({ title: "Erro no disparo", description: data.error, variant: "destructive" });
+        queryClient.invalidateQueries({ queryKey: ["broadcasts", orgId] });
         return;
       }
       if (data?.paused) {
         toast({ title: "⚠️ Disparo pausado", description: data?.error || "Instância offline", variant: "destructive" });
       } else {
-        toast({ title: "🚀 Disparo iniciado!", description: `Enviados: ${data?.sent || 0}, Restantes: ${data?.remaining || 0}` });
+        toast({ title: "🚀 Lote processado!", description: `${data?.sent || 0} enviados, ${data?.failed || 0} falhas, ${data?.remaining || 0} restantes` });
         logActivity({ action: "broadcast_executado", description: `Disparo iniciado`, metadata: { broadcast_id: broadcastId } });
       }
-      // Poll for updates every 10s
-      const pollInterval = setInterval(async () => {
-        const { data: fresh } = await supabase.from("broadcasts").select("status, sent_count, failed_count, total_leads").eq("id", broadcastId).single();
-        if (fresh) {
-          queryClient.setQueryData(["broadcasts", orgId], (old: Broadcast[] | undefined) =>
-            (old || []).map(b => b.id === broadcastId ? { ...b, ...fresh } : b)
-          );
-          if (fresh.status === "completed" || fresh.status === "paused" || fresh.status === "cancelled") {
-            clearInterval(pollInterval);
-            toast({ title: fresh.status === "completed" ? "✅ Disparo concluído!" : "⏸️ Disparo pausado", description: `${fresh.sent_count || 0} enviadas, ${fresh.failed_count || 0} falhas` });
-            queryClient.invalidateQueries({ queryKey: ["broadcasts", orgId] });
-          }
-        }
-      }, 10000);
-      // Stop polling after 30 minutes max
-      setTimeout(() => clearInterval(pollInterval), 30 * 60 * 1000);
+      queryClient.invalidateQueries({ queryKey: ["broadcasts", orgId] });
+      if (selectedBroadcast?.id === broadcastId) {
+        queryClient.invalidateQueries({ queryKey: ["broadcast_leads", broadcastId] });
+      }
     } catch (error: any) {
-      console.error("[BROADCAST] Exceção:", error);
       toast({ title: "Erro no disparo", description: error.message || "Erro desconhecido", variant: "destructive" });
       logActivity({ action: "broadcast_executado", description: `Falha no disparo`, success: false, errorMessage: error.message, metadata: { broadcast_id: broadcastId } });
       queryClient.invalidateQueries({ queryKey: ["broadcasts", orgId] });
@@ -418,8 +405,19 @@ export default function Broadcasts() {
           {filtered.map(broadcast => {
             const cfg = STATUS_CONFIG[broadcast.status] || STATUS_CONFIG.draft;
             const StatusIcon = cfg.icon;
-            const progress = broadcast.total_leads > 0 ? (broadcast.sent_count / broadcast.total_leads) * 100 : 0;
+            const processed = (broadcast.sent_count || 0) + (broadcast.failed_count || 0);
+            const total = broadcast.total_leads || 0;
+            const progress = total > 0 ? (processed / total) * 100 : 0;
+            const sentPct = total > 0 ? ((broadcast.sent_count || 0) / total * 100).toFixed(1) : "0";
+            const failPct = total > 0 ? ((broadcast.failed_count || 0) / total * 100).toFixed(1) : "0";
             const scenarioLabel = SCENARIO_OPTIONS.find(s => s.value === broadcast.scenario_key);
+
+            // ETA calculation
+            const delayPerMsg = Math.max(5, (broadcast.delay_between_messages || 10));
+            const remaining = total - processed;
+            const etaSeconds = remaining * delayPerMsg;
+            const etaMin = Math.ceil(etaSeconds / 60);
+            const etaStr = etaMin > 60 ? `~${Math.floor(etaMin / 60)}h${etaMin % 60}m` : `~${etaMin}min`;
 
             return (
               <div key={broadcast.id} className="border rounded-lg p-4 hover:bg-secondary/30 transition-colors group">
@@ -442,9 +440,6 @@ export default function Broadcasts() {
                           {scenarioLabel.icon} {scenarioLabel.label}
                         </Badge>
                       )}
-                      <Badge variant="outline" className="text-[10px]">
-                        {broadcast.type === "automated" ? "Auto" : "Manual"}
-                      </Badge>
                       {broadcast.instance_name && (
                         <Badge variant="outline" className="text-[10px] gap-1">
                           <MessageSquare className="h-3 w-3" />{broadcast.instance_name}
@@ -452,42 +447,65 @@ export default function Broadcasts() {
                       )}
                     </div>
 
-                    {/* Segmentation tags */}
-                    {(broadcast.segment_source?.length > 0 || broadcast.segment_tags?.length > 0) && (
-                      <div className="flex items-center gap-1.5 mb-2 flex-wrap">
-                        {broadcast.segment_source?.map(s => (
-                          <Badge key={s} variant="secondary" className="text-[9px] gap-0.5">
-                            <Filter className="h-2.5 w-2.5" />{SOURCE_OPTIONS.find(o => o.value === s)?.label || s}
-                          </Badge>
-                        ))}
-                        {broadcast.segment_tags?.map(t => (
-                          <Badge key={t} variant="secondary" className="text-[9px] gap-0.5">
-                            <Tag className="h-2.5 w-2.5" />{t}
-                          </Badge>
-                        ))}
+                    {/* Real-time progress for running broadcasts */}
+                    {broadcast.status === "running" && total > 0 && (
+                      <div className="bg-secondary/50 rounded-lg p-3 mb-2 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <div className="relative h-2.5 w-2.5">
+                              <div className="absolute inset-0 rounded-full bg-green-500 animate-ping opacity-40" />
+                              <div className="absolute inset-0 rounded-full bg-green-500" />
+                            </div>
+                            <span className="text-xs font-medium">Processando...</span>
+                          </div>
+                          <span className="text-xs text-muted-foreground font-mono">ETA: {etaStr}</span>
+                        </div>
+                        <div className="relative">
+                          <Progress value={progress} className="h-2.5" />
+                          <div className="absolute inset-0 flex items-center justify-center">
+                            <span className="text-[9px] font-bold text-white drop-shadow-sm">{progress.toFixed(1)}%</span>
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-4 gap-2 text-center">
+                          <div>
+                            <p className="text-sm font-semibold text-foreground">{processed}/{total}</p>
+                            <p className="text-[9px] text-muted-foreground uppercase">Processados</p>
+                          </div>
+                          <div>
+                            <p className="text-sm font-semibold text-green-600">{broadcast.sent_count || 0}</p>
+                            <p className="text-[9px] text-muted-foreground uppercase">Enviados ({sentPct}%)</p>
+                          </div>
+                          <div>
+                            <p className="text-sm font-semibold text-red-500">{broadcast.failed_count || 0}</p>
+                            <p className="text-[9px] text-muted-foreground uppercase">Falhas ({failPct}%)</p>
+                          </div>
+                          <div>
+                            <p className="text-sm font-semibold text-muted-foreground">{remaining}</p>
+                            <p className="text-[9px] text-muted-foreground uppercase">Restantes</p>
+                          </div>
+                        </div>
                       </div>
                     )}
 
-                    <div className="flex items-center gap-4 text-xs text-muted-foreground">
-                      <span className="flex items-center gap-1"><Users className="h-3 w-3" />{broadcast.total_leads} leads</span>
-                      <span className="flex items-center gap-1"><Send className="h-3 w-3" />{broadcast.sent_count} enviadas</span>
-                      <span className="flex items-center gap-1"><MailOpen className="h-3 w-3" />{broadcast.read_count} lidas</span>
-                      <span className="flex items-center gap-1"><MessageCircle className="h-3 w-3" />{broadcast.replied_count} respostas</span>
-                      <span className="flex items-center gap-1"><Target className="h-3 w-3" />{broadcast.converted_count} conversões</span>
-                      {broadcast.failed_count > 0 && (
-                        <span className="flex items-center gap-1 text-destructive"><AlertCircle className="h-3 w-3" />{broadcast.failed_count} falhas</span>
-                      )}
-                    </div>
+                    {/* Compact stats for non-running */}
+                    {broadcast.status !== "running" && (
+                      <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                        <span className="flex items-center gap-1"><Users className="h-3 w-3" />{total} leads</span>
+                        <span className="flex items-center gap-1"><Send className="h-3 w-3" />{broadcast.sent_count || 0} enviadas</span>
+                        <span className="flex items-center gap-1"><MessageCircle className="h-3 w-3" />{broadcast.replied_count || 0} respostas</span>
+                        <span className="flex items-center gap-1"><Target className="h-3 w-3" />{broadcast.converted_count || 0} conversões</span>
+                        {(broadcast.failed_count || 0) > 0 && (
+                          <span className="flex items-center gap-1 text-destructive"><AlertCircle className="h-3 w-3" />{broadcast.failed_count} falhas</span>
+                        )}
+                      </div>
+                    )}
 
-                    {(broadcast.status === "running" || broadcast.status === "paused") && broadcast.total_leads > 0 && (
+                    {/* Completed progress bar */}
+                    {(broadcast.status === "completed" || broadcast.status === "paused") && total > 0 && (
                       <div className="mt-2 flex items-center gap-2">
                         <Progress value={progress} className="flex-1 max-w-xs h-1.5" />
                         <span className="text-[10px] text-muted-foreground font-mono">{progress.toFixed(0)}%</span>
                       </div>
-                    )}
-
-                    {broadcast.description && (
-                      <p className="text-[11px] text-muted-foreground mt-1.5 line-clamp-1">{broadcast.description}</p>
                     )}
                   </div>
 
@@ -1179,10 +1197,36 @@ function DetailDialog({
   if (!broadcast) return null;
   const cfg = STATUS_CONFIG[broadcast.status] || STATUS_CONFIG.draft;
   const scenarioLabel = SCENARIO_OPTIONS.find(s => s.value === broadcast.scenario_key);
+  const total = broadcast.total_leads || 0;
+  const processed = (broadcast.sent_count || 0) + (broadcast.failed_count || 0);
+  const progress = total > 0 ? (processed / total) * 100 : 0;
+  const remaining = total - processed;
+  const delayPerMsg = Math.max(5, (broadcast.delay_between_messages || 10));
+  const etaSeconds = remaining * delayPerMsg;
+  const etaMin = Math.ceil(etaSeconds / 60);
+  const etaStr = etaMin > 60 ? `${Math.floor(etaMin / 60)}h ${etaMin % 60}min` : `${etaMin} min`;
+
+  // Time elapsed
+  const startedAt = broadcast.started_at ? new Date(broadcast.started_at) : null;
+  const endedAt = broadcast.completed_at ? new Date(broadcast.completed_at) : null;
+  const elapsed = startedAt ? (endedAt || new Date()).getTime() - startedAt.getTime() : 0;
+  const elapsedMin = Math.floor(elapsed / 60000);
+  const elapsedStr = elapsedMin > 60 ? `${Math.floor(elapsedMin / 60)}h ${elapsedMin % 60}min` : `${elapsedMin} min`;
+
+  // Status color mapping for lead statuses
+  const leadStatusConfig: Record<string, { label: string; color: string }> = {
+    pending: { label: "Pendente", color: "bg-muted text-muted-foreground" },
+    sent: { label: "Enviado", color: "bg-primary/10 text-primary" },
+    delivered: { label: "Entregue", color: "bg-blue-500/10 text-blue-600" },
+    read: { label: "Lido", color: "bg-emerald-500/10 text-emerald-600" },
+    replied: { label: "Respondeu", color: "bg-amber-500/10 text-amber-600" },
+    failed: { label: "Falha", color: "bg-destructive/10 text-destructive" },
+    skipped: { label: "Pulado", color: "bg-muted text-muted-foreground" },
+  };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-2xl max-h-[85vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-3xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="text-base flex items-center gap-2">
             {broadcast.name}
@@ -1193,23 +1237,65 @@ function DetailDialog({
           <DialogDescription className="text-xs">{broadcast.description || "Sem descrição"}</DialogDescription>
         </DialogHeader>
 
-        {/* Summary Cards */}
-        <div className="grid grid-cols-4 gap-2">
+        {/* Live progress section */}
+        {broadcast.status === "running" && total > 0 && (
+          <div className="rounded-lg border-2 border-primary/20 bg-primary/5 p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="relative h-3 w-3">
+                  <div className="absolute inset-0 rounded-full bg-primary animate-ping opacity-40" />
+                  <div className="absolute inset-0 rounded-full bg-primary" />
+                </div>
+                <span className="text-sm font-semibold">Disparo em execução</span>
+              </div>
+              <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                <span className="flex items-center gap-1"><Timer className="h-3 w-3" />Decorrido: {elapsedStr}</span>
+                <span className="flex items-center gap-1"><Clock className="h-3 w-3" />ETA: {etaStr}</span>
+              </div>
+            </div>
+            <div className="relative">
+              <Progress value={progress} className="h-4" />
+              <div className="absolute inset-0 flex items-center justify-center">
+                <span className="text-[11px] font-bold text-white drop-shadow-md">{progress.toFixed(1)}% — {processed}/{total}</span>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Metrics Grid */}
+        <div className="grid grid-cols-5 gap-2">
           {[
-            { label: "Enviadas", value: broadcast.sent_count, total: broadcast.total_leads, color: "text-primary" },
-            { label: "Lidas", value: broadcast.read_count, total: broadcast.sent_count, color: "text-muted-foreground" },
-            { label: "Respostas", value: broadcast.replied_count, total: broadcast.sent_count, color: "text-warning" },
-            { label: "Conversões", value: broadcast.converted_count, total: broadcast.sent_count, color: "text-success" },
+            { label: "Total", value: total, sub: "leads", color: "text-foreground" },
+            { label: "Enviados", value: broadcast.sent_count || 0, sub: total > 0 ? `${((broadcast.sent_count || 0) / total * 100).toFixed(1)}%` : "0%", color: "text-primary" },
+            { label: "Falhas", value: broadcast.failed_count || 0, sub: total > 0 ? `${((broadcast.failed_count || 0) / total * 100).toFixed(1)}%` : "0%", color: "text-destructive" },
+            { label: "Respostas", value: broadcast.replied_count || 0, sub: (broadcast.sent_count || 0) > 0 ? `${((broadcast.replied_count || 0) / (broadcast.sent_count || 1) * 100).toFixed(1)}%` : "0%", color: "text-amber-500" },
+            { label: "Conversões", value: broadcast.converted_count || 0, sub: (broadcast.sent_count || 0) > 0 ? `${((broadcast.converted_count || 0) / (broadcast.sent_count || 1) * 100).toFixed(1)}%` : "0%", color: "text-emerald-600" },
           ].map(m => (
             <div key={m.label} className="border rounded-lg p-2.5 text-center">
-              <p className={`text-lg font-semibold ${m.color}`}>{m.value}</p>
+              <p className={`text-xl font-bold ${m.color}`}>{m.value}</p>
               <p className="text-[10px] text-muted-foreground">{m.label}</p>
-              {m.total > 0 && (
-                <p className="text-[9px] text-muted-foreground font-mono">{((m.value / m.total) * 100).toFixed(1)}%</p>
-              )}
+              <p className="text-[9px] text-muted-foreground font-mono">{m.sub}</p>
             </div>
           ))}
         </div>
+
+        {/* Completed progress */}
+        {broadcast.status !== "running" && total > 0 && (
+          <div className="space-y-1">
+            <div className="flex items-center justify-between text-xs text-muted-foreground">
+              <span>Progresso: {processed}/{total}</span>
+              <span>{progress.toFixed(1)}%</span>
+            </div>
+            <Progress value={progress} className="h-2" />
+            {startedAt && (
+              <div className="flex items-center gap-3 text-[10px] text-muted-foreground">
+                <span>Início: {startedAt.toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}</span>
+                {endedAt && <span>Fim: {endedAt.toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}</span>}
+                <span>Duração: {elapsedStr}</span>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Config Summary */}
         <div className="border rounded-lg p-3 space-y-2">
@@ -1222,14 +1308,6 @@ function DetailDialog({
             <span>Follow-up: <strong className="text-foreground">{broadcast.follow_up_enabled ? `${broadcast.follow_up_count}x a cada ${broadcast.follow_up_interval_hours}h` : "Desativado"}</strong></span>
             <span>Cadência: <strong className="text-foreground">{broadcast.send_rate_per_minute}/min • {broadcast.delay_between_messages}s</strong></span>
           </div>
-          {broadcast.segment_source?.length > 0 && (
-            <div className="flex items-center gap-1.5 flex-wrap">
-              <span className="text-[10px] text-muted-foreground">Segmentação:</span>
-              {broadcast.segment_source.map(s => (
-                <Badge key={s} variant="secondary" className="text-[9px]">{SOURCE_OPTIONS.find(o => o.value === s)?.label || s}</Badge>
-              ))}
-            </div>
-          )}
         </div>
 
         {/* Leads Table */}
@@ -1237,9 +1315,12 @@ function DetailDialog({
           <div className="flex items-center justify-between">
             <p className="text-xs font-medium">Leads ({leads.length})</p>
             <div className="flex gap-1.5 flex-wrap">
-              {Object.entries(statusCounts).map(([s, c]) => (
-                <Badge key={s} variant="outline" className="text-[9px]">{s}: {c}</Badge>
-              ))}
+              {Object.entries(statusCounts).map(([s, c]) => {
+                const sc = leadStatusConfig[s] || { label: s, color: "bg-muted text-muted-foreground" };
+                return (
+                  <Badge key={s} variant="outline" className={`text-[9px] ${sc.color}`}>{sc.label}: {c}</Badge>
+                );
+              })}
             </div>
           </div>
 
@@ -1257,23 +1338,30 @@ function DetailDialog({
                       <TableHead className="text-[10px]">Contato</TableHead>
                       <TableHead className="text-[10px]">Origem</TableHead>
                       <TableHead className="text-[10px]">Status</TableHead>
+                      <TableHead className="text-[10px]">Erro</TableHead>
                       <TableHead className="text-[10px]">Enviado</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {leads.map(bl => (
-                      <TableRow key={bl.id}>
-                        <TableCell className="text-xs py-2">{bl.lead?.name || "—"}</TableCell>
-                        <TableCell className="text-xs py-2 font-mono">{bl.lead?.phone || bl.lead?.email || "—"}</TableCell>
-                        <TableCell className="text-xs py-2">{bl.lead?.source || "—"}</TableCell>
-                        <TableCell className="py-2">
-                          <Badge variant="outline" className="text-[9px]">{bl.status}</Badge>
-                        </TableCell>
-                        <TableCell className="text-[10px] py-2 text-muted-foreground">
-                          {bl.sent_at ? new Date(bl.sent_at).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : "—"}
-                        </TableCell>
-                      </TableRow>
-                    ))}
+                    {leads.map(bl => {
+                      const sc = leadStatusConfig[bl.status] || { label: bl.status, color: "bg-muted text-muted-foreground" };
+                      return (
+                        <TableRow key={bl.id}>
+                          <TableCell className="text-xs py-2">{bl.lead?.name || "—"}</TableCell>
+                          <TableCell className="text-xs py-2 font-mono">{bl.lead?.phone || bl.lead?.email || "—"}</TableCell>
+                          <TableCell className="text-xs py-2">{bl.lead?.source || "—"}</TableCell>
+                          <TableCell className="py-2">
+                            <Badge className={`text-[9px] border-0 ${sc.color}`}>{sc.label}</Badge>
+                          </TableCell>
+                          <TableCell className="text-[10px] py-2 text-destructive max-w-[120px] truncate" title={bl.error_message || ""}>
+                            {bl.error_message || "—"}
+                          </TableCell>
+                          <TableCell className="text-[10px] py-2 text-muted-foreground">
+                            {bl.sent_at ? new Date(bl.sent_at).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : "—"}
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
                   </TableBody>
                 </Table>
               </ScrollArea>
