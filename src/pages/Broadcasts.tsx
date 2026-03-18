@@ -405,8 +405,19 @@ export default function Broadcasts() {
           {filtered.map(broadcast => {
             const cfg = STATUS_CONFIG[broadcast.status] || STATUS_CONFIG.draft;
             const StatusIcon = cfg.icon;
-            const progress = broadcast.total_leads > 0 ? (broadcast.sent_count / broadcast.total_leads) * 100 : 0;
+            const processed = (broadcast.sent_count || 0) + (broadcast.failed_count || 0);
+            const total = broadcast.total_leads || 0;
+            const progress = total > 0 ? (processed / total) * 100 : 0;
+            const sentPct = total > 0 ? ((broadcast.sent_count || 0) / total * 100).toFixed(1) : "0";
+            const failPct = total > 0 ? ((broadcast.failed_count || 0) / total * 100).toFixed(1) : "0";
             const scenarioLabel = SCENARIO_OPTIONS.find(s => s.value === broadcast.scenario_key);
+
+            // ETA calculation
+            const delayPerMsg = Math.max(5, (broadcast.delay_between_messages || 10));
+            const remaining = total - processed;
+            const etaSeconds = remaining * delayPerMsg;
+            const etaMin = Math.ceil(etaSeconds / 60);
+            const etaStr = etaMin > 60 ? `~${Math.floor(etaMin / 60)}h${etaMin % 60}m` : `~${etaMin}min`;
 
             return (
               <div key={broadcast.id} className="border rounded-lg p-4 hover:bg-secondary/30 transition-colors group">
@@ -429,9 +440,6 @@ export default function Broadcasts() {
                           {scenarioLabel.icon} {scenarioLabel.label}
                         </Badge>
                       )}
-                      <Badge variant="outline" className="text-[10px]">
-                        {broadcast.type === "automated" ? "Auto" : "Manual"}
-                      </Badge>
                       {broadcast.instance_name && (
                         <Badge variant="outline" className="text-[10px] gap-1">
                           <MessageSquare className="h-3 w-3" />{broadcast.instance_name}
@@ -439,42 +447,65 @@ export default function Broadcasts() {
                       )}
                     </div>
 
-                    {/* Segmentation tags */}
-                    {(broadcast.segment_source?.length > 0 || broadcast.segment_tags?.length > 0) && (
-                      <div className="flex items-center gap-1.5 mb-2 flex-wrap">
-                        {broadcast.segment_source?.map(s => (
-                          <Badge key={s} variant="secondary" className="text-[9px] gap-0.5">
-                            <Filter className="h-2.5 w-2.5" />{SOURCE_OPTIONS.find(o => o.value === s)?.label || s}
-                          </Badge>
-                        ))}
-                        {broadcast.segment_tags?.map(t => (
-                          <Badge key={t} variant="secondary" className="text-[9px] gap-0.5">
-                            <Tag className="h-2.5 w-2.5" />{t}
-                          </Badge>
-                        ))}
+                    {/* Real-time progress for running broadcasts */}
+                    {broadcast.status === "running" && total > 0 && (
+                      <div className="bg-secondary/50 rounded-lg p-3 mb-2 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <div className="relative h-2.5 w-2.5">
+                              <div className="absolute inset-0 rounded-full bg-green-500 animate-ping opacity-40" />
+                              <div className="absolute inset-0 rounded-full bg-green-500" />
+                            </div>
+                            <span className="text-xs font-medium">Processando...</span>
+                          </div>
+                          <span className="text-xs text-muted-foreground font-mono">ETA: {etaStr}</span>
+                        </div>
+                        <div className="relative">
+                          <Progress value={progress} className="h-2.5" />
+                          <div className="absolute inset-0 flex items-center justify-center">
+                            <span className="text-[9px] font-bold text-white drop-shadow-sm">{progress.toFixed(1)}%</span>
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-4 gap-2 text-center">
+                          <div>
+                            <p className="text-sm font-semibold text-foreground">{processed}/{total}</p>
+                            <p className="text-[9px] text-muted-foreground uppercase">Processados</p>
+                          </div>
+                          <div>
+                            <p className="text-sm font-semibold text-green-600">{broadcast.sent_count || 0}</p>
+                            <p className="text-[9px] text-muted-foreground uppercase">Enviados ({sentPct}%)</p>
+                          </div>
+                          <div>
+                            <p className="text-sm font-semibold text-red-500">{broadcast.failed_count || 0}</p>
+                            <p className="text-[9px] text-muted-foreground uppercase">Falhas ({failPct}%)</p>
+                          </div>
+                          <div>
+                            <p className="text-sm font-semibold text-muted-foreground">{remaining}</p>
+                            <p className="text-[9px] text-muted-foreground uppercase">Restantes</p>
+                          </div>
+                        </div>
                       </div>
                     )}
 
-                    <div className="flex items-center gap-4 text-xs text-muted-foreground">
-                      <span className="flex items-center gap-1"><Users className="h-3 w-3" />{broadcast.total_leads} leads</span>
-                      <span className="flex items-center gap-1"><Send className="h-3 w-3" />{broadcast.sent_count} enviadas</span>
-                      <span className="flex items-center gap-1"><MailOpen className="h-3 w-3" />{broadcast.read_count} lidas</span>
-                      <span className="flex items-center gap-1"><MessageCircle className="h-3 w-3" />{broadcast.replied_count} respostas</span>
-                      <span className="flex items-center gap-1"><Target className="h-3 w-3" />{broadcast.converted_count} conversões</span>
-                      {broadcast.failed_count > 0 && (
-                        <span className="flex items-center gap-1 text-destructive"><AlertCircle className="h-3 w-3" />{broadcast.failed_count} falhas</span>
-                      )}
-                    </div>
+                    {/* Compact stats for non-running */}
+                    {broadcast.status !== "running" && (
+                      <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                        <span className="flex items-center gap-1"><Users className="h-3 w-3" />{total} leads</span>
+                        <span className="flex items-center gap-1"><Send className="h-3 w-3" />{broadcast.sent_count || 0} enviadas</span>
+                        <span className="flex items-center gap-1"><MessageCircle className="h-3 w-3" />{broadcast.replied_count || 0} respostas</span>
+                        <span className="flex items-center gap-1"><Target className="h-3 w-3" />{broadcast.converted_count || 0} conversões</span>
+                        {(broadcast.failed_count || 0) > 0 && (
+                          <span className="flex items-center gap-1 text-destructive"><AlertCircle className="h-3 w-3" />{broadcast.failed_count} falhas</span>
+                        )}
+                      </div>
+                    )}
 
-                    {(broadcast.status === "running" || broadcast.status === "paused") && broadcast.total_leads > 0 && (
+                    {/* Completed progress bar */}
+                    {(broadcast.status === "completed" || broadcast.status === "paused") && total > 0 && (
                       <div className="mt-2 flex items-center gap-2">
                         <Progress value={progress} className="flex-1 max-w-xs h-1.5" />
                         <span className="text-[10px] text-muted-foreground font-mono">{progress.toFixed(0)}%</span>
                       </div>
-                    )}
-
-                    {broadcast.description && (
-                      <p className="text-[11px] text-muted-foreground mt-1.5 line-clamp-1">{broadcast.description}</p>
                     )}
                   </div>
 
