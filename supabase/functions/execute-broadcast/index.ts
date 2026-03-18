@@ -435,7 +435,9 @@ ${!useEmoji ? "- NUNCA use emojis. ZERO emojis." : ""}
 
       if (!messageText) {
         await supabase.from("broadcast_leads").update({
-          status: "failed", error_message: "Sem mensagem para enviar",
+          status: "failed", error_message: broadcast.ai_enabled 
+            ? "IA não conseguiu gerar mensagem — verifique o cenário e a chave da API Anthropic" 
+            : "Sem mensagem para enviar — preencha o template da campanha",
         }).eq("id", bl.id);
         failCount++;
         continue;
