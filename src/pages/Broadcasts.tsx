@@ -128,6 +128,7 @@ export default function Broadcasts() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const orgId = profile?.org_id;
+  const pollRefs = useRef<Map<string, NodeJS.Timeout>>(new Map());
 
   const [activeTab, setActiveTab] = useState("all");
   const [searchQuery, setSearchQuery] = useState("");
@@ -146,7 +147,11 @@ export default function Broadcasts() {
       return (data as Broadcast[]) || [];
     },
     enabled: !!orgId,
-    staleTime: 60000,
+    refetchInterval: (query) => {
+      const data = query.state.data as Broadcast[] | undefined;
+      const hasRunning = data?.some(b => b.status === "running");
+      return hasRunning ? 5000 : 30000;
+    },
   });
 
   // ---- React Query: fetch scenarios ----
