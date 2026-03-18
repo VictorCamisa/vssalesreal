@@ -312,11 +312,10 @@ ${!useEmoji ? "- NUNCA use emojis. ZERO emojis." : ""}
           success = true;
         } else {
           const errBody = await sendResp.text();
-          lastError = `${sendResp.status}: ${errBody.substring(0, 200)}`;
+          lastError = `API WhatsApp erro ${sendResp.status}: ${errBody.substring(0, 200)}`;
           console.error(`Block ${i+1} send error for ${phone}:`, sendResp.status, errBody.substring(0, 300));
-          // If number doesn't exist on WhatsApp, skip remaining blocks
           if (errBody.includes('"exists":false') || errBody.includes("not registered")) {
-            lastError = "Número não tem WhatsApp";
+            lastError = "Número não tem WhatsApp — o contato pode ter desativado a conta ou o número é inválido";
             break;
           }
         }
