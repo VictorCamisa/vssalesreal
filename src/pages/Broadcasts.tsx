@@ -252,45 +252,27 @@ export default function Broadcasts() {
 
   const executeBroadcast = async (broadcastId: string) => {
     if (!orgId) return;
-    console.log("[BROADCAST] Iniciando disparo:", { broadcastId, orgId });
     try {
       const { data, error } = await supabase.functions.invoke("execute-broadcast", {
         body: { broadcast_id: broadcastId, org_id: orgId },
       });
-      console.log("[BROADCAST] Resposta da função:", { data, error });
-      if (error) {
-        console.error("[BROADCAST] Erro retornado:", error);
-        throw error;
-      }
+      if (error) throw error;
       if (data?.error) {
-        console.error("[BROADCAST] Erro no data:", data.error);
         toast({ title: "Erro no disparo", description: data.error, variant: "destructive" });
+        queryClient.invalidateQueries({ queryKey: ["broadcasts", orgId] });
         return;
       }
       if (data?.paused) {
         toast({ title: "⚠️ Disparo pausado", description: data?.error || "Instância offline", variant: "destructive" });
       } else {
-        toast({ title: "🚀 Disparo iniciado!", description: `Enviados: ${data?.sent || 0}, Restantes: ${data?.remaining || 0}` });
+        toast({ title: "🚀 Lote processado!", description: `${data?.sent || 0} enviados, ${data?.failed || 0} falhas, ${data?.remaining || 0} restantes` });
         logActivity({ action: "broadcast_executado", description: `Disparo iniciado`, metadata: { broadcast_id: broadcastId } });
       }
-      // Poll for updates every 10s
-      const pollInterval = setInterval(async () => {
-        const { data: fresh } = await supabase.from("broadcasts").select("status, sent_count, failed_count, total_leads").eq("id", broadcastId).single();
-        if (fresh) {
-          queryClient.setQueryData(["broadcasts", orgId], (old: Broadcast[] | undefined) =>
-            (old || []).map(b => b.id === broadcastId ? { ...b, ...fresh } : b)
-          );
-          if (fresh.status === "completed" || fresh.status === "paused" || fresh.status === "cancelled") {
-            clearInterval(pollInterval);
-            toast({ title: fresh.status === "completed" ? "✅ Disparo concluído!" : "⏸️ Disparo pausado", description: `${fresh.sent_count || 0} enviadas, ${fresh.failed_count || 0} falhas` });
-            queryClient.invalidateQueries({ queryKey: ["broadcasts", orgId] });
-          }
-        }
-      }, 10000);
-      // Stop polling after 30 minutes max
-      setTimeout(() => clearInterval(pollInterval), 30 * 60 * 1000);
+      queryClient.invalidateQueries({ queryKey: ["broadcasts", orgId] });
+      if (selectedBroadcast?.id === broadcastId) {
+        queryClient.invalidateQueries({ queryKey: ["broadcast_leads", broadcastId] });
+      }
     } catch (error: any) {
-      console.error("[BROADCAST] Exceção:", error);
       toast({ title: "Erro no disparo", description: error.message || "Erro desconhecido", variant: "destructive" });
       logActivity({ action: "broadcast_executado", description: `Falha no disparo`, success: false, errorMessage: error.message, metadata: { broadcast_id: broadcastId } });
       queryClient.invalidateQueries({ queryKey: ["broadcasts", orgId] });
