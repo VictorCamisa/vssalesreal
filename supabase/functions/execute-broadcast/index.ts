@@ -434,20 +434,24 @@ ${!useEmoji ? "- NUNCA use emojis. ZERO emojis." : ""}
 
           let lastAnthropicError = "";
           for (const model of anthropicModels) {
-            const aiResp = await fetch("https://api.anthropic.com/v1/messages", {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-                "x-api-key": ANTHROPIC_API_KEY,
-                "anthropic-version": "2023-06-01",
+            const aiResp = await fetchWithTimeout(
+              "https://api.anthropic.com/v1/messages",
+              {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  "x-api-key": ANTHROPIC_API_KEY,
+                  "anthropic-version": "2023-06-01",
+                },
+                body: JSON.stringify({
+                  model,
+                  system: fullSystemPrompt,
+                  max_tokens: 1000,
+                  messages: [{ role: "user", content: prompt }],
+                }),
               },
-              body: JSON.stringify({
-                model,
-                system: fullSystemPrompt,
-                max_tokens: 1000,
-                messages: [{ role: "user", content: prompt }],
-              }),
-            });
+              25000,
+            );
 
             if (aiResp.ok) {
               const aiData = await aiResp.json();
