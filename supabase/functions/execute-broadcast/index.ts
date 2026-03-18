@@ -9,12 +9,41 @@ const corsHeaders = {
 
 const BATCH_SIZE = 10;
 const INSTANCE_RECHECK_INTERVAL = 5;
+const MAX_FUNCTION_RUNTIME_MS = 110000;
+const RUNTIME_SAFETY_MARGIN_MS = 12000;
+const ESTIMATED_PER_LEAD_PROCESS_MS = 15000;
 
 const json = (data: unknown, status = 200) =>
   new Response(JSON.stringify(data), {
     status,
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const fetchWithTimeout = async (
+  url: string,
+  init: RequestInit,
+  timeoutMs = 25000,
+): Promise<Response> => {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    return await fetch(url, { ...init, signal: controller.signal });
+  } finally {
+    clearTimeout(timeout);
+  }
+};
+
+const computeSafeBatchSize = (delayMs: number) => {
+  const safeSize = Math.floor(
+    (MAX_FUNCTION_RUNTIME_MS + delayMs) /
+      (delayMs + ESTIMATED_PER_LEAD_PROCESS_MS),
+  );
+
+  return Math.max(1, Math.min(BATCH_SIZE, safeSize || 1));
+};
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
@@ -75,9 +104,13 @@ Deno.serve(async (req) => {
     // Helper: check if instance is online
     const isInstanceOnline = async (name: string): Promise<boolean> => {
       try {
-        const stResp = await fetch(`${EVOLUTION_API_URL}/instance/connectionState/${name}`, {
-          headers: { apikey: EVOLUTION_API_KEY },
-        });
+        const stResp = await fetchWithTimeout(
+          `${EVOLUTION_API_URL}/instance/connectionState/${name}`,
+          {
+            headers: { apikey: EVOLUTION_API_KEY },
+          },
+          12000,
+        );
         if (stResp.ok) {
           const stData = await stResp.json();
           return (stData.instance?.state || stData.state) === "open";
@@ -219,13 +252,17 @@ ${!useEmoji ? "- NUNCA use emojis. ZERO emojis." : ""}
 
     if (broadcast.ai_enabled && ANTHROPIC_API_KEY) {
       try {
-        const modelsResp = await fetch("https://api.anthropic.com/v1/models", {
-          method: "GET",
-          headers: {
-            "x-api-key": ANTHROPIC_API_KEY,
-            "anthropic-version": "2023-06-01",
+        const modelsResp = await fetchWithTimeout(
+          "https://api.anthropic.com/v1/models",
+          {
+            method: "GET",
+            headers: {
+              "x-api-key": ANTHROPIC_API_KEY,
+              "anthropic-version": "2023-06-01",
+            },
           },
-        });
+          12000,
+        );
 
         if (modelsResp.ok) {
           const modelsData = await modelsResp.json();
@@ -250,13 +287,17 @@ ${!useEmoji ? "- NUNCA use emojis. ZERO emojis." : ""}
       }
     }
 
-    // --- Get ONLY pending leads, limited to BATCH_SIZE ---
+    const delayMs = Math.max(5000, (broadcast.delay_between_messages || 10) * 1000);
+    const safeBatchSize = computeSafeBatchSize(delayMs);
+
+    // --- Get ONLY pending leads, limited to safe batch size ---
     const { data: bLeads } = await supabase
       .from("broadcast_leads")
       .select("id, lead_id, lead:leads_raw(name, phone, enrichment_data)")
       .eq("broadcast_id", broadcast_id)
       .eq("status", "pending")
-      .limit(BATCH_SIZE);
+      .order("created_at", { ascending: true })
+      .limit(safeBatchSize);
 
     if (!bLeads || bLeads.length === 0) {
       await supabase.from("broadcasts").update({
@@ -268,7 +309,10 @@ ${!useEmoji ? "- NUNCA use emojis. ZERO emojis." : ""}
     }
 
     // Helper: send message in blocks
-    const sendInBlocks = async (phone: string, fullMessage: string): Promise<boolean> => {
+    const sendInBlocks = async (
+      phone: string,
+      fullMessage: string,
+    ): Promise<{ success: boolean; error: string }> => {
       let blocks = fullMessage.split(/---BLOCO---/i).map(b => b.trim()).filter(b => b.length > 0);
       if (blocks.length <= 1) blocks = fullMessage.split(/\n\n+/).map(b => b.trim()).filter(b => b.length > 0);
       if (blocks.length === 0) blocks = [fullMessage];
@@ -300,13 +344,17 @@ ${!useEmoji ? "- NUNCA use emojis. ZERO emojis." : ""}
       for (let i = 0; i < blocks.length; i++) {
         if (i > 0) {
           const baseDelay = Math.max(3000, blocks[i].length * 50);
-          await new Promise(resolve => setTimeout(resolve, baseDelay));
+          await sleep(baseDelay);
         }
-        const sendResp = await fetch(`${EVOLUTION_API_URL}/message/sendText/${instanceName}`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json", apikey: EVOLUTION_API_KEY },
-          body: JSON.stringify({ number: phone, text: blocks[i] }),
-        });
+        const sendResp = await fetchWithTimeout(
+          `${EVOLUTION_API_URL}/message/sendText/${instanceName}`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json", apikey: EVOLUTION_API_KEY },
+            body: JSON.stringify({ number: phone, text: blocks[i] }),
+          },
+          20000,
+        );
         if (sendResp.ok) {
           await sendResp.json();
           success = true;
@@ -325,9 +373,24 @@ ${!useEmoji ? "- NUNCA use emojis. ZERO emojis." : ""}
 
     let sentCount = 0;
     let failCount = 0;
-    const delayMs = Math.max(5000, (broadcast.delay_between_messages || 10) * 1000);
+    const executionStartedAt = Date.now();
+    let yieldedByRuntime = false;
+
+    const shouldYieldNow = () => {
+      const elapsed = Date.now() - executionStartedAt;
+      return elapsed >= MAX_FUNCTION_RUNTIME_MS - RUNTIME_SAFETY_MARGIN_MS;
+    };
+
+    const shouldFlushProgress = (idx: number) =>
+      (sentCount + failCount) % 3 === 0 || idx === bLeads.length - 1;
 
     for (let idx = 0; idx < bLeads.length; idx++) {
+      if (shouldYieldNow()) {
+        yieldedByRuntime = true;
+        console.warn("Runtime limit approaching; yielding to next invocation");
+        break;
+      }
+
       const bl = bLeads[idx];
       const lead = (bl as any).lead;
 
@@ -355,6 +418,7 @@ ${!useEmoji ? "- NUNCA use emojis. ZERO emojis." : ""}
           status: "failed", error_message: "Lead sem telefone cadastrado no sistema",
         }).eq("id", bl.id);
         failCount++;
+        if (shouldFlushProgress(idx)) await updateBroadcastCounts(supabase, broadcast_id);
         continue;
       }
 
@@ -364,6 +428,8 @@ ${!useEmoji ? "- NUNCA use emojis. ZERO emojis." : ""}
         await supabase.from("broadcast_leads").update({
           status: "skipped", error_message: "Em cooldown",
         }).eq("id", bl.id);
+        failCount++;
+        if (shouldFlushProgress(idx)) await updateBroadcastCounts(supabase, broadcast_id);
         continue;
       }
 
@@ -383,23 +449,26 @@ ${!useEmoji ? "- NUNCA use emojis. ZERO emojis." : ""}
           const leadContext = leadFirstName ? `Lead: ${leadFirstName}` : "Lead sem nome identificado";
           const prompt = `Crie UMA mensagem de primeiro contato para: ${leadContext}. ${broadcast.description ? `Contexto da campanha: ${broadcast.description}` : ""}. Use EXATAMENTE ${maxBlocks} blocos. Retorne APENAS os blocos separados por ---BLOCO---, sem aspas.`;
 
-
           let lastAnthropicError = "";
           for (const model of anthropicModels) {
-            const aiResp = await fetch("https://api.anthropic.com/v1/messages", {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-                "x-api-key": ANTHROPIC_API_KEY,
-                "anthropic-version": "2023-06-01",
+            const aiResp = await fetchWithTimeout(
+              "https://api.anthropic.com/v1/messages",
+              {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  "x-api-key": ANTHROPIC_API_KEY,
+                  "anthropic-version": "2023-06-01",
+                },
+                body: JSON.stringify({
+                  model,
+                  system: fullSystemPrompt,
+                  max_tokens: 1000,
+                  messages: [{ role: "user", content: prompt }],
+                }),
               },
-              body: JSON.stringify({
-                model,
-                system: fullSystemPrompt,
-                max_tokens: 1000,
-                messages: [{ role: "user", content: prompt }],
-              }),
-            });
+              25000,
+            );
 
             if (aiResp.ok) {
               const aiData = await aiResp.json();
@@ -434,11 +503,12 @@ ${!useEmoji ? "- NUNCA use emojis. ZERO emojis." : ""}
 
       if (!messageText) {
         await supabase.from("broadcast_leads").update({
-          status: "failed", error_message: broadcast.ai_enabled 
-            ? "IA não conseguiu gerar mensagem — verifique o cenário e a chave da API Anthropic" 
+          status: "failed", error_message: broadcast.ai_enabled
+            ? "IA não conseguiu gerar mensagem — verifique o cenário e a chave da API Anthropic"
             : "Sem mensagem para enviar — preencha o template da campanha",
         }).eq("id", bl.id);
         failCount++;
+        if (shouldFlushProgress(idx)) await updateBroadcastCounts(supabase, broadcast_id);
         continue;
       }
 
@@ -500,13 +570,19 @@ ${!useEmoji ? "- NUNCA use emojis. ZERO emojis." : ""}
       }
 
       // Update counts after each lead for real-time progress
-      if ((sentCount + failCount) % 3 === 0 || idx === bLeads.length - 1) {
+      if (shouldFlushProgress(idx)) {
         await updateBroadcastCounts(supabase, broadcast_id);
       }
 
-      // Delay between leads
+      // Delay between leads (respect runtime budget)
       if (delayMs > 0 && idx < bLeads.length - 1) {
-        await new Promise(resolve => setTimeout(resolve, delayMs));
+        const elapsed = Date.now() - executionStartedAt;
+        if (elapsed + delayMs >= MAX_FUNCTION_RUNTIME_MS - RUNTIME_SAFETY_MARGIN_MS) {
+          yieldedByRuntime = true;
+          console.warn("Skipping final delay in this batch to avoid timeout");
+          break;
+        }
+        await sleep(delayMs);
       }
     }
 
@@ -524,18 +600,34 @@ ${!useEmoji ? "- NUNCA use emojis. ZERO emojis." : ""}
 
     // Auto-continue if there are remaining leads
     if (remaining > 0) {
-      console.log(`Batch done: ${sentCount} sent, ${failCount} failed, ${remaining} remaining. Auto-continuing...`);
+      console.log(`Batch done: ${sentCount} sent, ${failCount} failed, ${remaining} remaining. batch_size=${safeBatchSize}`);
       const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-      // Fire-and-forget with internal secret
-      fetch(`${supabaseUrl}/functions/v1/execute-broadcast`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-internal-secret": INTERNAL_SECRET,
-          apikey: Deno.env.get("SUPABASE_ANON_KEY")!,
+
+      const continuationPromise = fetchWithTimeout(
+        `${supabaseUrl}/functions/v1/execute-broadcast`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-internal-secret": INTERNAL_SECRET,
+            apikey: Deno.env.get("SUPABASE_ANON_KEY")!,
+          },
+          body: JSON.stringify({ broadcast_id, org_id }),
         },
-        body: JSON.stringify({ broadcast_id, org_id }),
+        10000,
+      ).then(async (resp) => {
+        if (!resp.ok) {
+          const errText = await resp.text();
+          console.error("Auto-continue HTTP error:", resp.status, errText);
+          return;
+        }
+        await resp.text();
       }).catch((err) => console.error("Auto-continue error:", err));
+
+      const edgeRuntime = (globalThis as any).EdgeRuntime;
+      if (edgeRuntime?.waitUntil) {
+        edgeRuntime.waitUntil(continuationPromise);
+      }
     } else {
       // Mark as completed
       await supabase.from("broadcasts").update({
@@ -545,7 +637,7 @@ ${!useEmoji ? "- NUNCA use emojis. ZERO emojis." : ""}
       console.log("Broadcast completed!");
     }
 
-    return json({ success: true, sent: sentCount, failed: failCount, remaining });
+    return json({ success: true, sent: sentCount, failed: failCount, remaining, batch_size: safeBatchSize, yielded_by_runtime: yieldedByRuntime });
   } catch (e) {
     console.error("execute-broadcast error:", e);
     return json({ error: e instanceof Error ? e.message : "Unknown error" }, 500);
@@ -563,7 +655,7 @@ async function updateBroadcastCounts(supabase: any, broadcastId: string) {
 
   const counts = {
     sent_count: stats.filter((s: any) => s.status === "sent").length,
-    failed_count: stats.filter((s: any) => s.status === "failed").length,
+    failed_count: stats.filter((s: any) => s.status === "failed" || s.status === "skipped").length,
     delivered_count: stats.filter((s: any) => s.status === "delivered").length,
     read_count: stats.filter((s: any) => s.status === "read").length,
     replied_count: stats.filter((s: any) => s.status === "replied").length,
