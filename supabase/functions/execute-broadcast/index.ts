@@ -287,13 +287,17 @@ ${!useEmoji ? "- NUNCA use emojis. ZERO emojis." : ""}
       }
     }
 
-    // --- Get ONLY pending leads, limited to BATCH_SIZE ---
+    const delayMs = Math.max(5000, (broadcast.delay_between_messages || 10) * 1000);
+    const safeBatchSize = computeSafeBatchSize(delayMs);
+
+    // --- Get ONLY pending leads, limited to safe batch size ---
     const { data: bLeads } = await supabase
       .from("broadcast_leads")
       .select("id, lead_id, lead:leads_raw(name, phone, enrichment_data)")
       .eq("broadcast_id", broadcast_id)
       .eq("status", "pending")
-      .limit(BATCH_SIZE);
+      .order("created_at", { ascending: true })
+      .limit(safeBatchSize);
 
     if (!bLeads || bLeads.length === 0) {
       await supabase.from("broadcasts").update({
@@ -305,7 +309,10 @@ ${!useEmoji ? "- NUNCA use emojis. ZERO emojis." : ""}
     }
 
     // Helper: send message in blocks
-    const sendInBlocks = async (phone: string, fullMessage: string): Promise<boolean> => {
+    const sendInBlocks = async (
+      phone: string,
+      fullMessage: string,
+    ): Promise<{ success: boolean; error: string }> => {
       let blocks = fullMessage.split(/---BLOCO---/i).map(b => b.trim()).filter(b => b.length > 0);
       if (blocks.length <= 1) blocks = fullMessage.split(/\n\n+/).map(b => b.trim()).filter(b => b.length > 0);
       if (blocks.length === 0) blocks = [fullMessage];
