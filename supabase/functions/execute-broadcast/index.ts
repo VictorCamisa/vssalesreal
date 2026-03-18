@@ -353,7 +353,7 @@ ${!useEmoji ? "- NUNCA use emojis. ZERO emojis." : ""}
 
       if (!lead?.phone) {
         await supabase.from("broadcast_leads").update({
-          status: "failed", error_message: "Lead sem telefone",
+          status: "failed", error_message: "Lead sem telefone cadastrado no sistema",
         }).eq("id", bl.id);
         failCount++;
         continue;
