@@ -9,12 +9,41 @@ const corsHeaders = {
 
 const BATCH_SIZE = 10;
 const INSTANCE_RECHECK_INTERVAL = 5;
+const MAX_FUNCTION_RUNTIME_MS = 110000;
+const RUNTIME_SAFETY_MARGIN_MS = 12000;
+const ESTIMATED_PER_LEAD_PROCESS_MS = 15000;
 
 const json = (data: unknown, status = 200) =>
   new Response(JSON.stringify(data), {
     status,
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const fetchWithTimeout = async (
+  url: string,
+  init: RequestInit,
+  timeoutMs = 25000,
+): Promise<Response> => {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    return await fetch(url, { ...init, signal: controller.signal });
+  } finally {
+    clearTimeout(timeout);
+  }
+};
+
+const computeSafeBatchSize = (delayMs: number) => {
+  const safeSize = Math.floor(
+    (MAX_FUNCTION_RUNTIME_MS + delayMs) /
+      (delayMs + ESTIMATED_PER_LEAD_PROCESS_MS),
+  );
+
+  return Math.max(1, Math.min(BATCH_SIZE, safeSize || 1));
+};
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
