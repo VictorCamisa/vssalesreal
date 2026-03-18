@@ -247,15 +247,25 @@ export default function Broadcasts() {
 
   const executeBroadcast = async (broadcastId: string) => {
     if (!orgId) return;
+    console.log("[BROADCAST] Iniciando disparo:", { broadcastId, orgId });
     try {
       const { data, error } = await supabase.functions.invoke("execute-broadcast", {
         body: { broadcast_id: broadcastId, org_id: orgId },
       });
-      if (error) throw error;
+      console.log("[BROADCAST] Resposta da função:", { data, error });
+      if (error) {
+        console.error("[BROADCAST] Erro retornado:", error);
+        throw error;
+      }
+      if (data?.error) {
+        console.error("[BROADCAST] Erro no data:", data.error);
+        toast({ title: "Erro no disparo", description: data.error, variant: "destructive" });
+        return;
+      }
       if (data?.paused) {
         toast({ title: "⚠️ Disparo pausado", description: data?.error || "Instância offline", variant: "destructive" });
       } else {
-        toast({ title: "🚀 Disparo iniciado!", description: "O envio continua automaticamente em segundo plano." });
+        toast({ title: "🚀 Disparo iniciado!", description: `Enviados: ${data?.sent || 0}, Restantes: ${data?.remaining || 0}` });
         logActivity({ action: "broadcast_executado", description: `Disparo iniciado`, metadata: { broadcast_id: broadcastId } });
       }
       // Poll for updates every 10s
@@ -275,7 +285,8 @@ export default function Broadcasts() {
       // Stop polling after 30 minutes max
       setTimeout(() => clearInterval(pollInterval), 30 * 60 * 1000);
     } catch (error: any) {
-      toast({ title: "Erro no disparo", description: error.message, variant: "destructive" });
+      console.error("[BROADCAST] Exceção:", error);
+      toast({ title: "Erro no disparo", description: error.message || "Erro desconhecido", variant: "destructive" });
       logActivity({ action: "broadcast_executado", description: `Falha no disparo`, success: false, errorMessage: error.message, metadata: { broadcast_id: broadcastId } });
       queryClient.invalidateQueries({ queryKey: ["broadcasts", orgId] });
     }
