@@ -373,9 +373,24 @@ ${!useEmoji ? "- NUNCA use emojis. ZERO emojis." : ""}
 
     let sentCount = 0;
     let failCount = 0;
-    const delayMs = Math.max(5000, (broadcast.delay_between_messages || 10) * 1000);
+    const executionStartedAt = Date.now();
+    let yieldedByRuntime = false;
+
+    const shouldYieldNow = () => {
+      const elapsed = Date.now() - executionStartedAt;
+      return elapsed >= MAX_FUNCTION_RUNTIME_MS - RUNTIME_SAFETY_MARGIN_MS;
+    };
+
+    const shouldFlushProgress = (idx: number) =>
+      (sentCount + failCount) % 3 === 0 || idx === bLeads.length - 1;
 
     for (let idx = 0; idx < bLeads.length; idx++) {
+      if (shouldYieldNow()) {
+        yieldedByRuntime = true;
+        console.warn("Runtime limit approaching; yielding to next invocation");
+        break;
+      }
+
       const bl = bLeads[idx];
       const lead = (bl as any).lead;
 
@@ -403,6 +418,7 @@ ${!useEmoji ? "- NUNCA use emojis. ZERO emojis." : ""}
           status: "failed", error_message: "Lead sem telefone cadastrado no sistema",
         }).eq("id", bl.id);
         failCount++;
+        if (shouldFlushProgress(idx)) await updateBroadcastCounts(supabase, broadcast_id);
         continue;
       }
 
@@ -412,6 +428,8 @@ ${!useEmoji ? "- NUNCA use emojis. ZERO emojis." : ""}
         await supabase.from("broadcast_leads").update({
           status: "skipped", error_message: "Em cooldown",
         }).eq("id", bl.id);
+        failCount++;
+        if (shouldFlushProgress(idx)) await updateBroadcastCounts(supabase, broadcast_id);
         continue;
       }
 
@@ -430,7 +448,6 @@ ${!useEmoji ? "- NUNCA use emojis. ZERO emojis." : ""}
           const leadFirstName = lead.name?.split(" ")[0] || "";
           const leadContext = leadFirstName ? `Lead: ${leadFirstName}` : "Lead sem nome identificado";
           const prompt = `Crie UMA mensagem de primeiro contato para: ${leadContext}. ${broadcast.description ? `Contexto da campanha: ${broadcast.description}` : ""}. Use EXATAMENTE ${maxBlocks} blocos. Retorne APENAS os blocos separados por ---BLOCO---, sem aspas.`;
-
 
           let lastAnthropicError = "";
           for (const model of anthropicModels) {
@@ -486,11 +503,12 @@ ${!useEmoji ? "- NUNCA use emojis. ZERO emojis." : ""}
 
       if (!messageText) {
         await supabase.from("broadcast_leads").update({
-          status: "failed", error_message: broadcast.ai_enabled 
-            ? "IA não conseguiu gerar mensagem — verifique o cenário e a chave da API Anthropic" 
+          status: "failed", error_message: broadcast.ai_enabled
+            ? "IA não conseguiu gerar mensagem — verifique o cenário e a chave da API Anthropic"
             : "Sem mensagem para enviar — preencha o template da campanha",
         }).eq("id", bl.id);
         failCount++;
+        if (shouldFlushProgress(idx)) await updateBroadcastCounts(supabase, broadcast_id);
         continue;
       }
 
@@ -552,13 +570,19 @@ ${!useEmoji ? "- NUNCA use emojis. ZERO emojis." : ""}
       }
 
       // Update counts after each lead for real-time progress
-      if ((sentCount + failCount) % 3 === 0 || idx === bLeads.length - 1) {
+      if (shouldFlushProgress(idx)) {
         await updateBroadcastCounts(supabase, broadcast_id);
       }
 
-      // Delay between leads
+      // Delay between leads (respect runtime budget)
       if (delayMs > 0 && idx < bLeads.length - 1) {
-        await new Promise(resolve => setTimeout(resolve, delayMs));
+        const elapsed = Date.now() - executionStartedAt;
+        if (elapsed + delayMs >= MAX_FUNCTION_RUNTIME_MS - RUNTIME_SAFETY_MARGIN_MS) {
+          yieldedByRuntime = true;
+          console.warn("Skipping final delay in this batch to avoid timeout");
+          break;
+        }
+        await sleep(delayMs);
       }
     }
 
@@ -576,18 +600,34 @@ ${!useEmoji ? "- NUNCA use emojis. ZERO emojis." : ""}
 
     // Auto-continue if there are remaining leads
     if (remaining > 0) {
-      console.log(`Batch done: ${sentCount} sent, ${failCount} failed, ${remaining} remaining. Auto-continuing...`);
+      console.log(`Batch done: ${sentCount} sent, ${failCount} failed, ${remaining} remaining. batch_size=${safeBatchSize}`);
       const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-      // Fire-and-forget with internal secret
-      fetch(`${supabaseUrl}/functions/v1/execute-broadcast`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-internal-secret": INTERNAL_SECRET,
-          apikey: Deno.env.get("SUPABASE_ANON_KEY")!,
+
+      const continuationPromise = fetchWithTimeout(
+        `${supabaseUrl}/functions/v1/execute-broadcast`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-internal-secret": INTERNAL_SECRET,
+            apikey: Deno.env.get("SUPABASE_ANON_KEY")!,
+          },
+          body: JSON.stringify({ broadcast_id, org_id }),
         },
-        body: JSON.stringify({ broadcast_id, org_id }),
+        10000,
+      ).then(async (resp) => {
+        if (!resp.ok) {
+          const errText = await resp.text();
+          console.error("Auto-continue HTTP error:", resp.status, errText);
+          return;
+        }
+        await resp.text();
       }).catch((err) => console.error("Auto-continue error:", err));
+
+      const edgeRuntime = (globalThis as any).EdgeRuntime;
+      if (edgeRuntime?.waitUntil) {
+        edgeRuntime.waitUntil(continuationPromise);
+      }
     } else {
       // Mark as completed
       await supabase.from("broadcasts").update({
@@ -597,7 +637,7 @@ ${!useEmoji ? "- NUNCA use emojis. ZERO emojis." : ""}
       console.log("Broadcast completed!");
     }
 
-    return json({ success: true, sent: sentCount, failed: failCount, remaining });
+    return json({ success: true, sent: sentCount, failed: failCount, remaining, batch_size: safeBatchSize, yielded_by_runtime: yieldedByRuntime });
   } catch (e) {
     console.error("execute-broadcast error:", e);
     return json({ error: e instanceof Error ? e.message : "Unknown error" }, 500);
