@@ -258,23 +258,40 @@ export default function Broadcasts() {
       });
       if (error) throw error;
       if (data?.error) {
-        toast({ title: "Erro no disparo", description: data.error, variant: "destructive" });
+        const errorDesc = data.paused
+          ? "O disparo foi pausado automaticamente. Verifique se sua instância WhatsApp está conectada e online."
+          : data.error;
+        toast({ 
+          title: data.paused ? "⚠️ Disparo pausado" : "❌ Erro no disparo", 
+          description: errorDesc, 
+          variant: "destructive" 
+        });
         queryClient.invalidateQueries({ queryKey: ["broadcasts", orgId] });
         return;
       }
-      if (data?.paused) {
-        toast({ title: "⚠️ Disparo pausado", description: data?.error || "Instância offline", variant: "destructive" });
+      const sent = data?.sent || 0;
+      const failed = data?.failed || 0;
+      const remaining = data?.remaining || 0;
+      if (remaining > 0) {
+        toast({ title: "📦 Lote processado", description: `${sent} enviados, ${failed} falhas. Processando próximo lote (${remaining} restantes)...` });
       } else {
-        toast({ title: "🚀 Lote processado!", description: `${data?.sent || 0} enviados, ${data?.failed || 0} falhas, ${data?.remaining || 0} restantes` });
-        logActivity({ action: "broadcast_executado", description: `Disparo iniciado`, metadata: { broadcast_id: broadcastId } });
+        toast({ title: "✅ Disparo concluído!", description: `${sent} enviados com sucesso, ${failed} falhas.` });
       }
+      logActivity({ action: "broadcast_executado", description: `Lote: ${sent} enviados, ${failed} falhas`, metadata: { broadcast_id: broadcastId, sent, failed, remaining } });
       queryClient.invalidateQueries({ queryKey: ["broadcasts", orgId] });
       if (selectedBroadcast?.id === broadcastId) {
         queryClient.invalidateQueries({ queryKey: ["broadcast_leads", broadcastId] });
       }
     } catch (error: any) {
-      toast({ title: "Erro no disparo", description: error.message || "Erro desconhecido", variant: "destructive" });
-      logActivity({ action: "broadcast_executado", description: `Falha no disparo`, success: false, errorMessage: error.message, metadata: { broadcast_id: broadcastId } });
+      const msg = error.message || "Erro desconhecido";
+      let userMsg = msg;
+      if (msg.includes("FunctionsFetchError") || msg.includes("Failed to fetch")) {
+        userMsg = "Erro de conexão com o servidor. Verifique sua internet e tente novamente.";
+      } else if (msg.includes("Unauthorized") || msg.includes("401")) {
+        userMsg = "Sessão expirada. Faça login novamente.";
+      }
+      toast({ title: "❌ Falha no disparo", description: userMsg, variant: "destructive" });
+      logActivity({ action: "broadcast_executado", description: `Falha: ${msg}`, success: false, errorMessage: msg, metadata: { broadcast_id: broadcastId } });
       queryClient.invalidateQueries({ queryKey: ["broadcasts", orgId] });
     }
   };
