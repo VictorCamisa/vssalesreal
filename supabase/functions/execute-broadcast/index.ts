@@ -312,11 +312,10 @@ ${!useEmoji ? "- NUNCA use emojis. ZERO emojis." : ""}
           success = true;
         } else {
           const errBody = await sendResp.text();
-          lastError = `${sendResp.status}: ${errBody.substring(0, 200)}`;
+          lastError = `API WhatsApp erro ${sendResp.status}: ${errBody.substring(0, 200)}`;
           console.error(`Block ${i+1} send error for ${phone}:`, sendResp.status, errBody.substring(0, 300));
-          // If number doesn't exist on WhatsApp, skip remaining blocks
           if (errBody.includes('"exists":false') || errBody.includes("not registered")) {
-            lastError = "Número não tem WhatsApp";
+            lastError = "Número não tem WhatsApp — o contato pode ter desativado a conta ou o número é inválido";
             break;
           }
         }
@@ -353,7 +352,7 @@ ${!useEmoji ? "- NUNCA use emojis. ZERO emojis." : ""}
 
       if (!lead?.phone) {
         await supabase.from("broadcast_leads").update({
-          status: "failed", error_message: "Lead sem telefone",
+          status: "failed", error_message: "Lead sem telefone cadastrado no sistema",
         }).eq("id", bl.id);
         failCount++;
         continue;
@@ -435,7 +434,9 @@ ${!useEmoji ? "- NUNCA use emojis. ZERO emojis." : ""}
 
       if (!messageText) {
         await supabase.from("broadcast_leads").update({
-          status: "failed", error_message: "Sem mensagem para enviar",
+          status: "failed", error_message: broadcast.ai_enabled 
+            ? "IA não conseguiu gerar mensagem — verifique o cenário e a chave da API Anthropic" 
+            : "Sem mensagem para enviar — preencha o template da campanha",
         }).eq("id", bl.id);
         failCount++;
         continue;
