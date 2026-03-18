@@ -444,8 +444,8 @@ ${!useEmoji ? "- NUNCA use emojis. ZERO emojis." : ""}
       // Send via Evolution API
       const cleanPhone = lead.phone.replace(/\D/g, "");
       try {
-        const success = await sendInBlocks(cleanPhone, messageText);
-        if (success) {
+        const result = await sendInBlocks(cleanPhone, messageText);
+        if (result.success) {
           const storedMsg = messageText.replace(/---BLOCO---/gi, "\n").trim();
           const sentAt = new Date().toISOString();
           await supabase.from("broadcast_leads").update({
@@ -487,7 +487,7 @@ ${!useEmoji ? "- NUNCA use emojis. ZERO emojis." : ""}
           sentCount++;
         } else {
           await supabase.from("broadcast_leads").update({
-            status: "failed", error_message: "API error: all blocks failed",
+            status: "failed", error_message: result.error || "Falha no envio",
           }).eq("id", bl.id);
           failCount++;
         }
@@ -496,6 +496,11 @@ ${!useEmoji ? "- NUNCA use emojis. ZERO emojis." : ""}
           status: "failed", error_message: e instanceof Error ? e.message : "Unknown error",
         }).eq("id", bl.id);
         failCount++;
+      }
+
+      // Update counts after each lead for real-time progress
+      if ((sentCount + failCount) % 3 === 0 || idx === bLeads.length - 1) {
+        await updateBroadcastCounts(supabase, broadcast_id);
       }
 
       // Delay between leads
