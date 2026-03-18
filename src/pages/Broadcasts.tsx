@@ -1176,6 +1176,54 @@ function CreateCampaignDialog({
   );
 }
 
+// ---- ERROR CATEGORIES ----
+const ERROR_CATEGORIES: Record<string, { label: string; description: string; icon: string; color: string }> = {
+  "Número não tem WhatsApp": {
+    label: "Sem WhatsApp",
+    description: "O número não possui conta no WhatsApp ativa. Verifique se o número está correto ou se o contato desativou a conta.",
+    icon: "📵",
+    color: "text-orange-600 bg-orange-500/10",
+  },
+  "Lead sem telefone": {
+    label: "Sem Telefone",
+    description: "O lead não possui número de telefone cadastrado. Adicione o telefone na base de leads antes de incluí-lo em campanhas.",
+    icon: "📱",
+    color: "text-yellow-600 bg-yellow-500/10",
+  },
+  "Sem mensagem para enviar": {
+    label: "Sem Mensagem",
+    description: "Não foi possível gerar ou definir uma mensagem para este lead. Verifique o template da campanha ou a configuração da IA.",
+    icon: "💬",
+    color: "text-purple-600 bg-purple-500/10",
+  },
+  "Em cooldown": {
+    label: "Cooldown Ativo",
+    description: "Este contato já foi abordado recentemente e está em período de espera para evitar spam. O envio será possível após o período configurado.",
+    icon: "⏳",
+    color: "text-blue-600 bg-blue-500/10",
+  },
+  "not registered": {
+    label: "Não Registrado",
+    description: "O número não está registrado no WhatsApp. Pode ser um número fixo, inválido ou desativado.",
+    icon: "🚫",
+    color: "text-red-600 bg-red-500/10",
+  },
+};
+
+function categorizeError(errorMessage: string | null): { label: string; description: string; icon: string; color: string } {
+  if (!errorMessage) return { label: "Desconhecido", description: "Erro não identificado.", icon: "❓", color: "text-muted-foreground bg-muted" };
+  for (const [key, val] of Object.entries(ERROR_CATEGORIES)) {
+    if (errorMessage.toLowerCase().includes(key.toLowerCase())) return val;
+  }
+  if (errorMessage.includes("400") || errorMessage.includes("404")) {
+    return { label: "Erro API", description: `A API do WhatsApp retornou um erro: ${errorMessage}`, icon: "⚡", color: "text-red-600 bg-red-500/10" };
+  }
+  if (errorMessage.includes("timeout") || errorMessage.includes("TIMEOUT")) {
+    return { label: "Timeout", description: "A requisição excedeu o tempo limite. Pode ser instabilidade na conexão ou sobrecarga do servidor.", icon: "⏱️", color: "text-amber-600 bg-amber-500/10" };
+  }
+  return { label: "Erro de Envio", description: errorMessage, icon: "⚠️", color: "text-destructive bg-destructive/10" };
+}
+
 // ---- DETAIL DIALOG ----
 function DetailDialog({
   open, onOpenChange, broadcast, leads, loading, scenarios,
@@ -1187,12 +1235,33 @@ function DetailDialog({
   loading: boolean;
   scenarios: AiScenario[];
 }) {
+  const [activeLeadTab, setActiveLeadTab] = useState<string>("all");
+
   const statusCounts = useMemo(() => {
     if (!broadcast) return {};
     const counts: Record<string, number> = {};
     leads.forEach(l => { counts[l.status] = (counts[l.status] || 0) + 1; });
     return counts;
   }, [leads, broadcast]);
+
+  // Group errors by category
+  const errorBreakdown = useMemo(() => {
+    const failedLeads = leads.filter(l => l.status === "failed" || l.status === "skipped");
+    const groups: Record<string, { category: ReturnType<typeof categorizeError>; count: number; leads: any[] }> = {};
+    failedLeads.forEach(l => {
+      const cat = categorizeError(l.error_message);
+      const key = cat.label;
+      if (!groups[key]) groups[key] = { category: cat, count: 0, leads: [] };
+      groups[key].count++;
+      groups[key].leads.push(l);
+    });
+    return Object.values(groups).sort((a, b) => b.count - a.count);
+  }, [leads]);
+
+  const filteredLeads = useMemo(() => {
+    if (activeLeadTab === "all") return leads;
+    return leads.filter(l => l.status === activeLeadTab);
+  }, [leads, activeLeadTab]);
 
   if (!broadcast) return null;
   const cfg = STATUS_CONFIG[broadcast.status] || STATUS_CONFIG.draft;
@@ -1213,7 +1282,8 @@ function DetailDialog({
   const elapsedMin = Math.floor(elapsed / 60000);
   const elapsedStr = elapsedMin > 60 ? `${Math.floor(elapsedMin / 60)}h ${elapsedMin % 60}min` : `${elapsedMin} min`;
 
-  // Status color mapping for lead statuses
+  const successRate = processed > 0 ? ((broadcast.sent_count || 0) / processed * 100).toFixed(1) : "0";
+
   const leadStatusConfig: Record<string, { label: string; color: string }> = {
     pending: { label: "Pendente", color: "bg-muted text-muted-foreground" },
     sent: { label: "Enviado", color: "bg-primary/10 text-primary" },
@@ -1226,13 +1296,18 @@ function DetailDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-3xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-4xl max-h-[92vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="text-base flex items-center gap-2">
             {broadcast.name}
             <Badge variant="secondary" className={`text-[10px] gap-1 ${cfg.color} ${cfg.bg}`}>
               {cfg.label}
             </Badge>
+            {broadcast.ai_enabled && (
+              <Badge variant="outline" className="text-[10px] gap-1 border-primary/30 text-primary">
+                <Brain className="h-3 w-3" />IA
+              </Badge>
+            )}
           </DialogTitle>
           <DialogDescription className="text-xs">{broadcast.description || "Sem descrição"}</DialogDescription>
         </DialogHeader>
@@ -1248,115 +1323,217 @@ function DetailDialog({
                 </div>
                 <span className="text-sm font-semibold">Disparo em execução</span>
               </div>
-              <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                <span className="flex items-center gap-1"><Timer className="h-3 w-3" />Decorrido: {elapsedStr}</span>
-                <span className="flex items-center gap-1"><Clock className="h-3 w-3" />ETA: {etaStr}</span>
+              <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                <span className="flex items-center gap-1"><Timer className="h-3 w-3" />Decorrido: <strong className="text-foreground">{elapsedStr}</strong></span>
+                <span className="flex items-center gap-1"><Clock className="h-3 w-3" />Restante: <strong className="text-foreground">{etaStr}</strong></span>
+                <span className="flex items-center gap-1"><Gauge className="h-3 w-3" />Taxa sucesso: <strong className="text-foreground">{successRate}%</strong></span>
               </div>
             </div>
             <div className="relative">
-              <Progress value={progress} className="h-4" />
+              <Progress value={progress} className="h-5" />
               <div className="absolute inset-0 flex items-center justify-center">
-                <span className="text-[11px] font-bold text-white drop-shadow-md">{progress.toFixed(1)}% — {processed}/{total}</span>
+                <span className="text-xs font-bold text-white drop-shadow-md">{progress.toFixed(1)}% — {processed} de {total} processados</span>
+              </div>
+            </div>
+            <div className="grid grid-cols-4 gap-3">
+              <div className="border rounded-md p-2 text-center bg-background/60">
+                <p className="text-lg font-bold">{processed}<span className="text-xs font-normal text-muted-foreground">/{total}</span></p>
+                <p className="text-[9px] text-muted-foreground uppercase tracking-wider">Processados</p>
+              </div>
+              <div className="border rounded-md p-2 text-center bg-background/60">
+                <p className="text-lg font-bold text-green-600">{broadcast.sent_count || 0}</p>
+                <p className="text-[9px] text-muted-foreground uppercase tracking-wider">Enviados com sucesso</p>
+              </div>
+              <div className="border rounded-md p-2 text-center bg-background/60">
+                <p className="text-lg font-bold text-red-500">{broadcast.failed_count || 0}</p>
+                <p className="text-[9px] text-muted-foreground uppercase tracking-wider">Falhas</p>
+              </div>
+              <div className="border rounded-md p-2 text-center bg-background/60">
+                <p className="text-lg font-bold text-muted-foreground">{remaining}</p>
+                <p className="text-[9px] text-muted-foreground uppercase tracking-wider">Na fila</p>
               </div>
             </div>
           </div>
         )}
 
-        {/* Metrics Grid */}
-        <div className="grid grid-cols-5 gap-2">
-          {[
-            { label: "Total", value: total, sub: "leads", color: "text-foreground" },
-            { label: "Enviados", value: broadcast.sent_count || 0, sub: total > 0 ? `${((broadcast.sent_count || 0) / total * 100).toFixed(1)}%` : "0%", color: "text-primary" },
-            { label: "Falhas", value: broadcast.failed_count || 0, sub: total > 0 ? `${((broadcast.failed_count || 0) / total * 100).toFixed(1)}%` : "0%", color: "text-destructive" },
-            { label: "Respostas", value: broadcast.replied_count || 0, sub: (broadcast.sent_count || 0) > 0 ? `${((broadcast.replied_count || 0) / (broadcast.sent_count || 1) * 100).toFixed(1)}%` : "0%", color: "text-amber-500" },
-            { label: "Conversões", value: broadcast.converted_count || 0, sub: (broadcast.sent_count || 0) > 0 ? `${((broadcast.converted_count || 0) / (broadcast.sent_count || 1) * 100).toFixed(1)}%` : "0%", color: "text-emerald-600" },
-          ].map(m => (
-            <div key={m.label} className="border rounded-lg p-2.5 text-center">
-              <p className={`text-xl font-bold ${m.color}`}>{m.value}</p>
-              <p className="text-[10px] text-muted-foreground">{m.label}</p>
-              <p className="text-[9px] text-muted-foreground font-mono">{m.sub}</p>
+        {/* Metrics Grid — non-running */}
+        {broadcast.status !== "running" && (
+          <>
+            <div className="grid grid-cols-6 gap-2">
+              {[
+                { label: "Total", value: total, sub: "leads", color: "text-foreground" },
+                { label: "Enviados", value: broadcast.sent_count || 0, sub: total > 0 ? `${((broadcast.sent_count || 0) / total * 100).toFixed(1)}%` : "0%", color: "text-primary" },
+                { label: "Falhas", value: broadcast.failed_count || 0, sub: total > 0 ? `${((broadcast.failed_count || 0) / total * 100).toFixed(1)}%` : "0%", color: "text-destructive" },
+                { label: "Entregues", value: broadcast.delivered_count || 0, sub: (broadcast.sent_count || 0) > 0 ? `${((broadcast.delivered_count || 0) / (broadcast.sent_count || 1) * 100).toFixed(1)}%` : "0%", color: "text-blue-500" },
+                { label: "Respostas", value: broadcast.replied_count || 0, sub: (broadcast.sent_count || 0) > 0 ? `${((broadcast.replied_count || 0) / (broadcast.sent_count || 1) * 100).toFixed(1)}%` : "0%", color: "text-amber-500" },
+                { label: "Conversões", value: broadcast.converted_count || 0, sub: (broadcast.sent_count || 0) > 0 ? `${((broadcast.converted_count || 0) / (broadcast.sent_count || 1) * 100).toFixed(1)}%` : "0%", color: "text-emerald-600" },
+              ].map(m => (
+                <div key={m.label} className="border rounded-lg p-2.5 text-center">
+                  <p className={`text-lg font-bold ${m.color}`}>{m.value}</p>
+                  <p className="text-[10px] text-muted-foreground">{m.label}</p>
+                  <p className="text-[9px] text-muted-foreground font-mono">{m.sub}</p>
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
 
-        {/* Completed progress */}
-        {broadcast.status !== "running" && total > 0 && (
-          <div className="space-y-1">
-            <div className="flex items-center justify-between text-xs text-muted-foreground">
-              <span>Progresso: {processed}/{total}</span>
-              <span>{progress.toFixed(1)}%</span>
-            </div>
-            <Progress value={progress} className="h-2" />
-            {startedAt && (
-              <div className="flex items-center gap-3 text-[10px] text-muted-foreground">
-                <span>Início: {startedAt.toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}</span>
-                {endedAt && <span>Fim: {endedAt.toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}</span>}
-                <span>Duração: {elapsedStr}</span>
+            {/* Progress bar for completed/paused */}
+            {total > 0 && (
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between text-xs text-muted-foreground">
+                  <span>Progresso: {processed}/{total} processados</span>
+                  <span className="font-mono">{progress.toFixed(1)}%</span>
+                </div>
+                <Progress value={progress} className="h-2.5" />
+                {startedAt && (
+                  <div className="flex items-center gap-4 text-[10px] text-muted-foreground">
+                    <span>📅 Início: {startedAt.toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })}</span>
+                    {endedAt && <span>🏁 Fim: {endedAt.toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })}</span>}
+                    <span>⏱️ Duração: {elapsedStr}</span>
+                    <span>✅ Taxa de sucesso: {successRate}%</span>
+                  </div>
+                )}
               </div>
             )}
+          </>
+        )}
+
+        {/* Error Diagnostics Section */}
+        {errorBreakdown.length > 0 && (
+          <div className="border border-destructive/20 rounded-lg overflow-hidden">
+            <div className="bg-destructive/5 px-4 py-2.5 flex items-center gap-2 border-b border-destructive/10">
+              <AlertCircle className="h-4 w-4 text-destructive" />
+              <span className="text-sm font-semibold text-destructive">Diagnóstico de Erros</span>
+              <Badge variant="outline" className="ml-auto text-[10px] border-destructive/30 text-destructive">
+                {leads.filter(l => l.status === "failed" || l.status === "skipped").length} problemas
+              </Badge>
+            </div>
+            <div className="p-3 space-y-2">
+              {errorBreakdown.map((group, i) => (
+                <div key={i} className="border rounded-md p-3 space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="text-base">{group.category.icon}</span>
+                      <div>
+                        <p className="text-xs font-semibold">{group.category.label}</p>
+                        <p className="text-[10px] text-muted-foreground leading-snug max-w-md">{group.category.description}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Badge variant="secondary" className={`text-xs font-mono ${group.category.color}`}>
+                        {group.count} lead{group.count > 1 ? "s" : ""}
+                      </Badge>
+                      <span className="text-[10px] text-muted-foreground font-mono">
+                        {total > 0 ? ((group.count / total) * 100).toFixed(1) : 0}%
+                      </span>
+                    </div>
+                  </div>
+                  {group.leads.length <= 5 && (
+                    <div className="flex flex-wrap gap-1 mt-1">
+                      {group.leads.map(l => (
+                        <span key={l.id} className="text-[9px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-mono">
+                          {l.lead?.name || l.lead?.phone || "—"}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
           </div>
         )}
 
         {/* Config Summary */}
         <div className="border rounded-lg p-3 space-y-2">
-          <p className="text-xs font-medium">Configuração</p>
-          <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground">
+          <p className="text-xs font-medium">Configuração da Campanha</p>
+          <div className="grid grid-cols-3 gap-2 text-xs text-muted-foreground">
             <span>Tipo: <strong className="text-foreground">{broadcast.type === "automated" ? "Automatizada" : "Manual"}</strong></span>
             <span>Canal: <strong className="text-foreground capitalize">{broadcast.channel}</strong></span>
-            <span>Instância: <strong className="text-foreground">{broadcast.instance_name || "—"}</strong></span>
+            <span>Instância: <strong className="text-foreground">{broadcast.instance_name || "Auto-detect"}</strong></span>
             <span>Cenário IA: <strong className="text-foreground">{scenarioLabel ? `${scenarioLabel.icon} ${scenarioLabel.label}` : (broadcast.ai_enabled ? "Sim" : "Não")}</strong></span>
             <span>Follow-up: <strong className="text-foreground">{broadcast.follow_up_enabled ? `${broadcast.follow_up_count}x a cada ${broadcast.follow_up_interval_hours}h` : "Desativado"}</strong></span>
-            <span>Cadência: <strong className="text-foreground">{broadcast.send_rate_per_minute}/min • {broadcast.delay_between_messages}s</strong></span>
+            <span>Cadência: <strong className="text-foreground">{broadcast.delay_between_messages}s entre msgs</strong></span>
           </div>
         </div>
 
-        {/* Leads Table */}
+        {/* Leads Table with filter tabs */}
         <div className="space-y-2">
           <div className="flex items-center justify-between">
-            <p className="text-xs font-medium">Leads ({leads.length})</p>
-            <div className="flex gap-1.5 flex-wrap">
-              {Object.entries(statusCounts).map(([s, c]) => {
-                const sc = leadStatusConfig[s] || { label: s, color: "bg-muted text-muted-foreground" };
-                return (
-                  <Badge key={s} variant="outline" className={`text-[9px] ${sc.color}`}>{sc.label}: {c}</Badge>
-                );
-              })}
-            </div>
+            <p className="text-xs font-medium">Leads da Campanha</p>
+          </div>
+
+          {/* Status filter tabs */}
+          <div className="flex gap-1 flex-wrap">
+            <button
+              onClick={() => setActiveLeadTab("all")}
+              className={`text-[10px] px-2 py-1 rounded-md border transition-colors ${activeLeadTab === "all" ? "bg-primary text-primary-foreground border-primary" : "bg-secondary border-transparent text-muted-foreground hover:text-foreground"}`}
+            >
+              Todos ({leads.length})
+            </button>
+            {Object.entries(statusCounts).map(([s, c]) => {
+              const sc = leadStatusConfig[s] || { label: s, color: "bg-muted text-muted-foreground" };
+              return (
+                <button
+                  key={s}
+                  onClick={() => setActiveLeadTab(s)}
+                  className={`text-[10px] px-2 py-1 rounded-md border transition-colors ${activeLeadTab === s ? "bg-primary text-primary-foreground border-primary" : "bg-secondary border-transparent text-muted-foreground hover:text-foreground"}`}
+                >
+                  {sc.label} ({c})
+                </button>
+              );
+            })}
           </div>
 
           {loading ? (
             <div className="flex justify-center py-8"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>
-          ) : leads.length === 0 ? (
-            <p className="text-xs text-muted-foreground text-center py-6">Nenhum lead vinculado a esta campanha</p>
+          ) : filteredLeads.length === 0 ? (
+            <p className="text-xs text-muted-foreground text-center py-6">
+              {leads.length === 0 ? "Nenhum lead vinculado a esta campanha" : "Nenhum lead com este status"}
+            </p>
           ) : (
             <div className="border rounded-lg overflow-hidden">
-              <ScrollArea className="max-h-[300px]">
+              <ScrollArea className="max-h-[280px]">
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead className="text-[10px]">Lead</TableHead>
-                      <TableHead className="text-[10px]">Contato</TableHead>
-                      <TableHead className="text-[10px]">Origem</TableHead>
-                      <TableHead className="text-[10px]">Status</TableHead>
-                      <TableHead className="text-[10px]">Erro</TableHead>
-                      <TableHead className="text-[10px]">Enviado</TableHead>
+                      <TableHead className="text-[10px] w-[180px]">Lead</TableHead>
+                      <TableHead className="text-[10px] w-[130px]">Contato</TableHead>
+                      <TableHead className="text-[10px] w-[80px]">Origem</TableHead>
+                      <TableHead className="text-[10px] w-[80px]">Status</TableHead>
+                      <TableHead className="text-[10px]">Diagnóstico</TableHead>
+                      <TableHead className="text-[10px] w-[100px]">Enviado em</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {leads.map(bl => {
+                    {filteredLeads.map(bl => {
                       const sc = leadStatusConfig[bl.status] || { label: bl.status, color: "bg-muted text-muted-foreground" };
+                      const errCat = bl.error_message ? categorizeError(bl.error_message) : null;
                       return (
                         <TableRow key={bl.id}>
-                          <TableCell className="text-xs py-2">{bl.lead?.name || "—"}</TableCell>
-                          <TableCell className="text-xs py-2 font-mono">{bl.lead?.phone || bl.lead?.email || "—"}</TableCell>
-                          <TableCell className="text-xs py-2">{bl.lead?.source || "—"}</TableCell>
+                          <TableCell className="text-xs py-2 font-medium">{bl.lead?.name || "—"}</TableCell>
+                          <TableCell className="text-xs py-2 font-mono text-muted-foreground">{bl.lead?.phone || bl.lead?.email || "—"}</TableCell>
+                          <TableCell className="text-xs py-2">
+                            <Badge variant="secondary" className="text-[9px]">
+                              {SOURCE_OPTIONS.find(o => o.value === bl.lead?.source)?.label || bl.lead?.source || "—"}
+                            </Badge>
+                          </TableCell>
                           <TableCell className="py-2">
-                            <Badge className={`text-[9px] border-0 ${sc.color}`}>{sc.label}</Badge>
+                            <span className={`text-[10px] px-1.5 py-0.5 rounded-md font-medium ${sc.color}`}>{sc.label}</span>
                           </TableCell>
-                          <TableCell className="text-[10px] py-2 text-destructive max-w-[120px] truncate" title={bl.error_message || ""}>
-                            {bl.error_message || "—"}
+                          <TableCell className="py-2">
+                            {errCat ? (
+                              <div className="flex items-center gap-1.5" title={bl.error_message}>
+                                <span className="text-xs">{errCat.icon}</span>
+                                <span className={`text-[10px] font-medium ${errCat.color.split(" ")[0]}`}>{errCat.label}</span>
+                              </div>
+                            ) : bl.status === "sent" ? (
+                              <span className="text-[10px] text-green-600">✓ Enviado com sucesso</span>
+                            ) : bl.status === "pending" ? (
+                              <span className="text-[10px] text-muted-foreground">Aguardando processamento</span>
+                            ) : (
+                              <span className="text-[10px] text-muted-foreground">—</span>
+                            )}
                           </TableCell>
-                          <TableCell className="text-[10px] py-2 text-muted-foreground">
+                          <TableCell className="text-[10px] py-2 text-muted-foreground font-mono">
                             {bl.sent_at ? new Date(bl.sent_at).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : "—"}
                           </TableCell>
                         </TableRow>
