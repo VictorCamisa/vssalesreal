@@ -296,6 +296,7 @@ ${!useEmoji ? "- NUNCA use emojis. ZERO emojis." : ""}
       });
 
       let success = false;
+      let lastError = "";
       for (let i = 0; i < blocks.length; i++) {
         if (i > 0) {
           const baseDelay = Math.max(3000, blocks[i].length * 50);
@@ -310,10 +311,17 @@ ${!useEmoji ? "- NUNCA use emojis. ZERO emojis." : ""}
           await sendResp.json();
           success = true;
         } else {
-          console.error("Block send error:", sendResp.status, await sendResp.text());
+          const errBody = await sendResp.text();
+          lastError = `${sendResp.status}: ${errBody.substring(0, 200)}`;
+          console.error(`Block ${i+1} send error for ${phone}:`, sendResp.status, errBody.substring(0, 300));
+          // If number doesn't exist on WhatsApp, skip remaining blocks
+          if (errBody.includes('"exists":false') || errBody.includes("not registered")) {
+            lastError = "Número não tem WhatsApp";
+            break;
+          }
         }
       }
-      return success;
+      return { success, error: lastError };
     };
 
     let sentCount = 0;
