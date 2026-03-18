@@ -344,13 +344,17 @@ ${!useEmoji ? "- NUNCA use emojis. ZERO emojis." : ""}
       for (let i = 0; i < blocks.length; i++) {
         if (i > 0) {
           const baseDelay = Math.max(3000, blocks[i].length * 50);
-          await new Promise(resolve => setTimeout(resolve, baseDelay));
+          await sleep(baseDelay);
         }
-        const sendResp = await fetch(`${EVOLUTION_API_URL}/message/sendText/${instanceName}`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json", apikey: EVOLUTION_API_KEY },
-          body: JSON.stringify({ number: phone, text: blocks[i] }),
-        });
+        const sendResp = await fetchWithTimeout(
+          `${EVOLUTION_API_URL}/message/sendText/${instanceName}`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json", apikey: EVOLUTION_API_KEY },
+            body: JSON.stringify({ number: phone, text: blocks[i] }),
+          },
+          20000,
+        );
         if (sendResp.ok) {
           await sendResp.json();
           success = true;
