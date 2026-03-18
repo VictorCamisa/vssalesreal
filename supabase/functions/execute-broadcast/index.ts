@@ -655,7 +655,7 @@ async function updateBroadcastCounts(supabase: any, broadcastId: string) {
 
   const counts = {
     sent_count: stats.filter((s: any) => s.status === "sent").length,
-    failed_count: stats.filter((s: any) => s.status === "failed").length,
+    failed_count: stats.filter((s: any) => s.status === "failed" || s.status === "skipped").length,
     delivered_count: stats.filter((s: any) => s.status === "delivered").length,
     read_count: stats.filter((s: any) => s.status === "read").length,
     replied_count: stats.filter((s: any) => s.status === "replied").length,
