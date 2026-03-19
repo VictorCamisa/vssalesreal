@@ -125,7 +125,7 @@ async function streamSimulator(
           const parsed = JSON.parse(json);
           const content = parsed.choices?.[0]?.delta?.content;
           if (content) { full += content; onDelta(full); }
-        } catch {}
+        } catch (parseErr) { console.warn("SSE chunk parse error (non-critical):", parseErr); }
       }
     }
   } catch (e: any) { onError(e.message); }
