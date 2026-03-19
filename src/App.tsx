@@ -23,6 +23,7 @@ import AdminPanel from "./pages/AdminPanel";
 import CompanyProfile from "./pages/CompanyProfile";
 import CompanyForm from "./pages/CompanyForm";
 import MySeller from "./pages/MySeller";
+import CommCRM from "./pages/CommCRM";
 
 const queryClient = new QueryClient();
 
@@ -57,6 +58,7 @@ function AppRoutes() {
         <Route path="/whatsapp" element={<WhatsAppConnection />} />
         <Route path="/prospecting" element={<Prospecting />} />
         <Route path="/broadcasts" element={<Broadcasts />} />
+        <Route path="/comm-crm" element={<CommCRM />} />
         <Route path="/leads" element={<Leads />} />
         <Route path="/crm" element={<CRM />} />
         <Route path="/ai" element={<AIPage />} />

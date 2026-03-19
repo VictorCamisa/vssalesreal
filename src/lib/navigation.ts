@@ -1,6 +1,6 @@
 import {
   LayoutDashboard, Smartphone, Users, Search, Send,
-  Kanban, Calendar, Brain, Building2, UserCheck, Settings,
+  Kanban, Calendar, Brain, Building2, UserCheck, Settings, Radio,
 } from "lucide-react";
 
 export interface NavItem {
@@ -28,6 +28,7 @@ export const moduleGroups: ModuleGroup[] = [
     items: [
       { title: "WhatsApp", url: "/whatsapp", icon: Smartphone },
       { title: "Disparos", url: "/broadcasts", icon: Send },
+      { title: "CRM Comunicação", url: "/comm-crm", icon: Radio },
     ],
   },
   {
