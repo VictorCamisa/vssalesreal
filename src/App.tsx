@@ -23,6 +23,7 @@ import AdminPanel from "./pages/AdminPanel";
 import CompanyProfile from "./pages/CompanyProfile";
 import CompanyForm from "./pages/CompanyForm";
 import MySeller from "./pages/MySeller";
+import CommCRM from "./pages/CommCRM";
 
 const queryClient = new QueryClient();
 
