@@ -28,6 +28,7 @@ export const moduleGroups: ModuleGroup[] = [
     items: [
       { title: "WhatsApp", url: "/whatsapp", icon: Smartphone },
       { title: "Disparos", url: "/broadcasts", icon: Send },
+      { title: "CRM Comunicação", url: "/comm-crm", icon: Radio },
     ],
   },
   {

@@ -58,6 +58,7 @@ function AppRoutes() {
         <Route path="/whatsapp" element={<WhatsAppConnection />} />
         <Route path="/prospecting" element={<Prospecting />} />
         <Route path="/broadcasts" element={<Broadcasts />} />
+        <Route path="/comm-crm" element={<CommCRM />} />
         <Route path="/leads" element={<Leads />} />
         <Route path="/crm" element={<CRM />} />
         <Route path="/ai" element={<AIPage />} />
