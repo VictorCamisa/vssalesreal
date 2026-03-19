@@ -1,6 +1,6 @@
 import {
   LayoutDashboard, Smartphone, Users, Search, Send,
-  Kanban, Calendar, Brain, Building2, UserCheck, Settings,
+  Kanban, Calendar, Brain, Building2, UserCheck, Settings, Radio,
 } from "lucide-react";
 
 export interface NavItem {
