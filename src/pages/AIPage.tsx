@@ -306,7 +306,7 @@ async function streamAI(
             full += content;
             onDelta(full);
           }
-        } catch {}
+        } catch (parseErr) { console.warn("SSE chunk parse error (non-critical):", parseErr); }
       }
     }
   } catch (e: any) {

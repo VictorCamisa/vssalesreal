@@ -157,7 +157,7 @@ Deno.serve(async (req) => {
     }
     console.log(`Using instance: ${instanceName}`);
 
-    // Load scenario config (only once per batch — context is identical)
+    // Load scenario config — reloaded periodically so mid-broadcast edits take effect
     const scenarioKey = (broadcast as any).scenario_key || "broadcast_own_base";
     let scenarioPrompt = "";
     let maxBlocks = 2;
@@ -165,7 +165,8 @@ Deno.serve(async (req) => {
     let useEmoji = true;
     let scenarioTemperature = 0.4;
 
-    if (broadcast.ai_enabled) {
+    const loadScenarioConfig = async () => {
+      if (!broadcast.ai_enabled) return;
       const { data: scenario } = await supabase
         .from("ai_scenarios")
         .select("system_prompt, behavior, temperature")
@@ -181,7 +182,9 @@ Deno.serve(async (req) => {
         useEmoji = beh.use_emoji !== false;
         scenarioTemperature = Math.max(0.2, Math.min(Number(scenario.temperature) ?? 0.3, 0.45));
       }
-    }
+    };
+
+    await loadScenarioConfig();
 
     // Company context
     let companyContext = "";
@@ -381,9 +384,6 @@ ${!useEmoji ? "- NUNCA use emojis. ZERO emojis." : ""}
       return elapsed >= MAX_FUNCTION_RUNTIME_MS - RUNTIME_SAFETY_MARGIN_MS;
     };
 
-    const shouldFlushProgress = (idx: number) =>
-      (sentCount + failCount) % 3 === 0 || idx === bLeads.length - 1;
-
     for (let idx = 0; idx < bLeads.length; idx++) {
       if (shouldYieldNow()) {
         yieldedByRuntime = true;
@@ -411,6 +411,10 @@ ${!useEmoji ? "- NUNCA use emojis. ZERO emojis." : ""}
           await updateBroadcastCounts(supabase, broadcast_id);
           return json({ success: true, sent: sentCount, failed: failCount, remaining: bLeads.length - idx });
         }
+
+        // Reload scenario config so changes made during broadcast take effect
+        await loadScenarioConfig();
+        console.log(`Scenario config reloaded at idx=${idx}`);
       }
 
       if (!lead?.phone) {
@@ -418,7 +422,7 @@ ${!useEmoji ? "- NUNCA use emojis. ZERO emojis." : ""}
           status: "failed", error_message: "Lead sem telefone cadastrado no sistema",
         }).eq("id", bl.id);
         failCount++;
-        if (shouldFlushProgress(idx)) await updateBroadcastCounts(supabase, broadcast_id);
+        await updateBroadcastCounts(supabase, broadcast_id);
         continue;
       }
 
@@ -429,7 +433,7 @@ ${!useEmoji ? "- NUNCA use emojis. ZERO emojis." : ""}
           status: "skipped", error_message: "Em cooldown",
         }).eq("id", bl.id);
         failCount++;
-        if (shouldFlushProgress(idx)) await updateBroadcastCounts(supabase, broadcast_id);
+        await updateBroadcastCounts(supabase, broadcast_id);
         continue;
       }
 
@@ -497,7 +501,18 @@ ${!useEmoji ? "- NUNCA use emojis. ZERO emojis." : ""}
             }
           }
         } catch (e) {
-          console.error("AI generation error:", e);
+          const aiErrMsg = e instanceof Error ? e.message : String(e);
+          console.error("AI generation error:", aiErrMsg);
+          // Store the root cause so it shows in the lead error_message below
+          if (!messageText) {
+            await supabase.from("broadcast_leads").update({
+              status: "failed",
+              error_message: `Erro na geração de IA: ${aiErrMsg.substring(0, 200)}`,
+            }).eq("id", bl.id);
+            failCount++;
+            await updateBroadcastCounts(supabase, broadcast_id);
+            continue;
+          }
         }
       }
 
@@ -508,7 +523,7 @@ ${!useEmoji ? "- NUNCA use emojis. ZERO emojis." : ""}
             : "Sem mensagem para enviar — preencha o template da campanha",
         }).eq("id", bl.id);
         failCount++;
-        if (shouldFlushProgress(idx)) await updateBroadcastCounts(supabase, broadcast_id);
+        await updateBroadcastCounts(supabase, broadcast_id);
         continue;
       }
 
@@ -569,10 +584,8 @@ ${!useEmoji ? "- NUNCA use emojis. ZERO emojis." : ""}
         failCount++;
       }
 
-      // Update counts after each lead for real-time progress
-      if (shouldFlushProgress(idx)) {
-        await updateBroadcastCounts(supabase, broadcast_id);
-      }
+      // Update counts after every lead for real-time progress
+      await updateBroadcastCounts(supabase, broadcast_id);
 
       // Delay between leads (respect runtime budget)
       if (delayMs > 0 && idx < bLeads.length - 1) {
