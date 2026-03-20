@@ -537,6 +537,9 @@ export default function Leads() {
               <span><Upload className="h-4 w-4" /> Importar</span>
             </Button>
           </label>
+          <Button size="sm" variant="outline" className="rounded-xl gap-2" onClick={() => { setSecurityOpen(true); handleSecurityScan(); }}>
+            <Shield className="h-3.5 w-3.5" /> Segurança
+          </Button>
           <Button size="sm" variant="outline" className="rounded-xl gap-2" onClick={exportCSV}>
             <Download className="h-3.5 w-3.5" /> Exportar
           </Button>
