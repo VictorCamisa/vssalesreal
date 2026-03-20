@@ -557,7 +557,7 @@ export default function Prospecting() {
                           {job.city && <span className="flex items-center gap-1"><MapPin className="h-3 w-3" />{job.city}</span>}
                           {job.keywords && <span className="flex items-center gap-1"><Tag className="h-3 w-3" />{job.keywords}</span>}
                         </div>
-                        {job.status === "running" && <Progress value={45} className="h-1 mt-2 max-w-xs" />}
+                        {job.status === "running" && <ProspectingThinkingFeed isRunning={true} />}
                         {job.error_message && <p className="text-xs text-destructive mt-1">{job.error_message}</p>}
                       </div>
                       <div className="flex items-center gap-1.5">
