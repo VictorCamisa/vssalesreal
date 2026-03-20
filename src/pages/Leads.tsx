@@ -102,6 +102,14 @@ export default function Leads() {
   const [addLoading, setAddLoading] = useState(false);
   const [deleteAllOpen, setDeleteAllOpen] = useState(false);
   const [deletingAll, setDeletingAll] = useState(false);
+  const [securityOpen, setSecurityOpen] = useState(false);
+  const [securityLoading, setSecurityLoading] = useState(false);
+  const [securityResults, setSecurityResults] = useState<{
+    duplicatePhones: { phone: string; leads: Lead[] }[];
+    duplicateNames: { name: string; leads: Lead[] }[];
+    noPhone: Lead[];
+    noName: Lead[];
+  } | null>(null);
 
   const fetchLeads = async () => {
     if (!profile?.org_id) return;
