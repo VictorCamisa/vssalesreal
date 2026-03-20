@@ -445,7 +445,72 @@ export default function Leads() {
     }
   };
 
-  const exportCSV = () => {
+  const handleSecurityScan = async () => {
+    if (!profile?.org_id) return;
+    setSecurityLoading(true);
+    setSecurityResults(null);
+    try {
+      const { data: allLeads } = await supabase
+        .from("leads_raw")
+        .select("id, name, phone, email, source, status, tags, created_at, enrichment_data")
+        .eq("org_id", profile.org_id)
+        .order("created_at", { ascending: false })
+        .limit(5000);
+
+      const leads = (allLeads || []) as Lead[];
+
+      // Duplicate phones (same phone, different names)
+      const phoneMap = new Map<string, Lead[]>();
+      leads.forEach(l => {
+        if (!l.phone) return;
+        const existing = phoneMap.get(l.phone) || [];
+        existing.push(l);
+        phoneMap.set(l.phone, existing);
+      });
+      const duplicatePhones = Array.from(phoneMap.entries())
+        .filter(([_, group]) => {
+          const names = new Set(group.map(l => l.name?.toLowerCase()).filter(Boolean));
+          return names.size > 1;
+        })
+        .map(([phone, leads]) => ({ phone, leads }));
+
+      // Duplicate names (same name, different phones)
+      const nameMap = new Map<string, Lead[]>();
+      leads.forEach(l => {
+        if (!l.name) return;
+        const key = l.name.toLowerCase().trim();
+        const existing = nameMap.get(key) || [];
+        existing.push(l);
+        nameMap.set(key, existing);
+      });
+      const duplicateNames = Array.from(nameMap.entries())
+        .filter(([_, group]) => {
+          const phones = new Set(group.map(l => l.phone).filter(Boolean));
+          return phones.size > 1;
+        })
+        .map(([name, leads]) => ({ name, leads }));
+
+      const noPhone = leads.filter(l => !l.phone);
+      const noName = leads.filter(l => !l.name);
+
+      setSecurityResults({ duplicatePhones, duplicateNames, noPhone, noName });
+    } catch (error: any) {
+      toast({ title: "Erro na verificação", description: error.message, variant: "destructive" });
+    } finally { setSecurityLoading(false); }
+  };
+
+  const handleMergeLeads = async (keepId: string, deleteIds: string[]) => {
+    try {
+      const { error } = await supabase.from("leads_raw").delete().in("id", deleteIds);
+      if (error) throw error;
+      toast({ title: `${deleteIds.length} duplicata(s) removida(s)` });
+      handleSecurityScan();
+      fetchLeads();
+    } catch (error: any) {
+      toast({ title: "Erro ao mesclar", description: error.message, variant: "destructive" });
+    }
+  };
+
     const rows = [["Nome", "Telefone", "Email", "Fonte", "Status"]];
     leads.forEach((l) => rows.push([l.name || "", l.phone || "", l.email || "", sourceLabels[l.source] || l.source, statusLabels[l.status] || l.status]));
     const csv = rows.map((r) => r.map((v) => `"${v.replace(/"/g, '""')}"`).join(",")).join("\n");
