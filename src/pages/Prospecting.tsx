@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -9,7 +9,7 @@ import {
   CheckCircle2, Tag, X, Zap, Eye,
   Sparkles, Phone, Building2, User, Upload,
   FileSpreadsheet, AlertCircle, MapPin, ArrowRight,
-  ExternalLink, Compass, Target, Brain, TrendingUp
+  ExternalLink, Compass, Target, Brain, TrendingUp, Check, Circle
 } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
