@@ -934,6 +934,143 @@ export default function Leads() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      {/* Security Center Dialog */}
+      <Dialog open={securityOpen} onOpenChange={setSecurityOpen}>
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Shield className="h-5 w-5 text-primary" /> Central de Segurança
+            </DialogTitle>
+            <DialogDescription>Verificação de integridade e duplicatas na sua base de leads</DialogDescription>
+          </DialogHeader>
+
+          {securityLoading ? (
+            <div className="flex flex-col items-center justify-center py-12 gap-3">
+              <Loader2 className="h-6 w-6 animate-spin text-primary" />
+              <div className="space-y-1.5 w-full max-w-xs">
+                {["Carregando leads...", "Verificando telefones duplicados...", "Analisando nomes duplicados...", "Identificando dados incompletos..."].map((step, i) => (
+                  <p key={i} className="text-xs text-muted-foreground animate-fade-in" style={{ animationDelay: `${i * 800}ms` }}>{step}</p>
+                ))}
+              </div>
+            </div>
+          ) : securityResults ? (
+            <div className="space-y-5">
+              {/* Summary */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                {[
+                  { label: "Tel. Duplicados", count: securityResults.duplicatePhones.length, color: securityResults.duplicatePhones.length > 0 ? "text-destructive" : "text-success", icon: Phone },
+                  { label: "Nomes Duplicados", count: securityResults.duplicateNames.length, color: securityResults.duplicateNames.length > 0 ? "text-warning" : "text-success", icon: User },
+                  { label: "Sem Telefone", count: securityResults.noPhone.length, color: securityResults.noPhone.length > 0 ? "text-warning" : "text-success", icon: AlertTriangle },
+                  { label: "Sem Nome", count: securityResults.noName.length, color: securityResults.noName.length > 0 ? "text-warning" : "text-success", icon: AlertTriangle },
+                ].map(s => (
+                  <div key={s.label} className="border rounded-lg p-3 text-center">
+                    <s.icon className={`h-4 w-4 mx-auto mb-1 ${s.color}`} />
+                    <p className={`text-xl font-bold ${s.color}`}>{s.count}</p>
+                    <p className="text-[10px] text-muted-foreground">{s.label}</p>
+                  </div>
+                ))}
+              </div>
+
+              {securityResults.duplicatePhones.length === 0 && securityResults.duplicateNames.length === 0 && securityResults.noPhone.length === 0 && securityResults.noName.length === 0 && (
+                <div className="text-center py-8">
+                  <CheckCircle2 className="h-10 w-10 text-success mx-auto mb-3" />
+                  <p className="text-sm font-medium">Base saudável!</p>
+                  <p className="text-xs text-muted-foreground">Nenhum problema de integridade encontrado.</p>
+                </div>
+              )}
+
+              {/* Duplicate Phones */}
+              {securityResults.duplicatePhones.length > 0 && (
+                <div className="space-y-2">
+                  <h4 className="text-sm font-medium flex items-center gap-2 text-destructive">
+                    <Phone className="h-4 w-4" /> Mesmo telefone, nomes diferentes ({securityResults.duplicatePhones.length})
+                  </h4>
+                  <ScrollArea className="max-h-[200px]">
+                    <div className="space-y-2">
+                      {securityResults.duplicatePhones.map((group, gi) => (
+                        <div key={gi} className="border rounded-md p-3 space-y-2">
+                          <p className="text-xs font-mono text-muted-foreground">{group.phone}</p>
+                          {group.leads.map((lead, li) => (
+                            <div key={lead.id} className="flex items-center justify-between text-xs">
+                              <span>{lead.name || "Sem nome"} · <span className="text-muted-foreground">{sourceLabels[lead.source]}</span></span>
+                              {li > 0 && (
+                                <Button variant="ghost" size="sm" className="h-6 text-[10px] text-destructive" onClick={() => handleMergeLeads(group.leads[0].id, [lead.id])}>
+                                  <Trash2 className="h-3 w-3 mr-1" /> Remover
+                                </Button>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      ))}
+                    </div>
+                  </ScrollArea>
+                </div>
+              )}
+
+              {/* Duplicate Names */}
+              {securityResults.duplicateNames.length > 0 && (
+                <div className="space-y-2">
+                  <h4 className="text-sm font-medium flex items-center gap-2 text-warning">
+                    <User className="h-4 w-4" /> Mesmo nome, telefones diferentes ({securityResults.duplicateNames.length})
+                  </h4>
+                  <ScrollArea className="max-h-[200px]">
+                    <div className="space-y-2">
+                      {securityResults.duplicateNames.map((group, gi) => (
+                        <div key={gi} className="border rounded-md p-3 space-y-2">
+                          <p className="text-xs font-medium">{group.name}</p>
+                          {group.leads.map((lead) => (
+                            <div key={lead.id} className="flex items-center justify-between text-xs">
+                              <span className="font-mono">{lead.phone || "Sem telefone"} · <span className="text-muted-foreground">{sourceLabels[lead.source]}</span></span>
+                              <Button variant="ghost" size="sm" className="h-6 text-[10px] text-destructive" onClick={() => handleMergeLeads(group.leads[0].id, [lead.id])}>
+                                <Trash2 className="h-3 w-3 mr-1" /> Remover
+                              </Button>
+                            </div>
+                          ))}
+                        </div>
+                      ))}
+                    </div>
+                  </ScrollArea>
+                </div>
+              )}
+
+              {/* No Phone */}
+              {securityResults.noPhone.length > 0 && (
+                <div className="space-y-2">
+                  <h4 className="text-sm font-medium flex items-center gap-2 text-warning">
+                    <AlertTriangle className="h-4 w-4" /> Leads sem telefone ({securityResults.noPhone.length})
+                  </h4>
+                  <p className="text-xs text-muted-foreground">Esses leads não podem receber disparos via WhatsApp.</p>
+                  <Button variant="outline" size="sm" className="text-xs gap-1 text-destructive" onClick={async () => {
+                    const ids = securityResults.noPhone.map(l => l.id);
+                    await supabase.from("leads_raw").delete().in("id", ids);
+                    toast({ title: `${ids.length} leads sem telefone removidos` });
+                    handleSecurityScan();
+                    fetchLeads();
+                  }}>
+                    <Trash2 className="h-3 w-3" /> Remover todos sem telefone
+                  </Button>
+                </div>
+              )}
+
+              {/* No Name */}
+              {securityResults.noName.length > 0 && (
+                <div className="space-y-2">
+                  <h4 className="text-sm font-medium flex items-center gap-2 text-warning">
+                    <AlertTriangle className="h-4 w-4" /> Leads sem nome ({securityResults.noName.length})
+                  </h4>
+                  <p className="text-xs text-muted-foreground">Leads apenas com telefone — personalização de mensagens limitada.</p>
+                </div>
+              )}
+
+              <DialogFooter>
+                <Button variant="outline" size="sm" onClick={handleSecurityScan} className="gap-1.5 text-xs">
+                  <RefreshCw className="h-3 w-3" /> Verificar novamente
+                </Button>
+              </DialogFooter>
+            </div>
+          ) : null}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
