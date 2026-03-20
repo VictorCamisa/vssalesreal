@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -9,7 +9,7 @@ import {
   CheckCircle2, Tag, X, Zap, Eye,
   Sparkles, Phone, Building2, User, Upload,
   FileSpreadsheet, AlertCircle, MapPin, ArrowRight,
-  ExternalLink, Compass, Target, Brain, TrendingUp
+  ExternalLink, Compass, Target, Brain, TrendingUp, Check, Circle
 } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
@@ -64,6 +64,78 @@ const STATES = [
   "AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG",
   "PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO",
 ];
+
+const PROSPECTING_STAGES = [
+  { label: "Analisando perfil da empresa...", delay: 0 },
+  { label: "Montando consultas de busca para o nicho...", delay: 3000 },
+  { label: "Buscando leads em sites públicos...", delay: 8000 },
+  { label: "Raspando páginas de contato...", delay: 15000 },
+  { label: "Calculando score ICP de cada lead...", delay: 25000 },
+  { label: "Salvando leads no banco de dados...", delay: 40000 },
+];
+
+function ProspectingThinkingFeed({ isRunning }: { isRunning: boolean }) {
+  const [currentStep, setCurrentStep] = useState(0);
+  const [elapsedMs, setElapsedMs] = useState(0);
+  const startRef = useRef(Date.now());
+
+  useEffect(() => {
+    if (!isRunning) return;
+    startRef.current = Date.now();
+    setCurrentStep(0);
+    setElapsedMs(0);
+
+    const timer = setInterval(() => {
+      const elapsed = Date.now() - startRef.current;
+      setElapsedMs(elapsed);
+      const nextStep = PROSPECTING_STAGES.filter(s => elapsed >= s.delay).length - 1;
+      setCurrentStep(Math.max(0, nextStep));
+    }, 500);
+
+    return () => clearInterval(timer);
+  }, [isRunning]);
+
+  if (!isRunning) return null;
+
+  const formatTime = (ms: number) => {
+    const s = Math.floor(ms / 1000);
+    return s < 60 ? `${s}s` : `${Math.floor(s / 60)}m ${s % 60}s`;
+  };
+
+  return (
+    <div className="mt-3 space-y-1.5 pl-1">
+      {PROSPECTING_STAGES.map((stage, i) => {
+        const isComplete = i < currentStep;
+        const isCurrent = i === currentStep;
+        const isPending = i > currentStep;
+
+        if (isPending) return null;
+
+        return (
+          <div
+            key={i}
+            className="flex items-center gap-2 animate-fade-in"
+            style={{ animationDelay: `${i * 100}ms` }}
+          >
+            {isComplete ? (
+              <Check className="h-3.5 w-3.5 text-success shrink-0" />
+            ) : isCurrent ? (
+              <Loader2 className="h-3.5 w-3.5 text-primary animate-spin shrink-0" />
+            ) : (
+              <Circle className="h-3.5 w-3.5 text-muted-foreground/30 shrink-0" />
+            )}
+            <span className={`text-xs ${isComplete ? "text-muted-foreground line-through" : isCurrent ? "text-foreground font-medium" : "text-muted-foreground/40"}`}>
+              {stage.label}
+            </span>
+          </div>
+        );
+      })}
+      <p className="text-[10px] text-muted-foreground mt-2 pl-5">
+        ⏱ Tempo decorrido: {formatTime(elapsedMs)}
+      </p>
+    </div>
+  );
+}
 
 export default function Prospecting() {
   const { profile } = useAuth();
@@ -485,7 +557,7 @@ export default function Prospecting() {
                           {job.city && <span className="flex items-center gap-1"><MapPin className="h-3 w-3" />{job.city}</span>}
                           {job.keywords && <span className="flex items-center gap-1"><Tag className="h-3 w-3" />{job.keywords}</span>}
                         </div>
-                        {job.status === "running" && <Progress value={45} className="h-1 mt-2 max-w-xs" />}
+                        {job.status === "running" && <ProspectingThinkingFeed isRunning={true} />}
                         {job.error_message && <p className="text-xs text-destructive mt-1">{job.error_message}</p>}
                       </div>
                       <div className="flex items-center gap-1.5">

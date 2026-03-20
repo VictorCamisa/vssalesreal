@@ -7,7 +7,8 @@ import * as XLSX from "xlsx";
 import {
   Users, Search, Sparkles, ArrowRight, Trash2, Loader2, Download,
   Upload, Plus, Eye, MoreVertical, Target, BarChart3, Filter,
-  Phone, Mail, Globe, X, Building2, User, Zap, Send
+  Phone, Mail, Globe, X, Building2, User, Zap, Send,
+  Shield, AlertTriangle, Merge, CheckCircle2, RefreshCw
 } from "lucide-react";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
@@ -101,6 +102,14 @@ export default function Leads() {
   const [addLoading, setAddLoading] = useState(false);
   const [deleteAllOpen, setDeleteAllOpen] = useState(false);
   const [deletingAll, setDeletingAll] = useState(false);
+  const [securityOpen, setSecurityOpen] = useState(false);
+  const [securityLoading, setSecurityLoading] = useState(false);
+  const [securityResults, setSecurityResults] = useState<{
+    duplicatePhones: { phone: string; leads: Lead[] }[];
+    duplicateNames: { name: string; leads: Lead[] }[];
+    noPhone: Lead[];
+    noName: Lead[];
+  } | null>(null);
 
   const fetchLeads = async () => {
     if (!profile?.org_id) return;
@@ -436,6 +445,72 @@ export default function Leads() {
     }
   };
 
+  const handleSecurityScan = async () => {
+    if (!profile?.org_id) return;
+    setSecurityLoading(true);
+    setSecurityResults(null);
+    try {
+      const { data: allLeads } = await supabase
+        .from("leads_raw")
+        .select("id, name, phone, email, source, status, tags, created_at, enrichment_data")
+        .eq("org_id", profile.org_id)
+        .order("created_at", { ascending: false })
+        .limit(5000);
+
+      const leads = (allLeads || []) as Lead[];
+
+      // Duplicate phones (same phone, different names)
+      const phoneMap = new Map<string, Lead[]>();
+      leads.forEach(l => {
+        if (!l.phone) return;
+        const existing = phoneMap.get(l.phone) || [];
+        existing.push(l);
+        phoneMap.set(l.phone, existing);
+      });
+      const duplicatePhones = Array.from(phoneMap.entries())
+        .filter(([_, group]) => {
+          const names = new Set(group.map(l => l.name?.toLowerCase()).filter(Boolean));
+          return names.size > 1;
+        })
+        .map(([phone, leads]) => ({ phone, leads }));
+
+      // Duplicate names (same name, different phones)
+      const nameMap = new Map<string, Lead[]>();
+      leads.forEach(l => {
+        if (!l.name) return;
+        const key = l.name.toLowerCase().trim();
+        const existing = nameMap.get(key) || [];
+        existing.push(l);
+        nameMap.set(key, existing);
+      });
+      const duplicateNames = Array.from(nameMap.entries())
+        .filter(([_, group]) => {
+          const phones = new Set(group.map(l => l.phone).filter(Boolean));
+          return phones.size > 1;
+        })
+        .map(([name, leads]) => ({ name, leads }));
+
+      const noPhone = leads.filter(l => !l.phone);
+      const noName = leads.filter(l => !l.name);
+
+      setSecurityResults({ duplicatePhones, duplicateNames, noPhone, noName });
+    } catch (error: any) {
+      toast({ title: "Erro na verificação", description: error.message, variant: "destructive" });
+    } finally { setSecurityLoading(false); }
+  };
+
+  const handleMergeLeads = async (keepId: string, deleteIds: string[]) => {
+    try {
+      const { error } = await supabase.from("leads_raw").delete().in("id", deleteIds);
+      if (error) throw error;
+      toast({ title: `${deleteIds.length} duplicata(s) removida(s)` });
+      handleSecurityScan();
+      fetchLeads();
+    } catch (error: any) {
+      toast({ title: "Erro ao mesclar", description: error.message, variant: "destructive" });
+    }
+  };
+
   const exportCSV = () => {
     const rows = [["Nome", "Telefone", "Email", "Fonte", "Status"]];
     leads.forEach((l) => rows.push([l.name || "", l.phone || "", l.email || "", sourceLabels[l.source] || l.source, statusLabels[l.status] || l.status]));
@@ -462,6 +537,9 @@ export default function Leads() {
               <span><Upload className="h-4 w-4" /> Importar</span>
             </Button>
           </label>
+          <Button size="sm" variant="outline" className="rounded-xl gap-2" onClick={() => { setSecurityOpen(true); handleSecurityScan(); }}>
+            <Shield className="h-3.5 w-3.5" /> Segurança
+          </Button>
           <Button size="sm" variant="outline" className="rounded-xl gap-2" onClick={exportCSV}>
             <Download className="h-3.5 w-3.5" /> Exportar
           </Button>
@@ -854,6 +932,143 @@ export default function Leads() {
               {addLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />} Adicionar
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      {/* Security Center Dialog */}
+      <Dialog open={securityOpen} onOpenChange={setSecurityOpen}>
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Shield className="h-5 w-5 text-primary" /> Central de Segurança
+            </DialogTitle>
+            <DialogDescription>Verificação de integridade e duplicatas na sua base de leads</DialogDescription>
+          </DialogHeader>
+
+          {securityLoading ? (
+            <div className="flex flex-col items-center justify-center py-12 gap-3">
+              <Loader2 className="h-6 w-6 animate-spin text-primary" />
+              <div className="space-y-1.5 w-full max-w-xs">
+                {["Carregando leads...", "Verificando telefones duplicados...", "Analisando nomes duplicados...", "Identificando dados incompletos..."].map((step, i) => (
+                  <p key={i} className="text-xs text-muted-foreground animate-fade-in" style={{ animationDelay: `${i * 800}ms` }}>{step}</p>
+                ))}
+              </div>
+            </div>
+          ) : securityResults ? (
+            <div className="space-y-5">
+              {/* Summary */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                {[
+                  { label: "Tel. Duplicados", count: securityResults.duplicatePhones.length, color: securityResults.duplicatePhones.length > 0 ? "text-destructive" : "text-success", icon: Phone },
+                  { label: "Nomes Duplicados", count: securityResults.duplicateNames.length, color: securityResults.duplicateNames.length > 0 ? "text-warning" : "text-success", icon: User },
+                  { label: "Sem Telefone", count: securityResults.noPhone.length, color: securityResults.noPhone.length > 0 ? "text-warning" : "text-success", icon: AlertTriangle },
+                  { label: "Sem Nome", count: securityResults.noName.length, color: securityResults.noName.length > 0 ? "text-warning" : "text-success", icon: AlertTriangle },
+                ].map(s => (
+                  <div key={s.label} className="border rounded-lg p-3 text-center">
+                    <s.icon className={`h-4 w-4 mx-auto mb-1 ${s.color}`} />
+                    <p className={`text-xl font-bold ${s.color}`}>{s.count}</p>
+                    <p className="text-[10px] text-muted-foreground">{s.label}</p>
+                  </div>
+                ))}
+              </div>
+
+              {securityResults.duplicatePhones.length === 0 && securityResults.duplicateNames.length === 0 && securityResults.noPhone.length === 0 && securityResults.noName.length === 0 && (
+                <div className="text-center py-8">
+                  <CheckCircle2 className="h-10 w-10 text-success mx-auto mb-3" />
+                  <p className="text-sm font-medium">Base saudável!</p>
+                  <p className="text-xs text-muted-foreground">Nenhum problema de integridade encontrado.</p>
+                </div>
+              )}
+
+              {/* Duplicate Phones */}
+              {securityResults.duplicatePhones.length > 0 && (
+                <div className="space-y-2">
+                  <h4 className="text-sm font-medium flex items-center gap-2 text-destructive">
+                    <Phone className="h-4 w-4" /> Mesmo telefone, nomes diferentes ({securityResults.duplicatePhones.length})
+                  </h4>
+                  <ScrollArea className="max-h-[200px]">
+                    <div className="space-y-2">
+                      {securityResults.duplicatePhones.map((group, gi) => (
+                        <div key={gi} className="border rounded-md p-3 space-y-2">
+                          <p className="text-xs font-mono text-muted-foreground">{group.phone}</p>
+                          {group.leads.map((lead, li) => (
+                            <div key={lead.id} className="flex items-center justify-between text-xs">
+                              <span>{lead.name || "Sem nome"} · <span className="text-muted-foreground">{sourceLabels[lead.source]}</span></span>
+                              {li > 0 && (
+                                <Button variant="ghost" size="sm" className="h-6 text-[10px] text-destructive" onClick={() => handleMergeLeads(group.leads[0].id, [lead.id])}>
+                                  <Trash2 className="h-3 w-3 mr-1" /> Remover
+                                </Button>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      ))}
+                    </div>
+                  </ScrollArea>
+                </div>
+              )}
+
+              {/* Duplicate Names */}
+              {securityResults.duplicateNames.length > 0 && (
+                <div className="space-y-2">
+                  <h4 className="text-sm font-medium flex items-center gap-2 text-warning">
+                    <User className="h-4 w-4" /> Mesmo nome, telefones diferentes ({securityResults.duplicateNames.length})
+                  </h4>
+                  <ScrollArea className="max-h-[200px]">
+                    <div className="space-y-2">
+                      {securityResults.duplicateNames.map((group, gi) => (
+                        <div key={gi} className="border rounded-md p-3 space-y-2">
+                          <p className="text-xs font-medium">{group.name}</p>
+                          {group.leads.map((lead) => (
+                            <div key={lead.id} className="flex items-center justify-between text-xs">
+                              <span className="font-mono">{lead.phone || "Sem telefone"} · <span className="text-muted-foreground">{sourceLabels[lead.source]}</span></span>
+                              <Button variant="ghost" size="sm" className="h-6 text-[10px] text-destructive" onClick={() => handleMergeLeads(group.leads[0].id, [lead.id])}>
+                                <Trash2 className="h-3 w-3 mr-1" /> Remover
+                              </Button>
+                            </div>
+                          ))}
+                        </div>
+                      ))}
+                    </div>
+                  </ScrollArea>
+                </div>
+              )}
+
+              {/* No Phone */}
+              {securityResults.noPhone.length > 0 && (
+                <div className="space-y-2">
+                  <h4 className="text-sm font-medium flex items-center gap-2 text-warning">
+                    <AlertTriangle className="h-4 w-4" /> Leads sem telefone ({securityResults.noPhone.length})
+                  </h4>
+                  <p className="text-xs text-muted-foreground">Esses leads não podem receber disparos via WhatsApp.</p>
+                  <Button variant="outline" size="sm" className="text-xs gap-1 text-destructive" onClick={async () => {
+                    const ids = securityResults.noPhone.map(l => l.id);
+                    await supabase.from("leads_raw").delete().in("id", ids);
+                    toast({ title: `${ids.length} leads sem telefone removidos` });
+                    handleSecurityScan();
+                    fetchLeads();
+                  }}>
+                    <Trash2 className="h-3 w-3" /> Remover todos sem telefone
+                  </Button>
+                </div>
+              )}
+
+              {/* No Name */}
+              {securityResults.noName.length > 0 && (
+                <div className="space-y-2">
+                  <h4 className="text-sm font-medium flex items-center gap-2 text-warning">
+                    <AlertTriangle className="h-4 w-4" /> Leads sem nome ({securityResults.noName.length})
+                  </h4>
+                  <p className="text-xs text-muted-foreground">Leads apenas com telefone — personalização de mensagens limitada.</p>
+                </div>
+              )}
+
+              <DialogFooter>
+                <Button variant="outline" size="sm" onClick={handleSecurityScan} className="gap-1.5 text-xs">
+                  <RefreshCw className="h-3 w-3" /> Verificar novamente
+                </Button>
+              </DialogFooter>
+            </div>
+          ) : null}
         </DialogContent>
       </Dialog>
     </div>
