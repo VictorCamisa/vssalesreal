@@ -9,8 +9,9 @@ import {
   CheckCircle2, Tag, X, Zap, Eye,
   Sparkles, Phone, Building2, User, Upload,
   FileSpreadsheet, AlertCircle, MapPin, ArrowRight,
-  ExternalLink, Compass
+  ExternalLink, Compass, Target, Brain, TrendingUp
 } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
@@ -28,12 +29,19 @@ import {
 } from "@/components/ui/dialog";
 import { useEvolutionInstances } from "@/hooks/useEvolutionInstances";
 
-type ScrapeResult = { name: string | null; phone: string | null; email: string | null; company: string | null; role: string | null; city: string | null; website: string | null; segment: string | null };
+type ScrapeResult = {
+  name: string | null; phone: string | null; email: string | null;
+  company: string | null; role: string | null; city: string | null;
+  website: string | null; segment: string | null; company_size: string | null;
+  icp_score: number; icp_reason: string | null;
+};
 type ScrapeJob = {
   id: string; niche: string; keywords: string; city: string;
+  prospecting_intent: string;
   status: "running" | "completed" | "failed";
   results: ScrapeResult[]; results_count: number; total_found: number;
   duplicates_skipped: number; pages_searched: number;
+  avg_icp_score: number; company_profile_used: boolean;
   created_at: string; error_message?: string;
 };
 
@@ -73,6 +81,8 @@ export default function Prospecting() {
   const [scrapingLoading, setScrapingLoading] = useState(false);
   const [viewResults, setViewResults] = useState<ScrapeJob | null>(null);
   const [selectedResults, setSelectedResults] = useState<Set<number>>(new Set());
+  const [companyProfile, setCompanyProfile] = useState<any>(null);
+  const [companyProfileLoaded, setCompanyProfileLoaded] = useState(false);
 
   // Wizard
   const [wizardOpen, setWizardOpen] = useState(false);
@@ -82,6 +92,7 @@ export default function Prospecting() {
   const [selectedCity, setSelectedCity] = useState("");
   const [selectedBairro, setSelectedBairro] = useState("");
   const [leadCount, setLeadCount] = useState(20);
+  const [prospectingIntent, setProspectingIntent] = useState("");
 
   // WhatsApp state
   const [whatsappMode, setWhatsappMode] = useState<"group" | "conversation" | "contact">("group");
@@ -119,6 +130,16 @@ export default function Prospecting() {
 
   const capitalizeName = (name: string) => name.replace(/\b\w/g, (c) => c.toUpperCase()).trim();
 
+  // Load company profile once on mount
+  useState(() => {
+    if (!profile?.org_id || companyProfileLoaded) return;
+    supabase.from("company_profiles").select("*").eq("org_id", profile.org_id).maybeSingle()
+      .then(({ data }) => {
+        setCompanyProfile(data || null);
+        setCompanyProfileLoaded(true);
+      });
+  });
+
   // === Web Scraping ===
   const activeNiche = customNiche || selectedNiche;
   const activeLocation = [selectedCity, selectedBairro, selectedState].filter(Boolean).join(", ");
@@ -126,7 +147,22 @@ export default function Prospecting() {
   const resetWizard = () => {
     setSelectedNiche(""); setCustomNiche("");
     setSelectedState(""); setSelectedCity(""); setSelectedBairro("");
-    setLeadCount(20);
+    setLeadCount(20); setProspectingIntent("");
+  };
+
+  const icpScoreColor = (score: number) => {
+    if (score >= 80) return "text-success bg-success/10 border-success/30";
+    if (score >= 60) return "text-primary bg-primary/10 border-primary/30";
+    if (score >= 40) return "text-warning bg-warning/10 border-warning/30";
+    return "text-muted-foreground bg-secondary border-border";
+  };
+
+  const icpScoreLabel = (score: number) => {
+    if (score >= 80) return "Perfeito";
+    if (score >= 60) return "Bom";
+    if (score >= 40) return "Médio";
+    if (score >= 20) return "Fraco";
+    return "Ruim";
   };
 
   const handleScrape = async () => {
@@ -137,8 +173,11 @@ export default function Prospecting() {
     const jobId = crypto.randomUUID();
     const newJob: ScrapeJob = {
       id: jobId, niche: activeNiche, keywords: "", city: activeLocation,
+      prospecting_intent: prospectingIntent,
       status: "running", results: [], results_count: 0, total_found: 0,
-      duplicates_skipped: 0, pages_searched: 0, created_at: new Date().toISOString(),
+      duplicates_skipped: 0, pages_searched: 0, avg_icp_score: 0,
+      company_profile_used: !!companyProfile?.company_name,
+      created_at: new Date().toISOString(),
     };
     setScrapeJobs(prev => [newJob, ...prev]);
 
@@ -151,6 +190,7 @@ export default function Prospecting() {
           state: selectedState || undefined,
           bairro: selectedBairro || undefined,
           limit: leadCount,
+          prospecting_intent: prospectingIntent || undefined,
         },
       });
       if (error) throw error;
@@ -163,20 +203,23 @@ export default function Prospecting() {
         duplicates_skipped: data?.duplicates_skipped || 0,
         pages_searched: data?.pages_searched || 0,
         results: data?.results || [],
+        avg_icp_score: data?.avg_icp_score || 0,
+        company_profile_used: data?.company_profile_used || false,
       } : j));
 
       const dupMsg = data?.duplicates_skipped ? ` (${data.duplicates_skipped} duplicados ignorados)` : "";
-      toast({ title: "Prospecção concluída! 🎯", description: `${data?.count || 0} novos leads salvos de ${data?.total_found || 0} encontrados${dupMsg}` });
+      const icpMsg = data?.avg_icp_score ? ` · Score ICP médio: ${data.avg_icp_score}/100` : "";
+      toast({ title: "Prospecção concluída! 🎯", description: `${data?.count || 0} novos leads salvos de ${data?.total_found || 0} encontrados${dupMsg}${icpMsg}` });
       resetWizard();
     } catch (error: any) {
       console.error("Erro completo na prospecção (Nicho):", error);
       setScrapeJobs(prev => prev.map(j => j.id === jobId ? {
         ...j, status: "failed" as const, error_message: error.message || "Erro desconhecido na prospecção",
       } : j));
-      toast({ 
-        title: "Erro na prospecção", 
-        description: error.message || "Falha ao invocar a função de busca. Verifique os logs do console.", 
-        variant: "destructive" 
+      toast({
+        title: "Erro na prospecção",
+        description: error.message || "Falha ao invocar a função de busca. Verifique os logs do console.",
+        variant: "destructive"
       });
     } finally { setScrapingLoading(false); }
   };
@@ -381,11 +424,24 @@ export default function Prospecting() {
           <div className="flex items-center justify-between">
             <div>
               <h3 className="text-sm font-medium">Gerador de Demanda</h3>
-              <p className="text-xs text-muted-foreground">Busca real em sites e extração inteligente por IA</p>
+              <p className="text-xs text-muted-foreground">Busca real em sites com qualificação de leads por ICP</p>
             </div>
-            <Button size="sm" className="gap-1.5 text-xs" onClick={() => { resetWizard(); setWizardOpen(true); }}>
-              <Plus className="h-3.5 w-3.5" /> Nova Pesquisa
-            </Button>
+            <div className="flex items-center gap-2">
+              {companyProfileLoaded && (
+                companyProfile?.company_name ? (
+                  <Badge variant="outline" className="text-[10px] gap-1 text-success border-success/40 bg-success/5">
+                    <Brain className="h-3 w-3" /> ICP configurado
+                  </Badge>
+                ) : (
+                  <Badge variant="outline" className="text-[10px] gap-1 text-warning border-warning/40 bg-warning/5 cursor-pointer" onClick={() => navigate("/company")}>
+                    <AlertCircle className="h-3 w-3" /> Configure seu ICP
+                  </Badge>
+                )
+              )}
+              <Button size="sm" className="gap-1.5 text-xs" onClick={() => { resetWizard(); setWizardOpen(true); }}>
+                <Plus className="h-3.5 w-3.5" /> Nova Pesquisa
+              </Button>
+            </div>
           </div>
 
           {scrapeJobs.length === 0 ? (
@@ -409,9 +465,22 @@ export default function Prospecting() {
                           <p className="text-sm font-medium truncate">{job.niche}</p>
                           <Badge variant="secondary" className={`text-[10px] ${cfg.color}`}>{cfg.label}</Badge>
                           {job.results_count > 0 && <Badge variant="outline" className="text-[10px] gap-1"><Users2 className="h-3 w-3" />{job.results_count} salvos</Badge>}
+                          {job.avg_icp_score > 0 && (
+                            <Badge variant="outline" className={`text-[10px] gap-1 ${icpScoreColor(job.avg_icp_score)}`}>
+                              <Target className="h-3 w-3" /> ICP {job.avg_icp_score}/100
+                            </Badge>
+                          )}
+                          {job.company_profile_used && (
+                            <Badge variant="outline" className="text-[10px] gap-1 text-primary/70 border-primary/20">
+                              <Brain className="h-3 w-3" /> Perfil usado
+                            </Badge>
+                          )}
                           {job.duplicates_skipped > 0 && <Badge variant="outline" className="text-[10px] text-muted-foreground">{job.duplicates_skipped} duplicados</Badge>}
                           {job.pages_searched > 0 && <Badge variant="outline" className="text-[10px] text-muted-foreground">{job.pages_searched} páginas</Badge>}
                         </div>
+                        {job.prospecting_intent && (
+                          <p className="text-[10px] text-muted-foreground italic truncate mt-0.5">"{job.prospecting_intent}"</p>
+                        )}
                         <div className="flex items-center gap-3 text-xs text-muted-foreground">
                           {job.city && <span className="flex items-center gap-1"><MapPin className="h-3 w-3" />{job.city}</span>}
                           {job.keywords && <span className="flex items-center gap-1"><Tag className="h-3 w-3" />{job.keywords}</span>}
@@ -735,11 +804,54 @@ export default function Prospecting() {
               Nova Pesquisa de Demanda
             </DialogTitle>
           <DialogDescription className="text-xs">
-              Escolha o segmento, localização e quantidade de empresas
+              A IA analisa seu perfil de empresa e qualifica cada lead pelo fit com seu ICP
           </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-5">
+            {/* ICP banner */}
+            {companyProfileLoaded && (
+              companyProfile?.company_name ? (
+                <div className="flex items-start gap-2.5 p-3 rounded-lg border border-success/30 bg-success/5">
+                  <Brain className="h-4 w-4 text-success mt-0.5 shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-medium text-success">ICP configurado — {companyProfile.company_name}</p>
+                    <p className="text-[10px] text-muted-foreground mt-0.5">
+                      A IA vai qualificar cada lead com base no perfil da sua empresa
+                      {companyProfile.b2b_target_audience || companyProfile.target_audience
+                        ? ` (Público-alvo: ${(companyProfile.b2b_target_audience || companyProfile.target_audience).slice(0, 60)}...)`
+                        : ""}
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex items-start gap-2.5 p-3 rounded-lg border border-warning/30 bg-warning/5 cursor-pointer" onClick={() => { setWizardOpen(false); navigate("/company"); }}>
+                  <AlertCircle className="h-4 w-4 text-warning mt-0.5 shrink-0" />
+                  <div>
+                    <p className="text-xs font-medium text-warning">Configure o perfil da sua empresa para resultados melhores</p>
+                    <p className="text-[10px] text-muted-foreground mt-0.5">Clique para configurar → a IA usará seu ICP para qualificar leads automaticamente</p>
+                  </div>
+                </div>
+              )
+            )}
+
+            {/* Prospecting Intent */}
+            <div className="space-y-1.5">
+              <Label className="text-sm font-medium flex items-center gap-1.5">
+                <Target className="h-3.5 w-3.5 text-primary" />
+                Intenção de prospecção
+                <span className="text-[10px] text-muted-foreground font-normal ml-1">(opcional mas recomendado)</span>
+              </Label>
+              <Textarea
+                value={prospectingIntent}
+                onChange={e => setProspectingIntent(e.target.value)}
+                placeholder="Descreva o que você está buscando. Ex: 'Quero donos de restaurante que ainda não usam sistema de delivery' ou 'Preciso de empresas de médio porte com mais de 20 funcionários'"
+                className="text-sm min-h-[70px] resize-none"
+                maxLength={300}
+              />
+              <p className="text-[10px] text-muted-foreground">{prospectingIntent.length}/300 — Quanto mais específico, mais assertivos os leads</p>
+            </div>
+
             {/* Segment */}
             <div>
               <Label className="text-sm font-medium">Segmento *</Label>
@@ -801,7 +913,12 @@ export default function Prospecting() {
               <div className="border rounded-lg p-3 bg-secondary/30 space-y-1.5">
                 <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Resumo da busca</p>
                 <p className="text-sm"><span className="font-medium">{activeNiche}</span> em <span className="font-medium">{activeLocation}</span> — até <span className="font-medium">{leadCount}</span> empresas</p>
-                <p className="text-xs text-muted-foreground">A IA vai buscar empresas reais nessa localidade exata e extrair contatos com telefone, email e dados comerciais.</p>
+                {prospectingIntent && <p className="text-xs text-primary/80 italic">"{prospectingIntent.slice(0, 100)}{prospectingIntent.length > 100 ? "..." : ""}"</p>}
+                <p className="text-xs text-muted-foreground">
+                  {companyProfile?.company_name
+                    ? "A IA vai buscar, extrair e qualificar cada lead com score de aderência ao seu ICP."
+                    : "A IA vai buscar empresas reais e extrair contatos com telefone, email e dados comerciais."}
+                </p>
               </div>
             )}
 
@@ -828,6 +945,7 @@ export default function Prospecting() {
             </DialogTitle>
             <DialogDescription className="text-xs">
               {viewResults?.results_count || 0} salvos · {viewResults?.total_found || 0} encontrados · {viewResults?.duplicates_skipped || 0} duplicados · {viewResults?.pages_searched || 0} páginas
+              {viewResults?.avg_icp_score ? ` · ICP médio: ${viewResults.avg_icp_score}/100` : ""}
             </DialogDescription>
           </DialogHeader>
 
@@ -840,17 +958,31 @@ export default function Prospecting() {
                  </Button>
                </div>
 
-               <ScrollArea className="h-[400px]">
+               {viewResults.avg_icp_score > 0 && (
+                 <div className="flex items-center gap-2 p-2.5 rounded-md bg-secondary/40 border text-xs">
+                   <TrendingUp className="h-3.5 w-3.5 text-primary shrink-0" />
+                   <span>Score ICP médio: <span className={`font-semibold ${icpScoreColor(viewResults.avg_icp_score).split(" ")[0]}`}>{viewResults.avg_icp_score}/100</span></span>
+                   <span className="text-muted-foreground">— Leads ordenados por fit com seu ICP</span>
+                 </div>
+               )}
+               <ScrollArea className="h-[380px]">
                 <div className="space-y-1.5">
                    {viewResults.results.map((r, i) => (
-                     <div key={i} className="border rounded-md p-3 hover:bg-secondary/30 transition-colors">
+                     <div key={i} className={`border rounded-md p-3 hover:bg-secondary/30 transition-colors ${r.icp_score >= 80 ? "border-success/30" : r.icp_score >= 60 ? "border-primary/20" : ""}`}>
                        <div className="flex items-start gap-2.5">
                          <div className="flex-1 min-w-0">
-                           <p className="text-sm font-medium flex items-center gap-1.5">
-                             <User className="h-3 w-3 text-primary shrink-0" />
-                             {r.name || `Lead ${i + 1}`}
-                           </p>
-                           <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1.5 text-xs text-muted-foreground">
+                           <div className="flex items-center gap-2 flex-wrap mb-1">
+                             <p className="text-sm font-medium flex items-center gap-1.5">
+                               <User className="h-3 w-3 text-primary shrink-0" />
+                               {r.name || `Lead ${i + 1}`}
+                             </p>
+                             {typeof r.icp_score === "number" && (
+                               <Badge variant="outline" className={`text-[10px] gap-1 ${icpScoreColor(r.icp_score)}`}>
+                                 <Target className="h-2.5 w-2.5" /> {icpScoreLabel(r.icp_score)} ({r.icp_score})
+                               </Badge>
+                             )}
+                           </div>
+                           <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
                              {r.phone && <span className="flex items-center gap-1"><Phone className="h-3 w-3" />{r.phone}</span>}
                              {r.email && <span>✉ {r.email}</span>}
                              {r.company && <span className="flex items-center gap-1"><Building2 className="h-3 w-3" />{r.company}</span>}
@@ -859,6 +991,9 @@ export default function Prospecting() {
                              {r.website && <span className="flex items-center gap-1"><Globe className="h-3 w-3" />{r.website}</span>}
                              {r.segment && <Badge variant="secondary" className="text-[10px]">{r.segment}</Badge>}
                            </div>
+                           {r.icp_reason && (
+                             <p className="text-[10px] text-muted-foreground italic mt-1">{r.icp_reason}</p>
+                           )}
                          </div>
                        </div>
                      </div>

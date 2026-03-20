@@ -52,6 +52,84 @@ async function firecrawlScrape(apiKey: string, url: string): Promise<string> {
   }
 }
 
+function buildCompanyContext(company: any): string {
+  if (!company) return "";
+
+  const hasB2B = company.business_models?.includes("B2B");
+  const hasB2C = company.business_models?.includes("B2C");
+
+  const targetAudience = hasB2B
+    ? (company.b2b_target_audience || company.target_audience || "")
+    : (company.b2c_target_audience || company.target_audience || "");
+
+  const products = hasB2B
+    ? (company.b2b_products_services?.length ? company.b2b_products_services : company.products_services)
+    : (company.b2c_products_services?.length ? company.b2c_products_services : company.products_services);
+
+  const differentials = hasB2B
+    ? (company.b2b_differentials || company.differentials || "")
+    : (company.b2c_differentials || company.differentials || "");
+
+  const avgTicket = hasB2B
+    ? (company.b2b_avg_ticket || company.avg_ticket || "")
+    : (company.b2c_avg_ticket || company.avg_ticket || "");
+
+  const productsList = Array.isArray(products)
+    ? products.slice(0, 5).map((p: any) =>
+        typeof p === "string" ? p : `${p.name || ""}${p.description ? ` — ${p.description}` : ""}${p.price ? ` (${p.price})` : ""}`
+      ).join("; ")
+    : "";
+
+  return `
+EMPRESA VENDEDORA (quem vai abordar os leads):
+- Nome: ${company.company_name || "Não informado"}
+- Segmento: ${company.segment || "Não informado"}
+- Descrição: ${company.description || "Não informado"}
+- Modelo de negócio: ${company.business_models?.join(", ") || "Não informado"}
+- Público-alvo: ${targetAudience || "Não informado"}
+- Produtos/Serviços: ${productsList || "Não informado"}
+- Diferenciais: ${differentials || "Não informado"}
+- Ticket médio: ${avgTicket || "Não informado"}`.trim();
+}
+
+function buildSmartQueries(
+  niche: string,
+  locationStr: string,
+  prospectingIntent: string,
+  company: any
+): string[] {
+  const loc = locationStr || "";
+
+  // Base queries — always include
+  const queries: string[] = [
+    `${niche} ${loc} telefone contato`,
+    `${niche} ${loc} WhatsApp celular`,
+    `"${niche}" "${loc.split(",")[0]?.trim() || ""}" site contato email`,
+  ];
+
+  // Add intent-driven queries if provided
+  if (prospectingIntent?.trim()) {
+    const intentKeywords = prospectingIntent.trim().slice(0, 100);
+    queries.push(`${niche} ${loc} ${intentKeywords}`);
+  }
+
+  // Add company-context-aware query if we have target audience info
+  const hasB2B = company?.business_models?.includes("B2B");
+  const targetAudience = hasB2B
+    ? (company?.b2b_target_audience || company?.target_audience || "")
+    : (company?.target_audience || "");
+
+  if (targetAudience) {
+    // Build a smarter query based on who this company sells to
+    const audienceKeywords = targetAudience.slice(0, 80);
+    queries.push(`${niche} ${loc} ${audienceKeywords} contato`);
+  } else {
+    queries.push(`${niche} ${loc} endereço CNPJ`);
+  }
+
+  return queries.filter(q => q.trim().length > 5);
+}
+
 Deno.serve(async (req) => {
   const corsHeaders = getCorsHeaders(req);
   const json = (data: any, status = 200) =>
@@ -77,7 +155,7 @@ Deno.serve(async (req) => {
     const { data: { user }, error: authError } = await supabaseUser.auth.getUser();
     if (authError || !user) return json({ error: "Unauthorized" }, 401);
 
-    const { org_id, niche, city, state, bairro, limit = 20 } = await req.json();
+    const { org_id, niche, city, state, bairro, limit = 20, prospecting_intent = "" } = await req.json();
     if (!org_id || !niche) return json({ error: "org_id e niche são obrigatórios" }, 400);
 
     const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
@@ -92,24 +170,31 @@ Deno.serve(async (req) => {
     console.log(`=== PROSPECTING: "${niche}" in "${locationStr}" (want ${desiredCount} leads) ===`);
 
     // ──────────────────────────────────────────────────
-    // PHASE 1: Multiple search queries for maximum coverage
+    // LOAD COMPANY PROFILE for ICP-aware prospecting
     // ──────────────────────────────────────────────────
-    const queries = [
-      `${niche} ${locationStr} telefone contato`,
-      `${niche} ${locationStr} WhatsApp celular`,
-      `${niche} ${city || state || ""} site:google.com/maps`,
-      `"${niche}" "${city || ""}" telefone email site`,
-      `${niche} ${locationStr} endereço CNPJ`,
-    ].filter(q => q.trim().length > 5);
+    const { data: company } = await supabaseAdmin
+      .from("company_profiles")
+      .select("*")
+      .eq("org_id", org_id)
+      .maybeSingle();
 
-    // Run searches in parallel (max 3 concurrent)
-    const perQueryLimit = Math.ceil(desiredCount / 2); // more results per query
-    console.log(`Running ${queries.length} search queries (${perQueryLimit} results each)...`);
+    const companyContext = buildCompanyContext(company);
+    const hasCompanyProfile = !!company?.company_name;
+
+    console.log(`Company profile: ${hasCompanyProfile ? company.company_name : "NOT CONFIGURED"}`);
+    console.log(`Prospecting intent: "${prospecting_intent || "not provided"}"`);
+
+    // ──────────────────────────────────────────────────
+    // PHASE 1: Smart, ICP-aware search queries
+    // ──────────────────────────────────────────────────
+    const queries = buildSmartQueries(niche, locationStr, prospecting_intent, company);
+
+    const perQueryLimit = Math.ceil(desiredCount / 2);
+    console.log(`Running ${queries.length} smart search queries (${perQueryLimit} results each)...`);
 
     const allSearchResults: any[] = [];
     const seenUrls = new Set<string>();
 
-    // Execute searches in batches of 2 to avoid rate limits
     for (let i = 0; i < queries.length; i += 2) {
       const batch = queries.slice(i, i + 2);
       const batchResults = await Promise.all(
@@ -140,11 +225,9 @@ Deno.serve(async (req) => {
     for (const r of allSearchResults) {
       const url = (r.url || r.metadata?.sourceURL || "").toLowerCase();
       const markdown = (r.markdown || r.content || "").toLowerCase();
-      
-      // Check if the page content has phone numbers
+
       const hasPhone = /\(?\d{2}\)?\s*\d{4,5}[-.\s]?\d{4}/.test(markdown) || /\+55\s?\d{2}/.test(markdown);
-      
-      // If no phone in main page, try to find contact page URL
+
       if (!hasPhone) {
         const contactLinks = markdown.match(/https?:\/\/[^\s"')]+(?:contato|contact|fale-conosco|about|sobre|quem-somos)[^\s"')]*/) ;
         if (contactLinks) {
@@ -157,11 +240,9 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Scrape up to 10 contact pages for extra data
     const contactPagesToScrape = contactPageUrls.slice(0, 10);
     if (contactPagesToScrape.length > 0) {
       console.log(`Scraping ${contactPagesToScrape.length} contact pages...`);
-      // Scrape in batches of 3
       for (let i = 0; i < contactPagesToScrape.length; i += 3) {
         const batch = contactPagesToScrape.slice(i, i + 3);
         const scrapeResults = await Promise.all(
@@ -180,7 +261,6 @@ Deno.serve(async (req) => {
     // ──────────────────────────────────────────────────
     // PHASE 3: Build rich context for AI extraction
     // ──────────────────────────────────────────────────
-    // Give more content per page (5000 chars instead of 3000)
     const pagesContent = allSearchResults.map((r: any, i: number) => {
       const title = r.title || r.metadata?.title || `Resultado ${i + 1}`;
       const url = r.url || r.metadata?.sourceURL || "";
@@ -190,10 +270,33 @@ Deno.serve(async (req) => {
     }).join("\n\n");
 
     // ──────────────────────────────────────────────────
-    // PHASE 4: AI extraction with aggressive prompt
+    // PHASE 4: AI extraction WITH ICP qualification
     // ──────────────────────────────────────────────────
-    const extractionPrompt = `Analise TODAS as ${allSearchResults.length} páginas abaixo e extraia ABSOLUTAMENTE TODOS os contatos de empresas do segmento "${niche}" ${locationStr ? `localizadas em ${locationStr}` : ""}.
 
+    const intentSection = prospecting_intent?.trim()
+      ? `\nINTENÇÃO DE PROSPECÇÃO DO USUÁRIO:\n"${prospecting_intent.trim()}"\nConsidere essa intenção ao avaliar se cada lead é adequado.\n`
+      : "";
+
+    const icpSection = hasCompanyProfile
+      ? `
+${companyContext}
+
+CRITÉRIOS DE QUALIFICAÇÃO ICP (Ideal Customer Profile):
+Com base no perfil da empresa acima, avalie cada lead e atribua um icp_score de 0 a 100:
+- 80-100: Lead PERFEITO — é exatamente o público-alvo da empresa, alta probabilidade de conversão
+- 60-79: Lead BOM — tem bom fit, vale a pena abordar
+- 40-59: Lead MÉDIO — fit razoável, pode converter com esforço
+- 20-39: Lead FRACO — pouco alinhado, abordar apenas se faltar leads melhores
+- 0-19: Lead RUIM — fora do perfil ideal da empresa
+
+Preencha o campo "icp_score" e "icp_reason" (1 frase explicando o score) para cada lead.
+`
+      : `
+Como não há perfil de empresa configurado, atribua icp_score = 50 para todos os leads e icp_reason = "Perfil de empresa não configurado".
+`;
+
+    const extractionPrompt = `Analise TODAS as ${allSearchResults.length} páginas abaixo e extraia ABSOLUTAMENTE TODOS os contatos de empresas do segmento "${niche}" ${locationStr ? `localizadas em ${locationStr}` : ""}.
+${intentSection}
 PÁGINAS RASPADAS:
 ${pagesContent}
 
@@ -223,11 +326,14 @@ INSTRUÇÕES DE EXTRAÇÃO (SIGA RIGOROSAMENTE):
    - Endereço/cidade
    - Segmento de atuação
    - CNPJ se disponível
+   - Porte da empresa (pequena/média/grande) se inferível
 
 ${locationStr ? `FILTRO DE LOCALIDADE:
 - Priorize contatos de ${locationStr}
 - Inclua contatos onde a cidade/estado seja compatível
 - Se não puder confirmar a localidade mas o DDD for compatível, inclua` : ""}
+
+${icpSection}
 
 REGRAS CRÍTICAS:
 - Extraia o MÁXIMO possível de contatos — meta: pelo menos ${desiredCount}
@@ -247,12 +353,19 @@ Responda APENAS com JSON válido:
       "role": "string ou null",
       "city": "string ou null",
       "website": "string ou null",
-      "segment": "string ou null"
+      "segment": "string ou null",
+      "company_size": "string ou null",
+      "icp_score": 0,
+      "icp_reason": "string ou null"
     }
   ]
 }`;
 
-    console.log(`Sending ${allSearchResults.length} pages to AI for extraction...`);
+    console.log(`Sending ${allSearchResults.length} pages to AI for extraction + ICP qualification...`);
+
+    const systemPrompt = hasCompanyProfile
+      ? `Você é um especialista em prospecção B2B e qualificação de leads. Sua missão: encontrar TODOS os contatos empresariais nas páginas fornecidas E qualificar cada lead com um score de aderência ao ICP da empresa vendedora. ${locationStr ? `Priorize contatos de ${locationStr}.` : ""} Retorne APENAS JSON válido, sem markdown, sem explicações.`
+      : `Você é o MELHOR extrator de dados comerciais do Brasil. Sua missão: encontrar TODOS os contatos empresariais nas páginas fornecidas. Não deixe escapar nenhum telefone, email ou website. ${locationStr ? `Priorize contatos de ${locationStr}.` : ""} Retorne APENAS JSON válido, sem markdown, sem explicações.`;
 
     const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
@@ -263,10 +376,7 @@ Responda APENAS com JSON válido:
       body: JSON.stringify({
         model: "google/gemini-2.5-flash",
         messages: [
-          {
-            role: "system",
-            content: `Você é o MELHOR extrator de dados comerciais do Brasil. Sua missão: encontrar TODOS os contatos empresariais nas páginas fornecidas. Não deixe escapar nenhum telefone, email ou website. Extraia o máximo absoluto. ${locationStr ? `Priorize contatos de ${locationStr} mas inclua todos que forem relevantes ao segmento.` : ""} Retorne APENAS JSON válido, sem markdown, sem explicações.`,
-          },
+          { role: "system", content: systemPrompt },
           { role: "user", content: extractionPrompt },
         ],
         max_tokens: 8192,
@@ -277,14 +387,14 @@ Responda APENAS com JSON válido:
       const status = aiResponse.status;
       const errorText = await aiResponse.text();
       console.error("AI extraction error:", status, errorText);
-      
+
       if (status === 402) {
         return json({ error: "Créditos de IA esgotados. Verifique seu plano no Lovable." }, 402);
       }
       if (status === 429) {
         return json({ error: "Limite de requisições do Google Gemini atingido. Tente novamente em 1 minuto." }, 429);
       }
-      
+
       return json({ error: `Erro na extração por IA: Status ${status}` }, 502);
     }
 
@@ -340,6 +450,9 @@ Responda APENAS com JSON válido:
       return phone || email;
     });
 
+    // Sort by ICP score descending (best leads first)
+    uniqueContacts.sort((a: any, b: any) => (b.icp_score || 50) - (a.icp_score || 50));
+
     // Check DB duplicates
     const phonesToCheck = uniqueContacts.map((c: any) => formatPhone(c.phone || "")).filter(Boolean) as string[];
     const emailsToCheck = uniqueContacts.map((c: any) => c.email?.toLowerCase()?.trim()).filter(Boolean) as string[];
@@ -362,6 +475,9 @@ Responda APENAS com JSON válido:
       .map((c: any) => {
         const phone = formatPhone(c.phone || "");
         const email = c.email?.toLowerCase()?.trim() || null;
+        const icpScore = typeof c.icp_score === "number"
+          ? Math.min(100, Math.max(0, Math.round(c.icp_score)))
+          : 50;
         return {
           org_id,
           name: capitalizeName(c.name || c.company || "") || "Lead sem nome",
@@ -375,9 +491,14 @@ Responda APENAS com JSON válido:
             city: c.city || null,
             website: c.website || null,
             segment: c.segment || niche,
+            company_size: c.company_size || null,
             scraped_niche: niche,
             scraped_location: locationStr,
             scraped_at: new Date().toISOString(),
+            prospecting_intent: prospecting_intent || null,
+            icp_score: icpScore,
+            icp_reason: c.icp_reason || null,
+            company_profile_used: hasCompanyProfile,
           },
         };
       })
@@ -410,9 +531,16 @@ Responda APENAS com JSON válido:
       city: c.city || null,
       website: c.website || null,
       segment: c.segment || null,
+      company_size: c.company_size || null,
+      icp_score: typeof c.icp_score === "number" ? Math.min(100, Math.max(0, Math.round(c.icp_score))) : 50,
+      icp_reason: c.icp_reason || null,
     }));
 
-    console.log(`=== DONE: ${savedCount} saved, ${contacts.length - newLeads.length} dupes, ${allSearchResults.length} pages searched ===`);
+    const avgIcpScore = displayResults.length
+      ? Math.round(displayResults.reduce((sum: number, r: any) => sum + (r.icp_score || 50), 0) / displayResults.length)
+      : 0;
+
+    console.log(`=== DONE: ${savedCount} saved, ${contacts.length - newLeads.length} dupes, ${allSearchResults.length} pages searched, avg ICP score: ${avgIcpScore} ===`);
 
     return json({
       count: savedCount,
@@ -420,6 +548,8 @@ Responda APENAS com JSON válido:
       duplicates_skipped: contacts.length - newLeads.length,
       pages_searched: allSearchResults.length,
       results: displayResults,
+      avg_icp_score: avgIcpScore,
+      company_profile_used: hasCompanyProfile,
     });
 
   } catch (e) {
