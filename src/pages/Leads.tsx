@@ -181,13 +181,23 @@ export default function Leads() {
 
   const handleEnrich = async () => {
     if (selected.size === 0) return;
+    // Filter out already enriched leads
+    const eligibleIds = Array.from(selected).filter(id => {
+      const lead = leads.find(l => l.id === id);
+      return lead && lead.status !== "enriched" && lead.status !== "converted";
+    });
+    if (eligibleIds.length === 0) {
+      toast({ title: "Nenhum lead elegível", description: "Os leads selecionados já foram enriquecidos.", variant: "destructive" });
+      return;
+    }
     setEnriching(true);
     try {
       const { data, error } = await supabase.functions.invoke("enrich-lead", {
-        body: { lead_ids: Array.from(selected), org_id: profile?.org_id },
+        body: { lead_ids: eligibleIds, org_id: profile?.org_id },
       });
       if (error) throw error;
-      toast({ title: "Enriquecimento concluído!", description: `${data?.enriched || 0} leads enriquecidos.` });
+      const skippedMsg = data?.skipped > 0 ? ` (${data.skipped} já enriquecidos, ignorados)` : "";
+      toast({ title: "Enriquecimento concluído!", description: `${data?.enriched || 0} leads enriquecidos.${skippedMsg}` });
       logActivity({ action: "leads_enriquecidos", description: `${data?.enriched || 0} leads enriquecidos com sucesso` });
       setSelected(new Set());
       fetchLeads();
@@ -197,7 +207,13 @@ export default function Leads() {
     } finally { setEnriching(false); }
   };
 
+  const isLeadEnriched = (lead: Lead) => lead.status === "enriched" || lead.status === "converted";
+
   const handleEnrichSingle = async (lead: Lead) => {
+    if (isLeadEnriched(lead)) {
+      toast({ title: "Lead já enriquecido", description: "Este lead já foi enriquecido anteriormente.", variant: "destructive" });
+      return;
+    }
     setEnrichingId(lead.id);
     try {
       const { data, error } = await supabase.functions.invoke("enrich-lead", {
@@ -881,9 +897,9 @@ export default function Leads() {
                             <DropdownMenuItem onClick={() => setDetailLead(lead)}>
                               <Eye className="h-4 w-4 mr-2" /> Ver Detalhes
                             </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => handleEnrichSingle(lead)} disabled={enrichingId === lead.id}>
+                            <DropdownMenuItem onClick={() => handleEnrichSingle(lead)} disabled={enrichingId === lead.id || isLeadEnriched(lead)}>
                               {enrichingId === lead.id ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Sparkles className="h-4 w-4 mr-2" />}
-                              Enriquecer
+                              {isLeadEnriched(lead) ? "Já enriquecido" : "Enriquecer"}
                             </DropdownMenuItem>
                             {lead.phone && (
                               <DropdownMenuItem onClick={() => { navigator.clipboard.writeText(lead.phone!); toast({ title: "Telefone copiado!" }); }}>
@@ -1049,20 +1065,73 @@ export default function Leads() {
                     {/* Enrichment */}
                     {hasEnrichment ? (
                       <div className="space-y-3">
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 flex-wrap">
                           <Sparkles className="h-4 w-4 text-primary" />
                           <h4 className="font-semibold text-sm">Dados Enriquecidos</h4>
+                          <Badge variant="secondary" className="text-[9px] h-4">
+                            {ed.estrategia_enriquecimento === "conversa" ? "📱 Via Conversas" : "🏢 Via Empresa"}
+                          </Badge>
                         </div>
 
-                        <div className="rounded-lg border border-border/40 p-3 space-y-2 text-sm">
-                          {company && <p className="flex gap-2"><Building2 className="h-3.5 w-3.5 text-muted-foreground shrink-0 mt-0.5" /><span><strong>Empresa:</strong> {company}</span></p>}
-                          {role && <p className="flex gap-2"><User className="h-3.5 w-3.5 text-muted-foreground shrink-0 mt-0.5" /><span><strong>Cargo:</strong> {role}</span></p>}
-                          {segment && <p className="flex gap-2"><Tag className="h-3.5 w-3.5 text-muted-foreground shrink-0 mt-0.5" /><span><strong>Segmento:</strong> {segment}</span></p>}
-                          {size && <p className="flex gap-2"><Hash className="h-3.5 w-3.5 text-muted-foreground shrink-0 mt-0.5" /><span><strong>Porte:</strong> {typeof size === 'object' ? JSON.stringify(size) : size}</span></p>}
-                          {location && <p className="flex gap-2"><MapPin className="h-3.5 w-3.5 text-muted-foreground shrink-0 mt-0.5" /><span><strong>Localização:</strong> {formatLocation(location)}</span></p>}
-                          {decisionLevel && <p className="flex gap-2"><TrendingUp className="h-3.5 w-3.5 text-muted-foreground shrink-0 mt-0.5" /><span><strong>Nível de Decisão:</strong> {typeof decisionLevel === 'object' ? JSON.stringify(decisionLevel) : decisionLevel}</span></p>}
-                          {channel && <p className="flex gap-2"><Zap className="h-3.5 w-3.5 text-muted-foreground shrink-0 mt-0.5" /><span><strong>Canal Ideal:</strong> {channel}</span></p>}
-                        </div>
+                        {/* Conversation-based enrichment fields */}
+                        {ed.estrategia_enriquecimento === "conversa" && (
+                          <div className="rounded-lg border border-border/40 p-3 space-y-2 text-sm">
+                            {ed.nivel_interesse && (
+                              <p className="flex gap-2"><TrendingUp className="h-3.5 w-3.5 text-muted-foreground shrink-0 mt-0.5" />
+                                <span><strong>Nível de Interesse:</strong>{" "}
+                                  <Badge variant="secondary" className={`text-[10px] ${ed.nivel_interesse === "quente" ? "bg-success/10 text-success" : ed.nivel_interesse === "morno" ? "bg-warning/10 text-warning" : "bg-muted/50 text-muted-foreground"}`}>
+                                    {ed.nivel_interesse}
+                                  </Badge>
+                                </span>
+                              </p>
+                            )}
+                            {ed.interesse_detectado && <p className="flex gap-2"><Sparkles className="h-3.5 w-3.5 text-muted-foreground shrink-0 mt-0.5" /><span><strong>Interesse:</strong> {ed.interesse_detectado}</span></p>}
+                            {ed.momento_compra && <p className="flex gap-2"><Calendar className="h-3.5 w-3.5 text-muted-foreground shrink-0 mt-0.5" /><span><strong>Momento de Compra:</strong> {ed.momento_compra}</span></p>}
+                            {ed.tom_conversa && <p className="flex gap-2"><User className="h-3.5 w-3.5 text-muted-foreground shrink-0 mt-0.5" /><span><strong>Tom da Conversa:</strong> {ed.tom_conversa}</span></p>}
+                            {ed.resumo_conversa && <p className="flex gap-2"><Mail className="h-3.5 w-3.5 text-muted-foreground shrink-0 mt-0.5" /><span><strong>Resumo:</strong> {ed.resumo_conversa}</span></p>}
+                            {ed.proxima_acao_sugerida && <p className="flex gap-2"><Zap className="h-3.5 w-3.5 text-primary shrink-0 mt-0.5" /><span><strong>Próxima Ação:</strong> {ed.proxima_acao_sugerida}</span></p>}
+                            {location && <p className="flex gap-2"><MapPin className="h-3.5 w-3.5 text-muted-foreground shrink-0 mt-0.5" /><span><strong>Localização:</strong> {formatLocation(location)}</span></p>}
+                          </div>
+                        )}
+
+                        {ed.necessidades_expressas?.length > 0 && ed.estrategia_enriquecimento === "conversa" && (
+                          <div className="rounded-lg border border-border/40 p-3">
+                            <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">Necessidades Expressas</p>
+                            <ul className="space-y-1">
+                              {ed.necessidades_expressas.map((n: string, i: number) => (
+                                <li key={i} className="text-xs text-muted-foreground flex gap-1.5">
+                                  <span className="text-primary mt-0.5">→</span>{n}
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+
+                        {ed.objecoes_levantadas?.length > 0 && ed.estrategia_enriquecimento === "conversa" && (
+                          <div className="rounded-lg border border-border/40 p-3">
+                            <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">Objeções Levantadas na Conversa</p>
+                            <ul className="space-y-1">
+                              {ed.objecoes_levantadas.map((o: string, i: number) => (
+                                <li key={i} className="text-xs text-muted-foreground flex gap-1.5">
+                                  <AlertTriangle className="h-3 w-3 text-warning shrink-0 mt-0.5" />{o}
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+
+                        {/* Company-based enrichment fields */}
+                        {ed.estrategia_enriquecimento !== "conversa" && (
+                          <div className="rounded-lg border border-border/40 p-3 space-y-2 text-sm">
+                            {company && <p className="flex gap-2"><Building2 className="h-3.5 w-3.5 text-muted-foreground shrink-0 mt-0.5" /><span><strong>Empresa:</strong> {company}</span></p>}
+                            {role && <p className="flex gap-2"><User className="h-3.5 w-3.5 text-muted-foreground shrink-0 mt-0.5" /><span><strong>Cargo:</strong> {role}</span></p>}
+                            {segment && <p className="flex gap-2"><Tag className="h-3.5 w-3.5 text-muted-foreground shrink-0 mt-0.5" /><span><strong>Segmento:</strong> {segment}</span></p>}
+                            {size && <p className="flex gap-2"><Hash className="h-3.5 w-3.5 text-muted-foreground shrink-0 mt-0.5" /><span><strong>Porte:</strong> {typeof size === 'object' ? JSON.stringify(size) : size}</span></p>}
+                            {location && <p className="flex gap-2"><MapPin className="h-3.5 w-3.5 text-muted-foreground shrink-0 mt-0.5" /><span><strong>Localização:</strong> {formatLocation(location)}</span></p>}
+                            {decisionLevel && <p className="flex gap-2"><TrendingUp className="h-3.5 w-3.5 text-muted-foreground shrink-0 mt-0.5" /><span><strong>Nível de Decisão:</strong> {typeof decisionLevel === 'object' ? JSON.stringify(decisionLevel) : decisionLevel}</span></p>}
+                            {channel && <p className="flex gap-2"><Zap className="h-3.5 w-3.5 text-muted-foreground shrink-0 mt-0.5" /><span><strong>Canal Ideal:</strong> {channel}</span></p>}
+                          </div>
+                        )}
 
                         {/* Links */}
                         {(website || instagram || linkedin) && (
@@ -1138,12 +1207,20 @@ export default function Leads() {
                       <div className="rounded-lg border border-dashed border-border/40 p-6 text-center">
                         <Sparkles className="h-6 w-6 text-muted-foreground mx-auto mb-2" />
                         <p className="text-sm font-medium">Sem enriquecimento</p>
-                        <p className="text-xs text-muted-foreground mt-0.5">Enriqueça para obter empresa, segmento, score e argumentos de venda.</p>
-                        <Button size="sm" variant="outline" className="mt-3 gap-1.5 text-xs" onClick={() => handleEnrichSingle(detailLead)}
-                          disabled={enrichingId === detailLead.id}>
-                          {enrichingId === detailLead.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
-                          Enriquecer agora
-                        </Button>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          {detailLead.source === "web"
+                            ? "Enriqueça para obter empresa, segmento, score e argumentos de venda."
+                            : "Enriqueça para analisar conversas e identificar interesse, necessidades e próxima ação."}
+                        </p>
+                        {!isLeadEnriched(detailLead) ? (
+                          <Button size="sm" variant="outline" className="mt-3 gap-1.5 text-xs" onClick={() => handleEnrichSingle(detailLead)}
+                            disabled={enrichingId === detailLead.id}>
+                            {enrichingId === detailLead.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
+                            Enriquecer agora
+                          </Button>
+                        ) : (
+                          <p className="text-[10px] text-muted-foreground mt-2">Este lead já foi enriquecido.</p>
+                        )}
                       </div>
                     )}
                   </div>
