@@ -897,9 +897,9 @@ export default function Leads() {
                             <DropdownMenuItem onClick={() => setDetailLead(lead)}>
                               <Eye className="h-4 w-4 mr-2" /> Ver Detalhes
                             </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => handleEnrichSingle(lead)} disabled={enrichingId === lead.id}>
+                            <DropdownMenuItem onClick={() => handleEnrichSingle(lead)} disabled={enrichingId === lead.id || isLeadEnriched(lead)}>
                               {enrichingId === lead.id ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Sparkles className="h-4 w-4 mr-2" />}
-                              Enriquecer
+                              {isLeadEnriched(lead) ? "Já enriquecido" : "Enriquecer"}
                             </DropdownMenuItem>
                             {lead.phone && (
                               <DropdownMenuItem onClick={() => { navigator.clipboard.writeText(lead.phone!); toast({ title: "Telefone copiado!" }); }}>
