@@ -544,10 +544,12 @@ export default function Leads() {
   const getEnrichmentSummary = (lead: Lead) => {
     if (!lead.enrichment_data || Object.keys(lead.enrichment_data).length <= 1) return null;
     const ed = lead.enrichment_data;
+    const rawScore = ed.score_conversao ?? ed.score ?? null;
+    const score = rawScore !== null ? (rawScore > 10 ? Math.round(rawScore / 10) : rawScore) : null;
     return {
       company: ed.empresa || ed.company || null,
       segment: ed.segmento || ed.segment || null,
-      score: ed.score_conversao ?? ed.score ?? null,
+      score,
       location: ed.localizacao || ed.location || null,
     };
   };
