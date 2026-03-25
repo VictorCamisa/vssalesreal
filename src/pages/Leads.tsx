@@ -1028,11 +1028,19 @@ export default function Leads() {
                       <Badge className={`${statusConfig[detailLead.status]?.color || ""} text-xs`} variant="outline">
                         {statusConfig[detailLead.status]?.label || detailLead.status}
                       </Badge>
-                      {score !== null && (
+                    {score !== null && (
                         <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-primary/10 border border-primary/20">
                           <TrendingUp className="h-3 w-3 text-primary" />
                           <span className="text-xs font-bold text-primary font-mono">{score}/10</span>
                         </div>
+                      )}
+                      {scoreJustification && (
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <span className="text-[10px] text-muted-foreground cursor-help underline decoration-dotted">por quê?</span>
+                          </TooltipTrigger>
+                          <TooltipContent className="max-w-xs text-xs">{scoreJustification}</TooltipContent>
+                        </Tooltip>
                       )}
                       {detailLead.tags && detailLead.tags.length > 0 && (
                         <div className="flex gap-1">
