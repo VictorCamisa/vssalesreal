@@ -979,20 +979,27 @@ export default function Leads() {
               const ed = detailLead.enrichment_data || {};
               const hasEnrichment = Object.keys(ed).length > 1;
               const company = ed.empresa || ed.company || ed.descricao_empresa || null;
-              const role = ed.cargo_estimado || ed.role || null;
+              const role = ed.cargo || ed.cargo_estimado || ed.role || null;
               const segment = ed.segmento || ed.segment || null;
-              const score = ed.score_conversao ?? ed.score ?? null;
-              const website = ed.website || null;
-              const instagram = ed.instagram || null;
-              const linkedin = ed.linkedin || null;
-              const size = ed.porte || ed.tamanho || null;
+              const rawScore = ed.score_conversao ?? ed.score ?? null;
+              const score = rawScore !== null ? (rawScore > 10 ? Math.round(rawScore / 10) : rawScore) : null;
+              const website = ed.website || ed.redes_sociais?.website || null;
+              const instagram = ed.instagram || ed.redes_sociais?.instagram || null;
+              const linkedin = ed.linkedin || ed.redes_sociais?.linkedin || null;
+              const size = ed.porte_empresa || ed.porte || ed.tamanho || null;
               const location = ed.localizacao || ed.location || null;
-              const pains = ed.dores_provaveis || ed.dores || [];
-              const products = ed.produtos_servicos || ed.produtos || [];
-              const salesArgs = ed.argumentos_venda || [];
-              const channel = ed.canal_ideal || null;
+              const pains = ed.dores_provaveis || ed.dores || ed.necessidades_provaveis || [];
+              const products = ed.produtos_servicos || ed.produtos || ed.produtos_interesse || [];
+              const salesArgs = ed.argumentos_venda || ed.gatilhos_venda || [];
+              const channel = ed.canal_ideal || ed.melhor_canal || null;
+              const bestTime = ed.melhor_horario || null;
               const decisionLevel = ed.nivel_decisao || null;
-              const notes = ed.observacoes_importantes || ed.analysis || null;
+              const objections = ed.objecoes_provaveis || [];
+              const interests = ed.interesses || [];
+              const socialClass = ed.classe_social || null;
+              const demProfile = ed.perfil_demografico || null;
+              const scoreJustification = ed.justificativa_score || null;
+              const notes = ed.observacoes || ed.observacoes_importantes || ed.analysis || null;
               const sources = ed.fontes_utilizadas || [];
 
               return (
