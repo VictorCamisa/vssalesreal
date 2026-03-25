@@ -1142,9 +1142,25 @@ export default function Leads() {
                             {role && <p className="flex gap-2"><User className="h-3.5 w-3.5 text-muted-foreground shrink-0 mt-0.5" /><span><strong>Cargo:</strong> {role}</span></p>}
                             {segment && <p className="flex gap-2"><Tag className="h-3.5 w-3.5 text-muted-foreground shrink-0 mt-0.5" /><span><strong>Segmento:</strong> {segment}</span></p>}
                             {size && <p className="flex gap-2"><Hash className="h-3.5 w-3.5 text-muted-foreground shrink-0 mt-0.5" /><span><strong>Porte:</strong> {typeof size === 'object' ? JSON.stringify(size) : size}</span></p>}
-                            {location && <p className="flex gap-2"><MapPin className="h-3.5 w-3.5 text-muted-foreground shrink-0 mt-0.5" /><span><strong>Localização:</strong> {formatLocation(location)}</span></p>}
                             {decisionLevel && <p className="flex gap-2"><TrendingUp className="h-3.5 w-3.5 text-muted-foreground shrink-0 mt-0.5" /><span><strong>Nível de Decisão:</strong> {typeof decisionLevel === 'object' ? JSON.stringify(decisionLevel) : decisionLevel}</span></p>}
+                            {demProfile && (
+                              <p className="flex gap-2"><User className="h-3.5 w-3.5 text-muted-foreground shrink-0 mt-0.5" /><span><strong>Perfil:</strong> {typeof demProfile === 'object' ? [demProfile.faixa_etaria, demProfile.genero_provavel].filter(Boolean).join(", ") : demProfile}</span></p>
+                            )}
+                            {socialClass && <p className="flex gap-2"><Hash className="h-3.5 w-3.5 text-muted-foreground shrink-0 mt-0.5" /><span><strong>Classe Social:</strong> {socialClass}</span></p>}
+                            {location && <p className="flex gap-2"><MapPin className="h-3.5 w-3.5 text-muted-foreground shrink-0 mt-0.5" /><span><strong>Localização:</strong> {formatLocation(location)}</span></p>}
                             {channel && <p className="flex gap-2"><Zap className="h-3.5 w-3.5 text-muted-foreground shrink-0 mt-0.5" /><span><strong>Canal Ideal:</strong> {channel}</span></p>}
+                            {bestTime && <p className="flex gap-2"><Calendar className="h-3.5 w-3.5 text-muted-foreground shrink-0 mt-0.5" /><span><strong>Melhor Horário:</strong> {bestTime}</span></p>}
+                          </div>
+                        )}
+
+                        {interests.length > 0 && (
+                          <div className="rounded-lg border border-border/40 p-3">
+                            <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">Interesses</p>
+                            <div className="flex flex-wrap gap-1.5">
+                              {interests.map((int: string, i: number) => (
+                                <Badge key={i} variant="secondary" className="text-[10px]">{int}</Badge>
+                              ))}
+                            </div>
                           </div>
                         )}
 
