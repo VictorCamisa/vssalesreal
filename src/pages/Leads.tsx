@@ -1242,7 +1242,7 @@ export default function Leads() {
                           </div>
                         )}
 
-
+                        {notes && (
                           <div className="rounded-lg border border-border/40 p-3">
                             <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">Observações</p>
                             <p className="text-xs text-muted-foreground whitespace-pre-wrap">{notes}</p>
