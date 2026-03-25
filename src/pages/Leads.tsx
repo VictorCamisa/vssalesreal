@@ -1154,12 +1154,20 @@ export default function Leads() {
                       <div className="rounded-lg border border-dashed border-border/40 p-6 text-center">
                         <Sparkles className="h-6 w-6 text-muted-foreground mx-auto mb-2" />
                         <p className="text-sm font-medium">Sem enriquecimento</p>
-                        <p className="text-xs text-muted-foreground mt-0.5">Enriqueça para obter empresa, segmento, score e argumentos de venda.</p>
-                        <Button size="sm" variant="outline" className="mt-3 gap-1.5 text-xs" onClick={() => handleEnrichSingle(detailLead)}
-                          disabled={enrichingId === detailLead.id}>
-                          {enrichingId === detailLead.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
-                          Enriquecer agora
-                        </Button>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          {detailLead.source === "web"
+                            ? "Enriqueça para obter empresa, segmento, score e argumentos de venda."
+                            : "Enriqueça para analisar conversas e identificar interesse, necessidades e próxima ação."}
+                        </p>
+                        {!isLeadEnriched(detailLead) ? (
+                          <Button size="sm" variant="outline" className="mt-3 gap-1.5 text-xs" onClick={() => handleEnrichSingle(detailLead)}
+                            disabled={enrichingId === detailLead.id}>
+                            {enrichingId === detailLead.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
+                            Enriquecer agora
+                          </Button>
+                        ) : (
+                          <p className="text-[10px] text-muted-foreground mt-2">Este lead já foi enriquecido.</p>
+                        )}
                       </div>
                     )}
                   </div>
