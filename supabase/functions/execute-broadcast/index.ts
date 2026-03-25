@@ -453,8 +453,16 @@ ${!useEmoji ? "- NUNCA use emojis. ZERO emojis." : ""}
       if (broadcast.ai_enabled && !messageText && ANTHROPIC_API_KEY && fullSystemPrompt) {
         try {
           const leadFirstName = lead.name?.split(" ")[0] || "";
-          const leadContext = leadFirstName ? `Lead: ${leadFirstName}` : "Lead sem nome identificado";
-          const prompt = `Crie UMA mensagem de primeiro contato para: ${leadContext}. ${broadcast.description ? `Contexto da campanha: ${broadcast.description}` : ""}. Use EXATAMENTE ${maxBlocks} blocos. Retorne APENAS os blocos separados por ---BLOCO---, sem aspas.`;
+          const enrichment = lead.enrichment_data as any;
+          const leadDetails = [
+            leadFirstName ? `Nome: ${leadFirstName}` : null,
+            lead.name ? `Nome completo: ${lead.name}` : null,
+            enrichment?.company ? `Empresa: ${enrichment.company}` : null,
+            enrichment?.role ? `Cargo: ${enrichment.role}` : null,
+            enrichment?.segment ? `Segmento: ${enrichment.segment}` : null,
+          ].filter(Boolean).join(", ");
+          const leadContext = leadDetails || "Lead sem dados específicos — use abordagem consultiva genérica e cordial";
+          const prompt = `Crie UMA mensagem de primeiro contato para: ${leadContext}. ${broadcast.description ? `Contexto da campanha: ${broadcast.description}` : ""}. Use EXATAMENTE ${maxBlocks} blocos. Retorne APENAS os blocos separados por ---BLOCO---, sem aspas. IMPORTANTE: Gere a mensagem SEMPRE, mesmo sem dados detalhados do lead.`;
 
           let lastAnthropicError = "";
           for (const model of anthropicModels) {
