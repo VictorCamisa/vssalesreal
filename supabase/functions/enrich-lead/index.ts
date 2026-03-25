@@ -12,7 +12,6 @@ function detectLeadType(lead: { name?: string | null; email?: string | null; pho
   const name = (lead.name || "").toLowerCase().trim();
   const email = (lead.email || "").toLowerCase().trim();
 
-  // Company indicators in name
   const companyKeywords = [
     "ltda", "eireli", "me ", " me", "s/a", "s.a.", "sa ", "corp", "inc",
     "group", "grupo", "holding", "consulting", "consultoria", "soluções",
@@ -32,7 +31,6 @@ function detectLeadType(lead: { name?: string | null; email?: string | null; pho
     if (name.includes(kw)) return "b2b";
   }
 
-  // Email with corporate domain (not personal providers)
   const personalDomains = [
     "gmail.com", "hotmail.com", "outlook.com", "yahoo.com", "icloud.com",
     "live.com", "msn.com", "uol.com.br", "bol.com.br", "terra.com.br",
@@ -43,10 +41,19 @@ function detectLeadType(lead: { name?: string | null; email?: string | null; pho
     if (domain && !personalDomains.includes(domain)) return "b2b";
   }
 
-  // Names with all caps or very short (likely acronyms / companies)
   if (name.length > 0 && name === name.toUpperCase() && name.length <= 12 && !name.includes(" ")) return "b2b";
 
   return "b2c";
+}
+
+/** Determine enrichment strategy based on lead source */
+function getEnrichmentStrategy(source: string): "conversation" | "company" {
+  // WhatsApp and own base leads → enrich from conversation history
+  if (source === "whatsapp" || source === "manual" || source === "import") {
+    return "conversation";
+  }
+  // Web (prospected/scraped) leads → enrich by company research
+  return "company";
 }
 
 serve(async (req) => {
@@ -74,7 +81,7 @@ serve(async (req) => {
 
     const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
-    // Fetch company profile for richer context
+    // Fetch company profile for context
     const { data: companyProfile } = await supabaseAdmin
       .from("company_profiles")
       .select("*")
@@ -104,22 +111,78 @@ serve(async (req) => {
       companyContext = `\n\nCONTEXTO DA NOSSA EMPRESA (use para personalizar a análise e os argumentos de venda):\n${parts.join("\n")}`;
     }
 
-    // Fetch leads
+    // Fetch leads — include source and status
     const { data: leads, error: leadsError } = await supabaseAdmin
       .from("leads_raw")
-      .select("id, name, phone, email")
+      .select("id, name, phone, email, source, status")
       .in("id", lead_ids)
       .eq("org_id", org_id);
 
     if (leadsError) throw leadsError;
     if (!leads?.length) throw new Error("No leads found");
 
+    // Filter out already enriched leads
+    const eligibleLeads = leads.filter(l => l.status !== "enriched" && l.status !== "converted");
+    const skippedCount = leads.length - eligibleLeads.length;
+
+    if (eligibleLeads.length === 0) {
+      return new Response(JSON.stringify({
+        enriched: 0,
+        skipped: skippedCount,
+        total: leads.length,
+        message: "Todos os leads selecionados já foram enriquecidos.",
+      }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     let enriched = 0;
 
-    for (const lead of leads) {
+    for (const lead of eligibleLeads) {
+      const strategy = getEnrichmentStrategy(lead.source);
       const leadType = detectLeadType(lead);
 
-      const b2bPrompt = `Analise este lead EMPRESARIAL (B2B) e gere um perfil comercial completo para prospecção:
+      let prompt: string;
+      let systemPrompt: string;
+
+      if (strategy === "conversation") {
+        // ── CONVERSATION-BASED ENRICHMENT ──
+        // Fetch recent chat messages with this lead's phone
+        let conversationContext = "";
+        if (lead.phone) {
+          const jid = lead.phone.replace("+", "") + "@s.whatsapp.net";
+          const { data: messages } = await supabaseAdmin
+            .from("chat_messages")
+            .select("message_text, from_me, timestamp")
+            .eq("org_id", org_id)
+            .eq("remote_jid", jid)
+            .order("timestamp", { ascending: true })
+            .limit(50);
+
+          if (messages && messages.length > 0) {
+            conversationContext = "\n\nHISTÓRICO DE CONVERSAS COM ESTE LEAD:\n" +
+              messages.map(m => `[${m.from_me ? "VENDEDOR" : "LEAD"}] ${m.message_text}`).join("\n");
+          }
+        }
+
+        systemPrompt = `Você é um analista de inteligência comercial especializado em análise de conversas de WhatsApp. Analise o histórico de conversa e os dados disponíveis para traçar o perfil do lead. Retorne JSON com: interesse_detectado (string), nivel_interesse (frio/morno/quente), necessidades_expressas (array de strings), objecoes_levantadas (array de strings), produtos_interesse (array), momento_compra (string: "imediato", "curto prazo", "explorando", "indefinido"), tom_conversa (string), resumo_conversa (string curta), dores_identificadas (array), proxima_acao_sugerida (string), score_conversao (0-100), justificativa_score, argumentos_venda (array de strings baseado no que já foi conversado), localizacao (baseado no DDD se possível), tipo_lead ('${leadType}'), estrategia_enriquecimento ('conversa'). Se não houver histórico de conversa, analise baseado no nome e telefone.`;
+
+        prompt = `Analise este lead que veio de ${lead.source === "whatsapp" ? "grupo de WhatsApp" : "lista própria/importação"} e trace seu perfil baseado nas conversas:
+
+DADOS DO LEAD:
+- Nome: ${lead.name || "Desconhecido"}
+- Telefone: ${lead.phone || "N/A"}
+- Email: ${lead.email || "N/A"}
+- Fonte: ${lead.source}
+${conversationContext || "\n(Sem histórico de conversas disponível — analise com base nos dados existentes)"}
+${companyContext}
+
+Gere um perfil comercial completo focado no que este lead demonstrou nas conversas.
+Responda APENAS em JSON válido.`;
+
+      } else {
+        // ── COMPANY-BASED ENRICHMENT (web/scraped leads) ──
+        const b2bPrompt = `Analise este lead EMPRESARIAL (B2B) e gere um perfil comercial completo para prospecção:
 
 DADOS DO LEAD:
 - Nome: ${lead.name || "Desconhecido"}
@@ -136,13 +199,13 @@ ANÁLISE SOLICITADA:
 6. Dores e necessidades prováveis do segmento
 7. Melhor canal de abordagem (WhatsApp/Email/LinkedIn/Telefone)
 8. Melhor horário e dia da semana para contato
-9. Score de conversão (0-100) com justificativa — considere o FIT com nossos produtos/serviços e público-alvo
-10. 2-3 argumentos de venda personalizados para este lead com base nos nossos diferenciais e produtos
-11. Objeções prováveis deste lead e como contorná-las com base nas nossas respostas padrão
+9. Score de conversão (0-100) com justificativa
+10. 2-3 argumentos de venda personalizados
+11. Objeções prováveis e como contorná-las
 
 Responda APENAS em JSON válido.`;
 
-      const b2cPrompt = `Analise este lead de PESSOA FÍSICA (B2C / consumidor final) e gere um perfil para abordagem comercial:
+        const b2cPrompt = `Analise este lead de PESSOA FÍSICA (B2C / consumidor final) e gere um perfil para abordagem comercial:
 
 DADOS DO LEAD:
 - Nome: ${lead.name || "Desconhecido"}
@@ -157,20 +220,20 @@ ANÁLISE SOLICITADA:
 4. Interesses e estilo de vida prováveis
 5. Redes sociais prováveis (Instagram, Facebook)
 6. Necessidades e motivações de compra prováveis
-7. Melhor canal de abordagem (WhatsApp/Email/Telefone)
-8. Melhor horário e dia da semana para contato
-9. Score de conversão (0-100) com justificativa — considere o FIT com nossos produtos/serviços
-10. 2-3 gatilhos emocionais/argumentos de venda personalizados
-11. Objeções prováveis e como contorná-las
+7. Melhor canal de abordagem
+8. Score de conversão (0-100) com justificativa
+9. 2-3 gatilhos emocionais/argumentos de venda
+10. Objeções prováveis e como contorná-las
 
 Responda APENAS em JSON válido.`;
 
-      const systemPromptB2B = "Você é um analista de inteligência comercial sênior especializado em vendas B2B. Analise leads empresariais e retorne JSON com: empresa, cargo, nivel_decisao (C-level/Gerência/Operacional), segmento, porte_empresa (micro/pequena/média/grande), localizacao, redes_sociais (objeto com linkedin, instagram), dores_provaveis (array), canal_ideal, melhor_horario, score_conversao (0-100), justificativa_score, argumentos_venda (array de strings), objecoes_provaveis (array de objetos com objecao e contorno), tipo_lead ('b2b'), observacoes.";
+        const systemPromptB2B = "Você é um analista de inteligência comercial sênior especializado em vendas B2B. Analise leads empresariais e retorne JSON com: empresa, cargo, nivel_decisao (C-level/Gerência/Operacional), segmento, porte_empresa (micro/pequena/média/grande), localizacao, redes_sociais (objeto com linkedin, instagram), dores_provaveis (array), canal_ideal, melhor_horario, score_conversao (0-100), justificativa_score, argumentos_venda (array de strings), objecoes_provaveis (array de objetos com objecao e contorno), tipo_lead ('b2b'), estrategia_enriquecimento ('empresa'), observacoes.";
 
-      const systemPromptB2C = "Você é um analista de inteligência comercial sênior especializado em vendas B2C para consumidores finais. Analise leads de pessoas físicas e retorne JSON com: perfil_demografico (objeto com faixa_etaria, genero_provavel), localizacao, classe_social, interesses (array), redes_sociais (objeto com instagram, facebook), necessidades_provaveis (array), canal_ideal, melhor_horario, score_conversao (0-100), justificativa_score, gatilhos_venda (array de strings), objecoes_provaveis (array de objetos com objecao e contorno), tipo_lead ('b2c'), observacoes. NÃO invente dados de empresa, cargo ou segmento B2B — este é um consumidor final.";
+        const systemPromptB2C = "Você é um analista de inteligência comercial sênior especializado em vendas B2C. Analise leads de pessoas físicas e retorne JSON com: perfil_demografico (objeto com faixa_etaria, genero_provavel), localizacao, classe_social, interesses (array), redes_sociais (objeto com instagram, facebook), necessidades_provaveis (array), canal_ideal, melhor_horario, score_conversao (0-100), justificativa_score, gatilhos_venda (array de strings), objecoes_provaveis (array de objetos com objecao e contorno), tipo_lead ('b2c'), estrategia_enriquecimento ('empresa'), observacoes. NÃO invente dados de empresa, cargo ou segmento B2B.";
 
-      const prompt = leadType === "b2b" ? b2bPrompt : b2cPrompt;
-      const systemPrompt = leadType === "b2b" ? systemPromptB2B : systemPromptB2C;
+        prompt = leadType === "b2b" ? b2bPrompt : b2cPrompt;
+        systemPrompt = leadType === "b2b" ? systemPromptB2B : systemPromptB2C;
+      }
 
       try {
         const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
@@ -203,11 +266,16 @@ Responda APENAS em JSON válido.`;
         const aiData = await aiResponse.json();
         const content = aiData.choices?.[0]?.message?.content || "";
 
-        let enrichmentData: any = { raw_response: content, tipo_lead: leadType };
+        let enrichmentData: any = { raw_response: content, tipo_lead: leadType, estrategia_enriquecimento: strategy === "conversation" ? "conversa" : "empresa" };
         try {
           const jsonMatch = content.match(/\{[\s\S]*\}/);
           if (jsonMatch) {
-            enrichmentData = { ...JSON.parse(jsonMatch[0]), tipo_lead: leadType };
+            enrichmentData = {
+              ...JSON.parse(jsonMatch[0]),
+              tipo_lead: leadType,
+              estrategia_enriquecimento: strategy === "conversation" ? "conversa" : "empresa",
+              enriched_at: new Date().toISOString(),
+            };
           }
         } catch {
           // Keep raw response
@@ -227,7 +295,7 @@ Responda APENAS em JSON válido.`;
       }
     }
 
-    return new Response(JSON.stringify({ enriched, total: leads.length }), {
+    return new Response(JSON.stringify({ enriched, skipped: skippedCount, total: leads.length }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (e) {
