@@ -181,13 +181,23 @@ export default function Leads() {
 
   const handleEnrich = async () => {
     if (selected.size === 0) return;
+    // Filter out already enriched leads
+    const eligibleIds = Array.from(selected).filter(id => {
+      const lead = leads.find(l => l.id === id);
+      return lead && lead.status !== "enriched" && lead.status !== "converted";
+    });
+    if (eligibleIds.length === 0) {
+      toast({ title: "Nenhum lead elegível", description: "Os leads selecionados já foram enriquecidos.", variant: "destructive" });
+      return;
+    }
     setEnriching(true);
     try {
       const { data, error } = await supabase.functions.invoke("enrich-lead", {
-        body: { lead_ids: Array.from(selected), org_id: profile?.org_id },
+        body: { lead_ids: eligibleIds, org_id: profile?.org_id },
       });
       if (error) throw error;
-      toast({ title: "Enriquecimento concluído!", description: `${data?.enriched || 0} leads enriquecidos.` });
+      const skippedMsg = data?.skipped > 0 ? ` (${data.skipped} já enriquecidos, ignorados)` : "";
+      toast({ title: "Enriquecimento concluído!", description: `${data?.enriched || 0} leads enriquecidos.${skippedMsg}` });
       logActivity({ action: "leads_enriquecidos", description: `${data?.enriched || 0} leads enriquecidos com sucesso` });
       setSelected(new Set());
       fetchLeads();
