@@ -544,10 +544,12 @@ export default function Leads() {
   const getEnrichmentSummary = (lead: Lead) => {
     if (!lead.enrichment_data || Object.keys(lead.enrichment_data).length <= 1) return null;
     const ed = lead.enrichment_data;
+    const rawScore = ed.score_conversao ?? ed.score ?? null;
+    const score = rawScore !== null ? (rawScore > 10 ? Math.round(rawScore / 10) : rawScore) : null;
     return {
       company: ed.empresa || ed.company || null,
       segment: ed.segmento || ed.segment || null,
-      score: ed.score_conversao ?? ed.score ?? null,
+      score,
       location: ed.localizacao || ed.location || null,
     };
   };
@@ -979,20 +981,27 @@ export default function Leads() {
               const ed = detailLead.enrichment_data || {};
               const hasEnrichment = Object.keys(ed).length > 1;
               const company = ed.empresa || ed.company || ed.descricao_empresa || null;
-              const role = ed.cargo_estimado || ed.role || null;
+              const role = ed.cargo || ed.cargo_estimado || ed.role || null;
               const segment = ed.segmento || ed.segment || null;
-              const score = ed.score_conversao ?? ed.score ?? null;
-              const website = ed.website || null;
-              const instagram = ed.instagram || null;
-              const linkedin = ed.linkedin || null;
-              const size = ed.porte || ed.tamanho || null;
+              const rawScore = ed.score_conversao ?? ed.score ?? null;
+              const score = rawScore !== null ? (rawScore > 10 ? Math.round(rawScore / 10) : rawScore) : null;
+              const website = ed.website || ed.redes_sociais?.website || null;
+              const instagram = ed.instagram || ed.redes_sociais?.instagram || null;
+              const linkedin = ed.linkedin || ed.redes_sociais?.linkedin || null;
+              const size = ed.porte_empresa || ed.porte || ed.tamanho || null;
               const location = ed.localizacao || ed.location || null;
-              const pains = ed.dores_provaveis || ed.dores || [];
-              const products = ed.produtos_servicos || ed.produtos || [];
-              const salesArgs = ed.argumentos_venda || [];
-              const channel = ed.canal_ideal || null;
+              const pains = ed.dores_provaveis || ed.dores || ed.necessidades_provaveis || [];
+              const products = ed.produtos_servicos || ed.produtos || ed.produtos_interesse || [];
+              const salesArgs = ed.argumentos_venda || ed.gatilhos_venda || [];
+              const channel = ed.canal_ideal || ed.melhor_canal || null;
+              const bestTime = ed.melhor_horario || null;
               const decisionLevel = ed.nivel_decisao || null;
-              const notes = ed.observacoes_importantes || ed.analysis || null;
+              const objections = ed.objecoes_provaveis || [];
+              const interests = ed.interesses || [];
+              const socialClass = ed.classe_social || null;
+              const demProfile = ed.perfil_demografico || null;
+              const scoreJustification = ed.justificativa_score || null;
+              const notes = ed.observacoes || ed.observacoes_importantes || ed.analysis || null;
               const sources = ed.fontes_utilizadas || [];
 
               return (
@@ -1021,11 +1030,19 @@ export default function Leads() {
                       <Badge className={`${statusConfig[detailLead.status]?.color || ""} text-xs`} variant="outline">
                         {statusConfig[detailLead.status]?.label || detailLead.status}
                       </Badge>
-                      {score !== null && (
+                    {score !== null && (
                         <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-primary/10 border border-primary/20">
                           <TrendingUp className="h-3 w-3 text-primary" />
                           <span className="text-xs font-bold text-primary font-mono">{score}/10</span>
                         </div>
+                      )}
+                      {scoreJustification && (
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <span className="text-[10px] text-muted-foreground cursor-help underline decoration-dotted">por quê?</span>
+                          </TooltipTrigger>
+                          <TooltipContent className="max-w-xs text-xs">{scoreJustification}</TooltipContent>
+                        </Tooltip>
                       )}
                       {detailLead.tags && detailLead.tags.length > 0 && (
                         <div className="flex gap-1">
@@ -1127,9 +1144,25 @@ export default function Leads() {
                             {role && <p className="flex gap-2"><User className="h-3.5 w-3.5 text-muted-foreground shrink-0 mt-0.5" /><span><strong>Cargo:</strong> {role}</span></p>}
                             {segment && <p className="flex gap-2"><Tag className="h-3.5 w-3.5 text-muted-foreground shrink-0 mt-0.5" /><span><strong>Segmento:</strong> {segment}</span></p>}
                             {size && <p className="flex gap-2"><Hash className="h-3.5 w-3.5 text-muted-foreground shrink-0 mt-0.5" /><span><strong>Porte:</strong> {typeof size === 'object' ? JSON.stringify(size) : size}</span></p>}
-                            {location && <p className="flex gap-2"><MapPin className="h-3.5 w-3.5 text-muted-foreground shrink-0 mt-0.5" /><span><strong>Localização:</strong> {formatLocation(location)}</span></p>}
                             {decisionLevel && <p className="flex gap-2"><TrendingUp className="h-3.5 w-3.5 text-muted-foreground shrink-0 mt-0.5" /><span><strong>Nível de Decisão:</strong> {typeof decisionLevel === 'object' ? JSON.stringify(decisionLevel) : decisionLevel}</span></p>}
+                            {demProfile && (
+                              <p className="flex gap-2"><User className="h-3.5 w-3.5 text-muted-foreground shrink-0 mt-0.5" /><span><strong>Perfil:</strong> {typeof demProfile === 'object' ? [demProfile.faixa_etaria, demProfile.genero_provavel].filter(Boolean).join(", ") : demProfile}</span></p>
+                            )}
+                            {socialClass && <p className="flex gap-2"><Hash className="h-3.5 w-3.5 text-muted-foreground shrink-0 mt-0.5" /><span><strong>Classe Social:</strong> {socialClass}</span></p>}
+                            {location && <p className="flex gap-2"><MapPin className="h-3.5 w-3.5 text-muted-foreground shrink-0 mt-0.5" /><span><strong>Localização:</strong> {formatLocation(location)}</span></p>}
                             {channel && <p className="flex gap-2"><Zap className="h-3.5 w-3.5 text-muted-foreground shrink-0 mt-0.5" /><span><strong>Canal Ideal:</strong> {channel}</span></p>}
+                            {bestTime && <p className="flex gap-2"><Calendar className="h-3.5 w-3.5 text-muted-foreground shrink-0 mt-0.5" /><span><strong>Melhor Horário:</strong> {bestTime}</span></p>}
+                          </div>
+                        )}
+
+                        {interests.length > 0 && (
+                          <div className="rounded-lg border border-border/40 p-3">
+                            <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">Interesses</p>
+                            <div className="flex flex-wrap gap-1.5">
+                              {interests.map((int: string, i: number) => (
+                                <Badge key={i} variant="secondary" className="text-[10px]">{int}</Badge>
+                              ))}
+                            </div>
                           </div>
                         )}
 
@@ -1186,6 +1219,25 @@ export default function Leads() {
                               {salesArgs.map((a: string, i: number) => (
                                 <li key={i} className="text-xs text-muted-foreground flex gap-1.5">
                                   <CheckCircle2 className="h-3 w-3 text-success shrink-0 mt-0.5" />{a}
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+                        {objections.length > 0 && (
+                          <div className="rounded-lg border border-border/40 p-3">
+                            <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">Objeções e Contornos</p>
+                            <ul className="space-y-2">
+                              {objections.map((o: any, i: number) => (
+                                <li key={i} className="text-xs text-muted-foreground">
+                                  {typeof o === 'object' ? (
+                                    <>
+                                      <span className="flex gap-1.5"><AlertTriangle className="h-3 w-3 text-warning shrink-0 mt-0.5" /><strong>{o.objecao || o.objection}</strong></span>
+                                      {(o.contorno || o.response) && <p className="ml-[18px] mt-0.5 text-muted-foreground/80">↳ {o.contorno || o.response}</p>}
+                                    </>
+                                  ) : (
+                                    <span className="flex gap-1.5"><AlertTriangle className="h-3 w-3 text-warning shrink-0 mt-0.5" />{o}</span>
+                                  )}
                                 </li>
                               ))}
                             </ul>
