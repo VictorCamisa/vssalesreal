@@ -207,7 +207,13 @@ export default function Leads() {
     } finally { setEnriching(false); }
   };
 
+  const isLeadEnriched = (lead: Lead) => lead.status === "enriched" || lead.status === "converted";
+
   const handleEnrichSingle = async (lead: Lead) => {
+    if (isLeadEnriched(lead)) {
+      toast({ title: "Lead já enriquecido", description: "Este lead já foi enriquecido anteriormente.", variant: "destructive" });
+      return;
+    }
     setEnrichingId(lead.id);
     try {
       const { data, error } = await supabase.functions.invoke("enrich-lead", {
