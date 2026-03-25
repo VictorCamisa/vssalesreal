@@ -1073,15 +1073,65 @@ export default function Leads() {
                           </Badge>
                         </div>
 
-                        <div className="rounded-lg border border-border/40 p-3 space-y-2 text-sm">
-                          {company && <p className="flex gap-2"><Building2 className="h-3.5 w-3.5 text-muted-foreground shrink-0 mt-0.5" /><span><strong>Empresa:</strong> {company}</span></p>}
-                          {role && <p className="flex gap-2"><User className="h-3.5 w-3.5 text-muted-foreground shrink-0 mt-0.5" /><span><strong>Cargo:</strong> {role}</span></p>}
-                          {segment && <p className="flex gap-2"><Tag className="h-3.5 w-3.5 text-muted-foreground shrink-0 mt-0.5" /><span><strong>Segmento:</strong> {segment}</span></p>}
-                          {size && <p className="flex gap-2"><Hash className="h-3.5 w-3.5 text-muted-foreground shrink-0 mt-0.5" /><span><strong>Porte:</strong> {typeof size === 'object' ? JSON.stringify(size) : size}</span></p>}
-                          {location && <p className="flex gap-2"><MapPin className="h-3.5 w-3.5 text-muted-foreground shrink-0 mt-0.5" /><span><strong>Localização:</strong> {formatLocation(location)}</span></p>}
-                          {decisionLevel && <p className="flex gap-2"><TrendingUp className="h-3.5 w-3.5 text-muted-foreground shrink-0 mt-0.5" /><span><strong>Nível de Decisão:</strong> {typeof decisionLevel === 'object' ? JSON.stringify(decisionLevel) : decisionLevel}</span></p>}
-                          {channel && <p className="flex gap-2"><Zap className="h-3.5 w-3.5 text-muted-foreground shrink-0 mt-0.5" /><span><strong>Canal Ideal:</strong> {channel}</span></p>}
-                        </div>
+                        {/* Conversation-based enrichment fields */}
+                        {ed.estrategia_enriquecimento === "conversa" && (
+                          <div className="rounded-lg border border-border/40 p-3 space-y-2 text-sm">
+                            {ed.nivel_interesse && (
+                              <p className="flex gap-2"><TrendingUp className="h-3.5 w-3.5 text-muted-foreground shrink-0 mt-0.5" />
+                                <span><strong>Nível de Interesse:</strong>{" "}
+                                  <Badge variant="secondary" className={`text-[10px] ${ed.nivel_interesse === "quente" ? "bg-success/10 text-success" : ed.nivel_interesse === "morno" ? "bg-warning/10 text-warning" : "bg-muted/50 text-muted-foreground"}`}>
+                                    {ed.nivel_interesse}
+                                  </Badge>
+                                </span>
+                              </p>
+                            )}
+                            {ed.interesse_detectado && <p className="flex gap-2"><Sparkles className="h-3.5 w-3.5 text-muted-foreground shrink-0 mt-0.5" /><span><strong>Interesse:</strong> {ed.interesse_detectado}</span></p>}
+                            {ed.momento_compra && <p className="flex gap-2"><Calendar className="h-3.5 w-3.5 text-muted-foreground shrink-0 mt-0.5" /><span><strong>Momento de Compra:</strong> {ed.momento_compra}</span></p>}
+                            {ed.tom_conversa && <p className="flex gap-2"><User className="h-3.5 w-3.5 text-muted-foreground shrink-0 mt-0.5" /><span><strong>Tom da Conversa:</strong> {ed.tom_conversa}</span></p>}
+                            {ed.resumo_conversa && <p className="flex gap-2"><Mail className="h-3.5 w-3.5 text-muted-foreground shrink-0 mt-0.5" /><span><strong>Resumo:</strong> {ed.resumo_conversa}</span></p>}
+                            {ed.proxima_acao_sugerida && <p className="flex gap-2"><Zap className="h-3.5 w-3.5 text-primary shrink-0 mt-0.5" /><span><strong>Próxima Ação:</strong> {ed.proxima_acao_sugerida}</span></p>}
+                            {location && <p className="flex gap-2"><MapPin className="h-3.5 w-3.5 text-muted-foreground shrink-0 mt-0.5" /><span><strong>Localização:</strong> {formatLocation(location)}</span></p>}
+                          </div>
+                        )}
+
+                        {ed.necessidades_expressas?.length > 0 && ed.estrategia_enriquecimento === "conversa" && (
+                          <div className="rounded-lg border border-border/40 p-3">
+                            <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">Necessidades Expressas</p>
+                            <ul className="space-y-1">
+                              {ed.necessidades_expressas.map((n: string, i: number) => (
+                                <li key={i} className="text-xs text-muted-foreground flex gap-1.5">
+                                  <span className="text-primary mt-0.5">→</span>{n}
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+
+                        {ed.objecoes_levantadas?.length > 0 && ed.estrategia_enriquecimento === "conversa" && (
+                          <div className="rounded-lg border border-border/40 p-3">
+                            <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">Objeções Levantadas na Conversa</p>
+                            <ul className="space-y-1">
+                              {ed.objecoes_levantadas.map((o: string, i: number) => (
+                                <li key={i} className="text-xs text-muted-foreground flex gap-1.5">
+                                  <AlertTriangle className="h-3 w-3 text-warning shrink-0 mt-0.5" />{o}
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+
+                        {/* Company-based enrichment fields */}
+                        {ed.estrategia_enriquecimento !== "conversa" && (
+                          <div className="rounded-lg border border-border/40 p-3 space-y-2 text-sm">
+                            {company && <p className="flex gap-2"><Building2 className="h-3.5 w-3.5 text-muted-foreground shrink-0 mt-0.5" /><span><strong>Empresa:</strong> {company}</span></p>}
+                            {role && <p className="flex gap-2"><User className="h-3.5 w-3.5 text-muted-foreground shrink-0 mt-0.5" /><span><strong>Cargo:</strong> {role}</span></p>}
+                            {segment && <p className="flex gap-2"><Tag className="h-3.5 w-3.5 text-muted-foreground shrink-0 mt-0.5" /><span><strong>Segmento:</strong> {segment}</span></p>}
+                            {size && <p className="flex gap-2"><Hash className="h-3.5 w-3.5 text-muted-foreground shrink-0 mt-0.5" /><span><strong>Porte:</strong> {typeof size === 'object' ? JSON.stringify(size) : size}</span></p>}
+                            {location && <p className="flex gap-2"><MapPin className="h-3.5 w-3.5 text-muted-foreground shrink-0 mt-0.5" /><span><strong>Localização:</strong> {formatLocation(location)}</span></p>}
+                            {decisionLevel && <p className="flex gap-2"><TrendingUp className="h-3.5 w-3.5 text-muted-foreground shrink-0 mt-0.5" /><span><strong>Nível de Decisão:</strong> {typeof decisionLevel === 'object' ? JSON.stringify(decisionLevel) : decisionLevel}</span></p>}
+                            {channel && <p className="flex gap-2"><Zap className="h-3.5 w-3.5 text-muted-foreground shrink-0 mt-0.5" /><span><strong>Canal Ideal:</strong> {channel}</span></p>}
+                          </div>
+                        )}
 
                         {/* Links */}
                         {(website || instagram || linkedin) && (
