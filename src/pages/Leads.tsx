@@ -1222,8 +1222,27 @@ export default function Leads() {
                             </ul>
                           </div>
                         )}
+                        {objections.length > 0 && (
+                          <div className="rounded-lg border border-border/40 p-3">
+                            <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">Objeções e Contornos</p>
+                            <ul className="space-y-2">
+                              {objections.map((o: any, i: number) => (
+                                <li key={i} className="text-xs text-muted-foreground">
+                                  {typeof o === 'object' ? (
+                                    <>
+                                      <span className="flex gap-1.5"><AlertTriangle className="h-3 w-3 text-warning shrink-0 mt-0.5" /><strong>{o.objecao || o.objection}</strong></span>
+                                      {(o.contorno || o.response) && <p className="ml-[18px] mt-0.5 text-muted-foreground/80">↳ {o.contorno || o.response}</p>}
+                                    </>
+                                  ) : (
+                                    <span className="flex gap-1.5"><AlertTriangle className="h-3 w-3 text-warning shrink-0 mt-0.5" />{o}</span>
+                                  )}
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
 
-                        {notes && (
+
                           <div className="rounded-lg border border-border/40 p-3">
                             <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">Observações</p>
                             <p className="text-xs text-muted-foreground whitespace-pre-wrap">{notes}</p>
