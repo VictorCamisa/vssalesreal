@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { Lock, User, Shield } from "lucide-react";
-import vsLogo from "@/assets/vs-sales-logo.png";
+import { Logo } from "@/components/Logo";
 
 export default function AdminAuth() {
   const [email, setEmail] = useState("");
@@ -49,7 +49,7 @@ export default function AdminAuth() {
       <div className="relative z-10 w-full max-w-sm mx-4">
         {/* Logo & Header */}
         <div className="flex flex-col items-center mb-8">
-          <img src={vsLogo} alt="VS Soluções" className="h-16 w-16 object-contain mb-4" />
+          <Logo className="h-14 w-auto mb-4" />
           <div className="flex items-center gap-2 mb-1">
             <Shield className="h-4 w-4 text-[#FFB366]" />
             <span className="text-[10px] uppercase tracking-[0.3em] text-[#FFB366] font-semibold">Área Restrita</span>

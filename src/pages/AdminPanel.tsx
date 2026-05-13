@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import vsLogo from "@/assets/vs-sales-logo.png";
+import { Logo } from "@/components/Logo";
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer
 } from "recharts";
@@ -819,7 +819,7 @@ export default function AdminPanel() {
       {/* Sidebar */}
       <aside className="w-64 border-r border-[#1f1612] flex flex-col bg-[#0a0705] shrink-0">
         <div className="p-5 flex items-center gap-3 border-b border-[#1f1612]">
-          <img src={vsLogo} alt="VS" className="h-8 w-8 object-contain" />
+          <Logo className="h-8 w-auto" />
           <div>
             <p className="text-sm font-bold text-white" style={{ fontFamily: "'Bebas Neue', sans-serif", letterSpacing: "0.1em" }}>VS ADMIN</p>
             <p className="text-[10px] text-gray-600">Painel Administrativo</p>

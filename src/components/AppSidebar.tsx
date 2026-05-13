@@ -1,7 +1,7 @@
 import { useNavigate, useLocation } from "react-router-dom";
 import { LogOut, ChevronLeft, ChevronRight, LayoutDashboard } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
-import vsLogo from "@/assets/vs-sales-logo.png";
+import { Logo } from "@/components/Logo";
 import {
   Sidebar, SidebarContent, SidebarFooter, SidebarHeader, useSidebar,
 } from "@/components/ui/sidebar";
@@ -28,7 +28,7 @@ export function AppSidebar() {
       {/* Header with full logo */}
       <SidebarHeader className="px-4 pt-4 pb-3">
         <div className="flex items-center gap-3">
-          <img src={vsLogo} alt="VS Sales" className="h-8 shrink-0" />
+          <Logo className="h-9 w-auto shrink-0" />
           <div>
             <p className="text-base font-bold text-foreground tracking-tight leading-none">VS Sales</p>
             <p className="text-xs text-muted-foreground mt-0.5">Plataforma de vendas</p>

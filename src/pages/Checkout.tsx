@@ -1,7 +1,7 @@
 import { useState, useEffect, FormEvent } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
-import vsLogo from "@/assets/vs-sales-logo.png";
+import { Logo } from "@/components/Logo";
 import {
   ArrowLeft, ArrowRight, CheckCircle2, Building2, User, Mail, Phone,
   MessageCircle, Shield, Sparkles, Zap, Crown, Users, Check, Loader2,
@@ -251,7 +251,7 @@ export default function Checkout() {
         <header className="sticky top-0 z-50 bg-[#0a0705]/80 backdrop-blur-xl border-b border-white/5">
           <div className="max-w-5xl mx-auto px-5 h-14 flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <img src={vsLogo} alt="VS" className="h-7 w-7 object-contain" />
+              <Logo className="h-7 w-auto" />
               <span style={{ fontFamily: "'Bebas Neue', sans-serif" }} className="tracking-wider">VS SALES</span>
             </div>
             <div className="flex items-center gap-2 text-[10px] text-gray-500">
@@ -408,7 +408,7 @@ export default function Checkout() {
         <div className="max-w-5xl mx-auto px-5 h-14 flex items-center justify-between">
           <button onClick={() => navigate("/site")} className="flex items-center gap-2 text-gray-400 hover:text-white transition-colors text-sm">
             <ArrowLeft className="h-4 w-4" />
-            <img src={vsLogo} alt="VS" className="h-7 w-7 object-contain" />
+            <Logo className="h-7 w-auto" />
             <span style={{ fontFamily: "'Bebas Neue', sans-serif" }} className="tracking-wider hidden sm:inline">VS SALES</span>
           </button>
           <div className="flex items-center gap-2 text-[10px] text-gray-500">

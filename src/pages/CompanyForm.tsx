@@ -5,7 +5,7 @@ import {
   Building2, Package, Target, HelpCircle, Globe, Plus, X,
   Loader2, CheckCircle2, Sparkles, Send
 } from "lucide-react";
-import vsLogo from "@/assets/vs-sales-logo.png";
+import { Logo } from "@/components/Logo";
 import kayronLogo from "@/assets/kayron-logo-full-light.png";
 
 interface FormData {
@@ -423,7 +423,7 @@ export default function CompanyForm() {
           <div className="flex items-center gap-3">
             <img src={kayronLogo} alt="Kayron Agency" className="h-5 opacity-60" />
             <span className="text-[10px] text-gray-600">&</span>
-            <img src={vsLogo} alt="VS Labs" className="h-5 opacity-60" />
+            <Logo className="h-5 w-auto opacity-60" />
           </div>
           <p className="text-[10px] text-gray-500 text-center">
             Uma colaboração entre <span className="text-gray-400 font-medium">Kayron Agency</span> & <span className="text-gray-400 font-medium">VS Labs</span>
