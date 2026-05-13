@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { lovable } from "@/integrations/lovable/index";
-import vsLogo from "@/assets/vs-sales-logo.png";
+import { Logo } from "@/components/Logo";
 import { useToast } from "@/hooks/use-toast";
 import { Mail, Lock, Eye, EyeOff, ArrowRight, Zap } from "lucide-react";
 import { motion } from "framer-motion";
@@ -73,7 +73,7 @@ export default function Auth() {
         <div className="flex flex-col items-center mb-8">
           <div className="flex items-center gap-3 mb-3">
             <div className="h-12 w-12 rounded-2xl gradient-primary flex items-center justify-center shadow-glow">
-              <img src={vsLogo} alt="VS SALES" className="h-8 w-8 object-contain" />
+              <Logo className="h-8 w-auto" />
             </div>
             <span className="text-xl font-bold tracking-tight text-foreground">
               VS SALES

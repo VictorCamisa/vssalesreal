@@ -279,7 +279,7 @@ Mensagem do lead: ${msg}`;
   };
 
   const INTEREST_COLORS = {
-    cold: "bg-blue-500/10 text-blue-500 border-blue-500/30",
+    cold: "bg-sky-500/10 text-sky-500 border-sky-500/30",
     warm: "bg-warning/10 text-warning border-warning/30",
     hot: "bg-destructive/10 text-destructive border-destructive/30",
   };

@@ -4,7 +4,7 @@ import { NavLink } from "@/components/NavLink";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { OnboardingDialog } from "@/components/OnboardingDialog";
 import { useAuth } from "@/contexts/AuthContext";
-import vsLogo from "@/assets/vs-sales-logo.png";
+import { Logo } from "@/components/Logo";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem,
   DropdownMenuSeparator, DropdownMenuTrigger,
@@ -33,10 +33,10 @@ export function AppNavbar() {
 
         {/* Logo */}
         <NavLink to="/" className="flex items-center gap-2">
-          <div className="flex h-6 w-6 items-center justify-center rounded bg-primary shadow-sm shadow-primary/20">
-            <img src={vsLogo} alt="VS" className="h-3.5 w-3.5 brightness-[10]" />
-          </div>
-          <span className="text-[13px] font-semibold text-foreground hidden sm:inline">VS Sales</span>
+          <Logo className="h-6 w-auto" />
+          <span className="text-[13px] font-semibold text-foreground hidden sm:inline tracking-tight">
+            Sales
+          </span>
         </NavLink>
 
         <div className="flex-1" />
