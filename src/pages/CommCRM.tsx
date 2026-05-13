@@ -35,10 +35,10 @@ const COMM_STAGES = [
   },
   {
     key: "sent", name: "Disparado", icon: Send,
-    gradient: "from-blue-500 to-blue-600",
-    dotColor: "bg-blue-400",
-    bgAccent: "bg-blue-500/10",
-    borderAccent: "border-l-blue-500",
+    gradient: "from-sky-500 to-sky-600",
+    dotColor: "bg-sky-400",
+    bgAccent: "bg-sky-500/10",
+    borderAccent: "border-l-sky-500",
     description: "Mensagem enviada com sucesso",
     statusMatch: ["sent"],
   },
@@ -111,7 +111,7 @@ function getInitials(name: string | null | undefined): string {
 function getAvatarColor(name: string | null | undefined): string {
   if (!name) return "from-slate-400 to-slate-500";
   const colors = [
-    "from-blue-400 to-blue-600", "from-violet-400 to-purple-600",
+    "from-sky-400 to-sky-600", "from-violet-400 to-purple-600",
     "from-emerald-400 to-green-600", "from-amber-400 to-orange-600",
     "from-rose-400 to-red-600", "from-cyan-400 to-teal-600",
   ];
@@ -369,7 +369,7 @@ export default function CommCRM() {
         {/* Metrics Bar */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           <MetricCard icon={Users} label="Total Leads" value={totalLeads} color="text-slate-400" />
-          <MetricCard icon={Send} label="Disparados" value={sentCount + repliedCount + qualifiedCount + wonCount} color="text-blue-400" />
+          <MetricCard icon={Send} label="Disparados" value={sentCount + repliedCount + qualifiedCount + wonCount} color="text-sky-400" />
           <MetricCard icon={MessageSquare} label="Taxa Resposta" value={`${responseRate}%`} color="text-cyan-400" />
           <MetricCard icon={Trophy} label="Conversão" value={`${conversionRate}%`} color="text-emerald-400" />
         </div>

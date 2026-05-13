@@ -13,7 +13,7 @@ const PLANS = {
     name: "Starter",
     subtitle: "O SDR Digital",
     price: "1.497",
-    color: "#00D4FF",
+    color: "#FFB366",
     icon: Zap,
     features: [
       "Prospecção ativa e automática",
@@ -29,7 +29,7 @@ const PLANS = {
     name: "Pro",
     subtitle: "A Equipe Completa",
     price: "2.497",
-    color: "#0057FF",
+    color: "#FF6B1A",
     icon: Crown,
     features: [
       "Tudo do Starter, mais:",
@@ -79,20 +79,20 @@ function StepIndicator({ current, steps }: { current: number; steps: string[] })
                 className="h-9 w-9 rounded-full flex items-center justify-center text-xs font-bold transition-all duration-500"
                 style={{
                   background: done
-                    ? "linear-gradient(135deg, #00D4FF, #0057FF)"
+                    ? "linear-gradient(135deg, #FFB366, #FF6B1A)"
                     : active
-                    ? "rgba(0,212,255,0.12)"
+                    ? "rgba(255,179,102,0.12)"
                     : "rgba(26,26,46,0.6)",
-                  color: done ? "#fff" : active ? "#00D4FF" : "#555",
-                  border: active ? "1px solid rgba(0,212,255,0.4)" : "1px solid transparent",
-                  boxShadow: done ? "0 0 20px rgba(0,212,255,0.25)" : active ? "0 0 15px rgba(0,212,255,0.1)" : "none",
+                  color: done ? "#fff" : active ? "#FFB366" : "#555",
+                  border: active ? "1px solid rgba(255,179,102,0.4)" : "1px solid transparent",
+                  boxShadow: done ? "0 0 20px rgba(255,179,102,0.25)" : active ? "0 0 15px rgba(255,179,102,0.1)" : "none",
                 }}
               >
                 {done ? <Check className="h-4 w-4" /> : i + 1}
               </div>
               <span
                 className="text-[10px] font-medium transition-colors duration-300"
-                style={{ color: done || active ? "#00D4FF" : "#555" }}
+                style={{ color: done || active ? "#FFB366" : "#555" }}
               >
                 {label}
               </span>
@@ -100,7 +100,7 @@ function StepIndicator({ current, steps }: { current: number; steps: string[] })
             {/* connector */}
             {i < steps.length - 1 && (
               <div className="w-8 md:w-14 h-px mx-1 mb-5 transition-all duration-700" style={{
-                background: done ? "linear-gradient(90deg, #00D4FF, #0057FF)" : "rgba(26,26,46,0.8)",
+                background: done ? "linear-gradient(90deg, #FFB366, #FF6B1A)" : "rgba(26,26,46,0.8)",
               }} />
             )}
           </div>
@@ -136,7 +136,7 @@ function PlanCard({
           border: selected ? "none" : "2px solid rgba(85,85,85,0.4)",
         }}
       >
-        {selected && <Check className="h-3.5 w-3.5 text-[#0A0A0F]" />}
+        {selected && <Check className="h-3.5 w-3.5 text-[#0a0705]" />}
       </div>
 
       <Icon className="h-5 w-5 mb-3" style={{ color: plan.color }} />
@@ -234,21 +234,21 @@ export default function Checkout() {
   if (submitted) {
     const nextSteps = [
       { num: "01", title: "Confirmação enviada", desc: `Enviamos os detalhes do seu pedido para ${contact.email}. Verifique também sua caixa de spam.`, color: "#00FF88", done: true },
-      { num: "02", title: "Contato comercial", desc: "Um especialista do nosso time entrará em contato pelo WhatsApp ou telefone em até 2 horas úteis para alinhar sua operação.", color: "#00D4FF", done: false },
-      { num: "03", title: "Onboarding personalizado", desc: "Configuramos o VS SALES de acordo com seu ICP, segmento e metas comerciais — sem esforço da sua parte.", color: "#0057FF", done: false },
+      { num: "02", title: "Contato comercial", desc: "Um especialista do nosso time entrará em contato pelo WhatsApp ou telefone em até 2 horas úteis para alinhar sua operação.", color: "#FFB366", done: false },
+      { num: "03", title: "Onboarding personalizado", desc: "Configuramos o VS SALES de acordo com seu ICP, segmento e metas comerciais — sem esforço da sua parte.", color: "#FF6B1A", done: false },
       { num: "04", title: "Ativação e primeiros resultados", desc: "Seu sistema estará operando em até 48h. Os primeiros leads qualificados começam a chegar imediatamente.", color: "#00FF88", done: false },
     ];
 
     return (
-      <div className="min-h-screen bg-[#0A0A0F] text-white" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
+      <div className="min-h-screen bg-[#0a0705] text-white" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
         {/* Background */}
         <div className="fixed inset-0 opacity-[0.02] pointer-events-none" style={{
-          backgroundImage: "linear-gradient(rgba(0,212,255,1) 1px, transparent 1px), linear-gradient(90deg, rgba(0,212,255,1) 1px, transparent 1px)",
+          backgroundImage: "linear-gradient(rgba(255,179,102,1) 1px, transparent 1px), linear-gradient(90deg, rgba(255,179,102,1) 1px, transparent 1px)",
           backgroundSize: "80px 80px",
         }} />
 
         {/* Header */}
-        <header className="sticky top-0 z-50 bg-[#0A0A0F]/80 backdrop-blur-xl border-b border-white/5">
+        <header className="sticky top-0 z-50 bg-[#0a0705]/80 backdrop-blur-xl border-b border-white/5">
           <div className="max-w-5xl mx-auto px-5 h-14 flex items-center justify-between">
             <div className="flex items-center gap-2">
               <img src={vsLogo} alt="VS" className="h-7 w-7 object-contain" />
@@ -265,7 +265,7 @@ export default function Checkout() {
           {/* Success icon */}
           <div className="text-center mb-10">
             <div className="relative inline-block mb-6">
-              <div className="h-20 w-20 rounded-full flex items-center justify-center mx-auto" style={{ background: "linear-gradient(135deg, rgba(0,255,136,0.15), rgba(0,212,255,0.10))" }}>
+              <div className="h-20 w-20 rounded-full flex items-center justify-center mx-auto" style={{ background: "linear-gradient(135deg, rgba(0,255,136,0.15), rgba(255,179,102,0.10))" }}>
                 <CheckCircle2 className="h-10 w-10 text-[#00FF88]" />
               </div>
               <div className="absolute -inset-3 rounded-full animate-[ping_3s_ease-in-out_infinite]" style={{ background: "radial-gradient(circle, rgba(0,255,136,0.06), transparent 70%)" }} />
@@ -324,7 +324,7 @@ export default function Checkout() {
 
           {/* Next steps timeline */}
           <div className="mb-10">
-            <p className="text-[10px] uppercase tracking-[0.3em] text-[#00D4FF] font-medium mb-6">Próximos passos</p>
+            <p className="text-[10px] uppercase tracking-[0.3em] text-[#FFB366] font-medium mb-6">Próximos passos</p>
             <div className="space-y-0">
               {nextSteps.map((s, i) => (
                 <div key={s.num} className="flex gap-4">
@@ -334,7 +334,7 @@ export default function Checkout() {
                       className="h-8 w-8 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0"
                       style={{
                         background: s.done ? s.color : `${s.color}12`,
-                        color: s.done ? "#0A0A0F" : s.color,
+                        color: s.done ? "#0a0705" : s.color,
                       }}
                     >
                       {s.done ? <Check className="h-3.5 w-3.5" /> : s.num}
@@ -380,7 +380,7 @@ export default function Checkout() {
               href={`https://wa.me/5511999999999?text=${encodeURIComponent(`Olá! Acabei de solicitar o plano ${plan.name} do VS SALES. Meu nome é ${contact.name}, da empresa ${company.name}.`)}`}
               target="_blank"
               rel="noopener noreferrer"
-              className="flex items-center gap-2 px-6 py-3 rounded-xl bg-gradient-to-r from-[#00FF88] to-[#00D4FF] text-sm font-bold text-[#0A0A0F] hover:shadow-[0_0_30px_rgba(0,255,136,0.25)] transition-all"
+              className="flex items-center gap-2 px-6 py-3 rounded-xl bg-gradient-to-r from-[#00FF88] to-[#FFB366] text-sm font-bold text-[#0a0705] hover:shadow-[0_0_30px_rgba(0,255,136,0.25)] transition-all"
             >
               <MessageCircle className="h-4 w-4" />
               Falar agora pelo WhatsApp
@@ -396,15 +396,15 @@ export default function Checkout() {
   }
 
   return (
-    <div className="min-h-screen bg-[#0A0A0F] text-white" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
+    <div className="min-h-screen bg-[#0a0705] text-white" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
       {/* Subtle background grid */}
       <div className="fixed inset-0 opacity-[0.02] pointer-events-none" style={{
-        backgroundImage: "linear-gradient(rgba(0,212,255,1) 1px, transparent 1px), linear-gradient(90deg, rgba(0,212,255,1) 1px, transparent 1px)",
+        backgroundImage: "linear-gradient(rgba(255,179,102,1) 1px, transparent 1px), linear-gradient(90deg, rgba(255,179,102,1) 1px, transparent 1px)",
         backgroundSize: "80px 80px",
       }} />
 
       {/* Header */}
-      <header className="sticky top-0 z-50 bg-[#0A0A0F]/80 backdrop-blur-xl border-b border-white/5">
+      <header className="sticky top-0 z-50 bg-[#0a0705]/80 backdrop-blur-xl border-b border-white/5">
         <div className="max-w-5xl mx-auto px-5 h-14 flex items-center justify-between">
           <button onClick={() => navigate("/site")} className="flex items-center gap-2 text-gray-400 hover:text-white transition-colors text-sm">
             <ArrowLeft className="h-4 w-4" />
@@ -451,7 +451,7 @@ export default function Checkout() {
               <div className="flex justify-end">
                 <button
                   onClick={goNext}
-                  className="flex items-center gap-2 px-8 py-3 rounded-xl bg-gradient-to-r from-[#00D4FF] to-[#0057FF] text-sm font-semibold hover:shadow-[0_0_30px_rgba(0,212,255,0.3)] transition-all"
+                  className="flex items-center gap-2 px-8 py-3 rounded-xl bg-gradient-to-r from-[#FFB366] to-[#FF6B1A] text-sm font-semibold hover:shadow-[0_0_30px_rgba(255,179,102,0.3)] transition-all"
                 >
                   Continuar
                   <ArrowRight className="h-4 w-4" />
@@ -471,7 +471,7 @@ export default function Checkout() {
               </div>
 
               {/* Selected plan mini card */}
-              <div className="rounded-xl border border-[#1a1a2e] bg-[#0d0d18]/60 p-4 mb-8 flex items-center justify-between">
+              <div className="rounded-xl border border-[#1f1612] bg-[#0f0a08]/60 p-4 mb-8 flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <div className="h-10 w-10 rounded-xl flex items-center justify-center" style={{ background: `${plan.color}15` }}>
                     <plan.icon className="h-5 w-5" style={{ color: plan.color }} />
@@ -481,7 +481,7 @@ export default function Checkout() {
                     <p className="text-xs text-gray-500">R$ {plan.price}/mês</p>
                   </div>
                 </div>
-                <button onClick={() => { setStep(0); setDirection("prev"); setSlideKey(k => k+1); }} className="text-[10px] text-[#00D4FF] hover:underline">
+                <button onClick={() => { setStep(0); setDirection("prev"); setSlideKey(k => k+1); }} className="text-[10px] text-[#FFB366] hover:underline">
                   Trocar plano
                 </button>
               </div>
@@ -496,7 +496,7 @@ export default function Checkout() {
                       value={company.name}
                       onChange={(e) => setCompany((c) => ({ ...c, name: e.target.value }))}
                       placeholder="Ex: TechScale Soluções"
-                      className="w-full pl-10 pr-4 py-3 rounded-xl bg-[#0A0A0F] border border-[#1a1a2e] text-sm text-white placeholder:text-gray-600 focus:outline-none focus:border-[#00D4FF]/40 transition-colors"
+                      className="w-full pl-10 pr-4 py-3 rounded-xl bg-[#0a0705] border border-[#1f1612] text-sm text-white placeholder:text-gray-600 focus:outline-none focus:border-[#FFB366]/40 transition-colors"
                     />
                   </div>
                 </div>
@@ -507,7 +507,7 @@ export default function Checkout() {
                     <select
                       value={company.segment}
                       onChange={(e) => setCompany((c) => ({ ...c, segment: e.target.value }))}
-                      className="w-full px-4 py-3 rounded-xl bg-[#0A0A0F] border border-[#1a1a2e] text-sm text-white focus:outline-none focus:border-[#00D4FF]/40 transition-colors appearance-none"
+                      className="w-full px-4 py-3 rounded-xl bg-[#0a0705] border border-[#1f1612] text-sm text-white focus:outline-none focus:border-[#FFB366]/40 transition-colors appearance-none"
                       style={{
                         backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23555' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E")`,
                         backgroundRepeat: "no-repeat",
@@ -531,7 +531,7 @@ export default function Checkout() {
                     <select
                       value={company.employees}
                       onChange={(e) => setCompany((c) => ({ ...c, employees: e.target.value }))}
-                      className="w-full px-4 py-3 rounded-xl bg-[#0A0A0F] border border-[#1a1a2e] text-sm text-white focus:outline-none focus:border-[#00D4FF]/40 transition-colors appearance-none"
+                      className="w-full px-4 py-3 rounded-xl bg-[#0a0705] border border-[#1f1612] text-sm text-white focus:outline-none focus:border-[#FFB366]/40 transition-colors appearance-none"
                       style={{
                         backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23555' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E")`,
                         backgroundRepeat: "no-repeat",
@@ -553,7 +553,7 @@ export default function Checkout() {
                   <select
                     value={company.revenue}
                     onChange={(e) => setCompany((c) => ({ ...c, revenue: e.target.value }))}
-                    className="w-full px-4 py-3 rounded-xl bg-[#0A0A0F] border border-[#1a1a2e] text-sm text-white focus:outline-none focus:border-[#00D4FF]/40 transition-colors appearance-none"
+                    className="w-full px-4 py-3 rounded-xl bg-[#0a0705] border border-[#1f1612] text-sm text-white focus:outline-none focus:border-[#FFB366]/40 transition-colors appearance-none"
                     style={{
                       backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23555' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E")`,
                       backgroundRepeat: "no-repeat",
@@ -577,7 +577,7 @@ export default function Checkout() {
                 <button
                   onClick={goNext}
                   disabled={!company.name.trim()}
-                  className="flex items-center gap-2 px-8 py-3 rounded-xl bg-gradient-to-r from-[#00D4FF] to-[#0057FF] text-sm font-semibold hover:shadow-[0_0_30px_rgba(0,212,255,0.3)] transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                  className="flex items-center gap-2 px-8 py-3 rounded-xl bg-gradient-to-r from-[#FFB366] to-[#FF6B1A] text-sm font-semibold hover:shadow-[0_0_30px_rgba(255,179,102,0.3)] transition-all disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   Continuar <ArrowRight className="h-4 w-4" />
                 </button>
@@ -605,7 +605,7 @@ export default function Checkout() {
                       value={contact.name}
                       onChange={(e) => setContact((c) => ({ ...c, name: e.target.value }))}
                       placeholder="Seu nome completo"
-                      className="w-full pl-10 pr-4 py-3 rounded-xl bg-[#0A0A0F] border border-[#1a1a2e] text-sm text-white placeholder:text-gray-600 focus:outline-none focus:border-[#00D4FF]/40 transition-colors"
+                      className="w-full pl-10 pr-4 py-3 rounded-xl bg-[#0a0705] border border-[#1f1612] text-sm text-white placeholder:text-gray-600 focus:outline-none focus:border-[#FFB366]/40 transition-colors"
                     />
                   </div>
                 </div>
@@ -620,7 +620,7 @@ export default function Checkout() {
                       value={contact.email}
                       onChange={(e) => setContact((c) => ({ ...c, email: e.target.value }))}
                       placeholder="seu@empresa.com"
-                      className="w-full pl-10 pr-4 py-3 rounded-xl bg-[#0A0A0F] border border-[#1a1a2e] text-sm text-white placeholder:text-gray-600 focus:outline-none focus:border-[#00D4FF]/40 transition-colors"
+                      className="w-full pl-10 pr-4 py-3 rounded-xl bg-[#0a0705] border border-[#1f1612] text-sm text-white placeholder:text-gray-600 focus:outline-none focus:border-[#FFB366]/40 transition-colors"
                     />
                   </div>
                 </div>
@@ -635,7 +635,7 @@ export default function Checkout() {
                         value={contact.phone}
                         onChange={(e) => setContact((c) => ({ ...c, phone: e.target.value }))}
                         placeholder="(11) 99999-9999"
-                        className="w-full pl-10 pr-4 py-3 rounded-xl bg-[#0A0A0F] border border-[#1a1a2e] text-sm text-white placeholder:text-gray-600 focus:outline-none focus:border-[#00D4FF]/40 transition-colors"
+                        className="w-full pl-10 pr-4 py-3 rounded-xl bg-[#0a0705] border border-[#1f1612] text-sm text-white placeholder:text-gray-600 focus:outline-none focus:border-[#FFB366]/40 transition-colors"
                       />
                     </div>
                   </div>
@@ -645,7 +645,7 @@ export default function Checkout() {
                       value={contact.role}
                       onChange={(e) => setContact((c) => ({ ...c, role: e.target.value }))}
                       placeholder="Ex: Diretor Comercial"
-                      className="w-full px-4 py-3 rounded-xl bg-[#0A0A0F] border border-[#1a1a2e] text-sm text-white placeholder:text-gray-600 focus:outline-none focus:border-[#00D4FF]/40 transition-colors"
+                      className="w-full px-4 py-3 rounded-xl bg-[#0a0705] border border-[#1f1612] text-sm text-white placeholder:text-gray-600 focus:outline-none focus:border-[#FFB366]/40 transition-colors"
                     />
                   </div>
                 </div>
@@ -659,7 +659,7 @@ export default function Checkout() {
                       onChange={(e) => setContact((c) => ({ ...c, message: e.target.value }))}
                       placeholder="Ex: Preciso para minha equipe de 5 vendedores..."
                       rows={3}
-                      className="w-full pl-10 pr-4 py-3 rounded-xl bg-[#0A0A0F] border border-[#1a1a2e] text-sm text-white placeholder:text-gray-600 focus:outline-none focus:border-[#00D4FF]/40 transition-colors resize-none"
+                      className="w-full pl-10 pr-4 py-3 rounded-xl bg-[#0a0705] border border-[#1f1612] text-sm text-white placeholder:text-gray-600 focus:outline-none focus:border-[#FFB366]/40 transition-colors resize-none"
                     />
                   </div>
                 </div>
@@ -672,7 +672,7 @@ export default function Checkout() {
                 <button
                   onClick={goNext}
                   disabled={!contact.name.trim() || !contact.email.trim() || !contact.phone.trim()}
-                  className="flex items-center gap-2 px-8 py-3 rounded-xl bg-gradient-to-r from-[#00D4FF] to-[#0057FF] text-sm font-semibold hover:shadow-[0_0_30px_rgba(0,212,255,0.3)] transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                  className="flex items-center gap-2 px-8 py-3 rounded-xl bg-gradient-to-r from-[#FFB366] to-[#FF6B1A] text-sm font-semibold hover:shadow-[0_0_30px_rgba(255,179,102,0.3)] transition-all disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   Revisar pedido <ArrowRight className="h-4 w-4" />
                 </button>
@@ -733,7 +733,7 @@ export default function Checkout() {
 
               {/* Details */}
               <div className="grid md:grid-cols-2 gap-4 mb-8">
-                <div className="rounded-xl border border-[#1a1a2e] bg-[#0d0d18]/60 p-5">
+                <div className="rounded-xl border border-[#1f1612] bg-[#0f0a08]/60 p-5">
                   <p className="text-[10px] uppercase tracking-[0.2em] text-gray-500 mb-3 flex items-center gap-1.5">
                     <Building2 className="h-3 w-3" /> Empresa
                   </p>
@@ -755,12 +755,12 @@ export default function Checkout() {
                       <span className="text-white">{company.revenue || "—"}</span>
                     </div>
                   </div>
-                  <button onClick={() => { setStep(1); setDirection("prev"); setSlideKey(k => k+1); }} className="text-[10px] text-[#00D4FF] hover:underline mt-3">
+                  <button onClick={() => { setStep(1); setDirection("prev"); setSlideKey(k => k+1); }} className="text-[10px] text-[#FFB366] hover:underline mt-3">
                     Editar
                   </button>
                 </div>
 
-                <div className="rounded-xl border border-[#1a1a2e] bg-[#0d0d18]/60 p-5">
+                <div className="rounded-xl border border-[#1f1612] bg-[#0f0a08]/60 p-5">
                   <p className="text-[10px] uppercase tracking-[0.2em] text-gray-500 mb-3 flex items-center gap-1.5">
                     <User className="h-3 w-3" /> Contato
                   </p>
@@ -782,7 +782,7 @@ export default function Checkout() {
                       <span className="text-white">{contact.role || "—"}</span>
                     </div>
                   </div>
-                  <button onClick={() => { setStep(2); setDirection("prev"); setSlideKey(k => k+1); }} className="text-[10px] text-[#00D4FF] hover:underline mt-3">
+                  <button onClick={() => { setStep(2); setDirection("prev"); setSlideKey(k => k+1); }} className="text-[10px] text-[#FFB366] hover:underline mt-3">
                     Editar
                   </button>
                 </div>
@@ -809,7 +809,7 @@ export default function Checkout() {
                 <button
                   onClick={handleSubmit}
                   disabled={submitting}
-                  className="flex items-center gap-2 px-8 py-3.5 rounded-xl bg-gradient-to-r from-[#00FF88] to-[#00D4FF] text-sm font-bold text-[#0A0A0F] hover:shadow-[0_0_30px_rgba(0,255,136,0.3)] transition-all disabled:opacity-60"
+                  className="flex items-center gap-2 px-8 py-3.5 rounded-xl bg-gradient-to-r from-[#00FF88] to-[#FFB366] text-sm font-bold text-[#0a0705] hover:shadow-[0_0_30px_rgba(0,255,136,0.3)] transition-all disabled:opacity-60"
                 >
                   {submitting ? (
                     <>

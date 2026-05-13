@@ -49,10 +49,10 @@ const PIPELINE_STAGES = [
   },
   {
     key: "contacted", name: "Contato Feito", icon: MessageSquare,
-    gradient: "from-blue-500 to-blue-600",
-    dotColor: "bg-blue-400",
-    bgAccent: "bg-blue-500/10",
-    borderAccent: "border-l-blue-500",
+    gradient: "from-sky-500 to-sky-600",
+    dotColor: "bg-sky-400",
+    bgAccent: "bg-sky-500/10",
+    borderAccent: "border-l-sky-500",
     roles: ["sdr"], aiTemplate: "SDR — BANT",
     aiHint: "Qualificação rápida: Budget, Authority, Need, Timeline.",
     description: "Primeiro contato realizado",
@@ -149,7 +149,7 @@ function getInitials(name: string | null | undefined): string {
 function getAvatarColor(name: string | null | undefined): string {
   if (!name) return "from-slate-400 to-slate-500";
   const colors = [
-    "from-blue-400 to-blue-600",
+    "from-sky-400 to-sky-600",
     "from-violet-400 to-purple-600",
     "from-emerald-400 to-green-600",
     "from-amber-400 to-orange-600",
@@ -166,7 +166,7 @@ const AUTOMATION_STATUS_MAP: Record<string, { label: string; color: string; icon
   idle: { label: "Aguardando", color: "text-muted-foreground", icon: Activity },
   pending_enrichment: { label: "Enriquecendo...", color: "text-violet-400", icon: Sparkles },
   enriched_no_send: { label: "Sem envio", color: "text-amber-400", icon: MessageSquare },
-  awaiting_response: { label: "Aguardando resposta", color: "text-blue-400", icon: MessageSquare },
+  awaiting_response: { label: "Aguardando resposta", color: "text-sky-400", icon: MessageSquare },
   qualifying: { label: "Qualificando...", color: "text-cyan-400", icon: SearchIcon },
   qualified: { label: "Qualificado ✓", color: "text-emerald-400", icon: CheckCircle2 },
   scheduled: { label: "Agendado", color: "text-amber-400", icon: Calendar },

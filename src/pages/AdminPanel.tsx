@@ -638,8 +638,8 @@ export default function AdminPanel() {
         key={sale.id}
         className="rounded-xl border overflow-hidden transition-all"
         style={{
-          borderColor: isExpanded ? `${statusColor}30` : "#1a1a2e",
-          background: "#0d0d18",
+          borderColor: isExpanded ? `${statusColor}30` : "#1f1612",
+          background: "#0f0a08",
         }}
       >
         {/* Header */}
@@ -658,7 +658,7 @@ export default function AdminPanel() {
             <div className="flex items-center gap-2 mb-0.5">
               <span className="text-sm font-semibold text-white">{sale.name}</span>
               {planName && (
-                <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#0057FF]/10 text-[#00D4FF] border border-[#00D4FF]/20 font-medium">
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#FF6B1A]/10 text-[#FFB366] border border-[#FFB366]/20 font-medium">
                   {planName} — R$ {PLAN_PRICES[planName] || "?"}/mês
                 </span>
               )}
@@ -684,7 +684,7 @@ export default function AdminPanel() {
 
         {/* Expanded */}
         {isExpanded && (
-          <div className="border-t border-[#1a1a2e] p-5 space-y-5 bg-[#08081a]/50">
+          <div className="border-t border-[#1f1612] p-5 space-y-5 bg-[#0a0705]/50">
             {/* Details */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               {Object.entries(details).map(([key, val]) =>
@@ -708,15 +708,15 @@ export default function AdminPanel() {
                   <div>
                     <p className="text-[10px] text-gray-500 mb-1">Email</p>
                     <div className="flex items-center gap-2">
-                      <code className="text-xs text-white bg-[#0A0A14] px-2 py-1 rounded">{creds.email}</code>
-                      <button onClick={() => copyToClipboard(creds.email)} className="text-gray-500 hover:text-[#00D4FF]"><Copy className="h-3 w-3" /></button>
+                      <code className="text-xs text-white bg-[#0a0705] px-2 py-1 rounded">{creds.email}</code>
+                      <button onClick={() => copyToClipboard(creds.email)} className="text-gray-500 hover:text-[#FFB366]"><Copy className="h-3 w-3" /></button>
                     </div>
                   </div>
                   <div>
                     <p className="text-[10px] text-gray-500 mb-1">Senha temporária</p>
                     <div className="flex items-center gap-2">
-                      <code className="text-xs text-white bg-[#0A0A14] px-2 py-1 rounded">{creds.password}</code>
-                      <button onClick={() => copyToClipboard(creds.password)} className="text-gray-500 hover:text-[#00D4FF]"><Copy className="h-3 w-3" /></button>
+                      <code className="text-xs text-white bg-[#0a0705] px-2 py-1 rounded">{creds.password}</code>
+                      <button onClick={() => copyToClipboard(creds.password)} className="text-gray-500 hover:text-[#FFB366]"><Copy className="h-3 w-3" /></button>
                     </div>
                   </div>
                 </div>
@@ -733,7 +733,7 @@ export default function AdminPanel() {
                     value={notesValue}
                     onChange={e => setNotesValue(e.target.value)}
                     rows={2}
-                    className="flex-1 px-3 py-2 rounded-lg bg-[#0A0A0F] border border-[#1a1a2e] text-xs text-white placeholder:text-gray-700 focus:outline-none focus:border-[#00D4FF]/30 resize-none"
+                    className="flex-1 px-3 py-2 rounded-lg bg-[#0a0705] border border-[#1f1612] text-xs text-white placeholder:text-gray-700 focus:outline-none focus:border-[#FFB366]/30 resize-none"
                     placeholder="Ex: Cliente interessado, ligar amanhã às 14h..."
                     autoFocus
                   />
@@ -749,7 +749,7 @@ export default function AdminPanel() {
               ) : (
                 <div
                   onClick={() => { setEditingNotes(sale.id); setNotesValue(sale.admin_notes || ""); }}
-                  className="px-3 py-2 rounded-lg bg-[#0A0A0F] border border-[#1a1a2e] text-xs text-gray-500 cursor-pointer hover:border-[#00D4FF]/20 transition-colors min-h-[36px]"
+                  className="px-3 py-2 rounded-lg bg-[#0a0705] border border-[#1f1612] text-xs text-gray-500 cursor-pointer hover:border-[#FFB366]/20 transition-colors min-h-[36px]"
                 >
                   {sale.admin_notes || "Clique para adicionar anotação..."}
                 </div>
@@ -757,7 +757,7 @@ export default function AdminPanel() {
             </div>
 
             {/* Actions */}
-            <div className="flex items-center justify-between pt-3 border-t border-[#1a1a2e]">
+            <div className="flex items-center justify-between pt-3 border-t border-[#1f1612]">
               <div className="flex gap-2">
                 {/* Contact actions */}
                 {sale.phone && (
@@ -772,7 +772,7 @@ export default function AdminPanel() {
                 )}
                 <a
                   href={`mailto:${sale.email}`}
-                  className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-[#0057FF]/10 text-[#00D4FF] text-[11px] font-medium hover:bg-[#0057FF]/20 transition-colors"
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-[#FF6B1A]/10 text-[#FFB366] text-[11px] font-medium hover:bg-[#FF6B1A]/20 transition-colors"
                 >
                   <Mail className="h-3.5 w-3.5" /> Email
                 </a>
@@ -817,8 +817,8 @@ export default function AdminPanel() {
   return (
     <div className="min-h-screen flex" style={{ background: "#06060B", color: "#e0e0e0" }}>
       {/* Sidebar */}
-      <aside className="w-64 border-r border-[#1a1a2e] flex flex-col bg-[#0A0A14] shrink-0">
-        <div className="p-5 flex items-center gap-3 border-b border-[#1a1a2e]">
+      <aside className="w-64 border-r border-[#1f1612] flex flex-col bg-[#0a0705] shrink-0">
+        <div className="p-5 flex items-center gap-3 border-b border-[#1f1612]">
           <img src={vsLogo} alt="VS" className="h-8 w-8 object-contain" />
           <div>
             <p className="text-sm font-bold text-white" style={{ fontFamily: "'Bebas Neue', sans-serif", letterSpacing: "0.1em" }}>VS ADMIN</p>
@@ -833,7 +833,7 @@ export default function AdminPanel() {
               onClick={() => { setTab(t.key); setSearchQuery(""); }}
               className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all ${
                 tab === t.key
-                  ? "bg-[#0057FF]/15 text-[#00D4FF] font-medium"
+                  ? "bg-[#FF6B1A]/15 text-[#FFB366] font-medium"
                   : "text-gray-500 hover:text-gray-300 hover:bg-white/[0.03]"
               }`}
             >
@@ -848,7 +848,7 @@ export default function AdminPanel() {
           ))}
         </nav>
 
-        <div className="p-3 border-t border-[#1a1a2e]">
+        <div className="p-3 border-t border-[#1f1612]">
           <button
             onClick={handleLogout}
             className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-gray-600 hover:text-red-400 hover:bg-red-400/[0.05] transition-all"
@@ -861,7 +861,7 @@ export default function AdminPanel() {
 
       {/* Main */}
       <main className="flex-1 overflow-auto">
-        <header className="h-14 border-b border-[#1a1a2e] flex items-center justify-between px-6 bg-[#0A0A14]/50 backdrop-blur-sm sticky top-0 z-10">
+        <header className="h-14 border-b border-[#1f1612] flex items-center justify-between px-6 bg-[#0a0705]/50 backdrop-blur-sm sticky top-0 z-10">
           <h1 className="text-sm font-semibold text-white">{tabs.find(t => t.key === tab)?.label}</h1>
           <div className="flex items-center gap-3">
             {(tab === "users" || tab === "leads" || tab === "pending" || (tab === "companies" && !selectedOrgId)) && (
@@ -872,11 +872,11 @@ export default function AdminPanel() {
                   placeholder="Buscar..."
                   value={searchQuery}
                   onChange={e => setSearchQuery(e.target.value)}
-                  className="h-8 pl-9 pr-3 rounded-lg bg-[#0d0d18] border border-[#1a1a2e] text-xs text-white placeholder:text-gray-700 focus:outline-none focus:border-[#00D4FF]/30 w-56"
+                  className="h-8 pl-9 pr-3 rounded-lg bg-[#0f0a08] border border-[#1f1612] text-xs text-white placeholder:text-gray-700 focus:outline-none focus:border-[#FFB366]/30 w-56"
                 />
               </div>
             )}
-            <button onClick={loadData} className="flex items-center gap-1.5 text-[10px] text-gray-600 hover:text-[#00D4FF] transition-colors">
+            <button onClick={loadData} className="flex items-center gap-1.5 text-[10px] text-gray-600 hover:text-[#FFB366] transition-colors">
               <RefreshCw className="h-3 w-3" /> Atualizar
             </button>
           </div>
@@ -885,7 +885,7 @@ export default function AdminPanel() {
         <div className="p-6">
           {loading ? (
             <div className="flex items-center justify-center h-64">
-              <div className="h-6 w-6 animate-spin rounded-full border-2 border-[#00D4FF]/30 border-t-[#00D4FF]" />
+              <div className="h-6 w-6 animate-spin rounded-full border-2 border-[#FFB366]/30 border-t-[#FFB366]" />
             </div>
           ) : (
             <>
@@ -898,12 +898,12 @@ export default function AdminPanel() {
                       { label: "Vendas aprovadas", value: approvedSales.length, icon: CheckCircle2, color: "#00FF88" },
                       { label: "Vendas recusadas", value: rejectedSales.length, icon: XCircle, color: "#FF4444" },
                       { label: "MRR estimado", value: `R$ ${revenueEstimate.toLocaleString("pt-BR")}`, icon: DollarSign, color: "#00FF88" },
-                      { label: "Total de Usuários", value: totalUsers, icon: Users, color: "#0057FF" },
-                      { label: "Com Organização", value: usersWithOrg, icon: Building2, color: "#00D4FF" },
-                      { label: "Leads do Site", value: totalLeads, icon: FileText, color: "#00D4FF" },
+                      { label: "Total de Usuários", value: totalUsers, icon: Users, color: "#FF6B1A" },
+                      { label: "Com Organização", value: usersWithOrg, icon: Building2, color: "#FFB366" },
+                      { label: "Leads do Site", value: totalLeads, icon: FileText, color: "#FFB366" },
                       { label: "Atividades Hoje", value: todayLeads, icon: TrendingUp, color: "#FFB800" },
                     ].map(card => (
-                      <div key={card.label} className="rounded-xl border border-[#1a1a2e] bg-[#0d0d18]/60 p-5">
+                      <div key={card.label} className="rounded-xl border border-[#1f1612] bg-[#0f0a08]/60 p-5">
                         <div className="flex items-center justify-between mb-3">
                           <span className="text-[10px] text-gray-500 uppercase tracking-wider">{card.label}</span>
                           <card.icon className="h-4 w-4" style={{ color: card.color }} />
@@ -913,9 +913,9 @@ export default function AdminPanel() {
                     ))}
                   </div>
 
-                  <div className="rounded-xl border border-[#1a1a2e] bg-[#0d0d18]/60 p-5">
+                  <div className="rounded-xl border border-[#1f1612] bg-[#0f0a08]/60 p-5">
                     <h3 className="text-xs font-semibold text-white mb-4 flex items-center gap-2">
-                      <Activity className="h-4 w-4 text-[#00D4FF]" />
+                      <Activity className="h-4 w-4 text-[#FFB366]" />
                       Resumo de Vendas
                     </h3>
                     <div className="grid grid-cols-3 gap-3">
@@ -927,7 +927,7 @@ export default function AdminPanel() {
                         <button
                           key={s.label}
                           onClick={() => { setTab("pending"); }}
-                          className="text-center p-4 rounded-lg border border-[#1a1a2e] hover:border-opacity-60 transition-all hover:bg-white/[0.02]"
+                          className="text-center p-4 rounded-lg border border-[#1f1612] hover:border-opacity-60 transition-all hover:bg-white/[0.02]"
                         >
                           <p className="text-2xl font-bold mb-1" style={{ color: s.color }}>{s.count}</p>
                           <p className="text-[10px] text-gray-500">{s.label}</p>
@@ -936,7 +936,7 @@ export default function AdminPanel() {
                     </div>
                   </div>
 
-                  <div className="rounded-xl border border-[#1a1a2e] bg-[#0d0d18]/60 p-5">
+                  <div className="rounded-xl border border-[#1f1612] bg-[#0f0a08]/60 p-5">
                     <h3 className="text-xs font-semibold text-white mb-4 flex items-center gap-2">
                       <Database className="h-4 w-4 text-[#00FF88]" />
                       Resumo Geral
@@ -949,7 +949,7 @@ export default function AdminPanel() {
                         { label: "Leads capturados (site)", value: totalLeads },
                         { label: "Atividades hoje", value: todayLeads },
                       ].map(r => (
-                        <div key={r.label} className="flex items-center justify-between py-1 border-b border-[#1a1a2e] last:border-0">
+                        <div key={r.label} className="flex items-center justify-between py-1 border-b border-[#1f1612] last:border-0">
                           <span className="text-xs text-gray-400">{r.label}</span>
                           <span className="text-xs font-semibold text-white">{r.value}</span>
                         </div>
@@ -979,14 +979,14 @@ export default function AdminPanel() {
                   {pendingUsers.length > 0 && (
                     <div>
                       <h2 className="text-xs font-semibold text-white mb-3 flex items-center gap-2 uppercase tracking-wider">
-                        <Users className="h-4 w-4 text-[#00D4FF]" />
+                        <Users className="h-4 w-4 text-[#FFB366]" />
                         Usuários sem organização ({pendingUsers.length})
                       </h2>
                       <div className="space-y-3">
                         {pendingUsers.map(u => (
-                          <div key={u.id} className="rounded-xl border border-[#1a1a2e] bg-[#0d0d18] p-4 flex items-center gap-4">
-                            <div className="h-10 w-10 rounded-lg flex items-center justify-center bg-[#00D4FF]/10 shrink-0">
-                              <User className="h-5 w-5 text-[#00D4FF]" />
+                          <div key={u.id} className="rounded-xl border border-[#1f1612] bg-[#0f0a08] p-4 flex items-center gap-4">
+                            <div className="h-10 w-10 rounded-lg flex items-center justify-center bg-[#FFB366]/10 shrink-0">
+                              <User className="h-5 w-5 text-[#FFB366]" />
                             </div>
                             <div className="flex-1 min-w-0">
                               <p className="text-sm font-semibold text-white">{u.full_name || "Sem nome"}</p>
@@ -995,7 +995,7 @@ export default function AdminPanel() {
                                 <span className={`px-1.5 py-0.5 rounded-full text-[10px] border ${
                                   u.provider === "google"
                                     ? "bg-[#4285F4]/10 text-[#4285F4] border-[#4285F4]/20"
-                                    : "bg-[#00D4FF]/10 text-[#00D4FF] border-[#00D4FF]/20"
+                                    : "bg-[#FFB366]/10 text-[#FFB366] border-[#FFB366]/20"
                                 }`}>{u.provider === "google" ? "Google" : "Email"}</span>
                               </div>
                               <p className="text-[10px] text-gray-600 mt-0.5">
@@ -1101,7 +1101,7 @@ export default function AdminPanel() {
                     <p className="text-xs text-gray-500">{filteredUsers.length} usuários encontrados</p>
                     <button
                       onClick={() => { setShowCreateUser(true); setNewUserForm({ email: "", full_name: "", password: "" }); setNewUserCredentials(null); }}
-                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#00D4FF]/10 text-[#00D4FF] text-[11px] font-semibold hover:bg-[#00D4FF]/20 transition-colors border border-[#00D4FF]/20"
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#FFB366]/10 text-[#FFB366] text-[11px] font-semibold hover:bg-[#FFB366]/20 transition-colors border border-[#FFB366]/20"
                     >
                       <UserPlus className="h-3.5 w-3.5" /> Criar Usuário
                     </button>
@@ -1110,9 +1110,9 @@ export default function AdminPanel() {
                   {/* Create User Modal */}
                   {showCreateUser && (
                     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => setShowCreateUser(false)}>
-                      <div className="bg-[#0d0d18] border border-[#1a1a2e] rounded-2xl p-6 w-full max-w-md shadow-2xl" onClick={e => e.stopPropagation()}>
+                      <div className="bg-[#0f0a08] border border-[#1f1612] rounded-2xl p-6 w-full max-w-md shadow-2xl" onClick={e => e.stopPropagation()}>
                         <div className="flex items-center justify-between mb-5">
-                          <h3 className="text-sm font-semibold text-white flex items-center gap-2"><UserPlus className="h-4 w-4 text-[#00D4FF]" /> Criar Novo Usuário</h3>
+                          <h3 className="text-sm font-semibold text-white flex items-center gap-2"><UserPlus className="h-4 w-4 text-[#FFB366]" /> Criar Novo Usuário</h3>
                           <button onClick={() => setShowCreateUser(false)} className="text-gray-500 hover:text-white"><X className="h-4 w-4" /></button>
                         </div>
 
@@ -1124,22 +1124,22 @@ export default function AdminPanel() {
                               <p className="text-[11px] text-gray-400">Copie as credenciais abaixo e envie ao usuário.</p>
                             </div>
                             <div className="space-y-2">
-                              <div className="flex items-center justify-between bg-[#0A0A14] rounded-lg p-3 border border-[#1a1a2e]">
+                              <div className="flex items-center justify-between bg-[#0a0705] rounded-lg p-3 border border-[#1f1612]">
                                 <div>
                                   <p className="text-[10px] text-gray-500 uppercase">Email</p>
                                   <p className="text-xs text-white font-mono">{newUserCredentials.email}</p>
                                 </div>
-                                <button onClick={() => copyToClipboard(newUserCredentials.email)} className="text-gray-500 hover:text-[#00D4FF]"><Copy className="h-3.5 w-3.5" /></button>
+                                <button onClick={() => copyToClipboard(newUserCredentials.email)} className="text-gray-500 hover:text-[#FFB366]"><Copy className="h-3.5 w-3.5" /></button>
                               </div>
-                              <div className="flex items-center justify-between bg-[#0A0A14] rounded-lg p-3 border border-[#1a1a2e]">
+                              <div className="flex items-center justify-between bg-[#0a0705] rounded-lg p-3 border border-[#1f1612]">
                                 <div>
                                   <p className="text-[10px] text-gray-500 uppercase">Senha Temporária</p>
                                   <p className="text-xs text-white font-mono">{newUserCredentials.password}</p>
                                 </div>
-                                <button onClick={() => copyToClipboard(newUserCredentials.password)} className="text-gray-500 hover:text-[#00D4FF]"><Copy className="h-3.5 w-3.5" /></button>
+                                <button onClick={() => copyToClipboard(newUserCredentials.password)} className="text-gray-500 hover:text-[#FFB366]"><Copy className="h-3.5 w-3.5" /></button>
                               </div>
                             </div>
-                            <button onClick={() => setShowCreateUser(false)} className="w-full py-2.5 rounded-lg bg-[#00D4FF]/10 text-[#00D4FF] text-xs font-semibold hover:bg-[#00D4FF]/20 transition-colors">
+                            <button onClick={() => setShowCreateUser(false)} className="w-full py-2.5 rounded-lg bg-[#FFB366]/10 text-[#FFB366] text-xs font-semibold hover:bg-[#FFB366]/20 transition-colors">
                               Fechar
                             </button>
                           </div>
@@ -1152,7 +1152,7 @@ export default function AdminPanel() {
                                 value={newUserForm.full_name}
                                 onChange={e => setNewUserForm(f => ({ ...f, full_name: e.target.value }))}
                                 placeholder="Ex: João Silva"
-                                className="w-full h-9 px-3 rounded-lg bg-[#0A0A14] border border-[#1a1a2e] text-xs text-white placeholder:text-gray-700 focus:outline-none focus:border-[#00D4FF]/30"
+                                className="w-full h-9 px-3 rounded-lg bg-[#0a0705] border border-[#1f1612] text-xs text-white placeholder:text-gray-700 focus:outline-none focus:border-[#FFB366]/30"
                               />
                             </div>
                             <div>
@@ -1162,7 +1162,7 @@ export default function AdminPanel() {
                                 value={newUserForm.email}
                                 onChange={e => setNewUserForm(f => ({ ...f, email: e.target.value }))}
                                 placeholder="usuario@empresa.com"
-                                className="w-full h-9 px-3 rounded-lg bg-[#0A0A14] border border-[#1a1a2e] text-xs text-white placeholder:text-gray-700 focus:outline-none focus:border-[#00D4FF]/30"
+                                className="w-full h-9 px-3 rounded-lg bg-[#0a0705] border border-[#1f1612] text-xs text-white placeholder:text-gray-700 focus:outline-none focus:border-[#FFB366]/30"
                               />
                             </div>
                             <div>
@@ -1172,13 +1172,13 @@ export default function AdminPanel() {
                                 value={newUserForm.password}
                                 onChange={e => setNewUserForm(f => ({ ...f, password: e.target.value }))}
                                 placeholder="Deixe vazio para gerar automaticamente"
-                                className="w-full h-9 px-3 rounded-lg bg-[#0A0A14] border border-[#1a1a2e] text-xs text-white placeholder:text-gray-700 focus:outline-none focus:border-[#00D4FF]/30"
+                                className="w-full h-9 px-3 rounded-lg bg-[#0a0705] border border-[#1f1612] text-xs text-white placeholder:text-gray-700 focus:outline-none focus:border-[#FFB366]/30"
                               />
                             </div>
                             <button
                               onClick={createNewUser}
                               disabled={creatingNewUser || !newUserForm.email}
-                              className="w-full py-2.5 rounded-lg bg-gradient-to-r from-[#0057FF] to-[#00D4FF] text-white text-xs font-semibold hover:opacity-90 transition-opacity disabled:opacity-50 flex items-center justify-center gap-2"
+                              className="w-full py-2.5 rounded-lg bg-gradient-to-r from-[#FF6B1A] to-[#FFB366] text-white text-xs font-semibold hover:opacity-90 transition-opacity disabled:opacity-50 flex items-center justify-center gap-2"
                             >
                               {creatingNewUser ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <UserPlus className="h-3.5 w-3.5" />}
                               {creatingNewUser ? "Criando..." : "Criar Usuário"}
@@ -1188,10 +1188,10 @@ export default function AdminPanel() {
                       </div>
                     </div>
                   )}
-                  <div className="rounded-xl border border-[#1a1a2e] overflow-hidden">
+                  <div className="rounded-xl border border-[#1f1612] overflow-hidden">
                     <table className="w-full">
                       <thead>
-                        <tr className="bg-[#0d0d18] border-b border-[#1a1a2e]">
+                        <tr className="bg-[#0f0a08] border-b border-[#1f1612]">
                           <th className="text-left px-4 py-3 text-[10px] uppercase tracking-wider text-gray-500 font-medium">Usuário</th>
                           <th className="text-left px-4 py-3 text-[10px] uppercase tracking-wider text-gray-500 font-medium">Email</th>
                           <th className="text-left px-4 py-3 text-[10px] uppercase tracking-wider text-gray-500 font-medium">Método</th>
@@ -1203,10 +1203,10 @@ export default function AdminPanel() {
                       </thead>
                       <tbody>
                         {filteredUsers.map(u => (
-                          <tr key={u.id} className="border-b border-[#1a1a2e] hover:bg-white/[0.02] transition-colors">
+                          <tr key={u.id} className="border-b border-[#1f1612] hover:bg-white/[0.02] transition-colors">
                             <td className="px-4 py-3">
                               <div className="flex items-center gap-2">
-                                <div className="h-7 w-7 rounded-full bg-gradient-to-br from-[#0057FF] to-[#00D4FF] flex items-center justify-center text-[10px] font-bold text-white">
+                                <div className="h-7 w-7 rounded-full bg-gradient-to-br from-[#FF6B1A] to-[#FFB366] flex items-center justify-center text-[10px] font-bold text-white">
                                   {(u.full_name || u.email || "?")[0].toUpperCase()}
                                 </div>
                                 <span className="text-sm text-white">{u.full_name || "Sem nome"}</span>
@@ -1217,7 +1217,7 @@ export default function AdminPanel() {
                               <span className={`text-[10px] px-2 py-0.5 rounded-full border ${
                                 u.provider === "google"
                                   ? "bg-[#4285F4]/10 text-[#4285F4] border-[#4285F4]/20"
-                                  : "bg-[#00D4FF]/10 text-[#00D4FF] border-[#00D4FF]/20"
+                                  : "bg-[#FFB366]/10 text-[#FFB366] border-[#FFB366]/20"
                               }`}>
                                 {u.provider === "google" ? "Google" : "Email/Senha"}
                               </span>
@@ -1294,7 +1294,7 @@ export default function AdminPanel() {
                         onClick={() => setLeadFilter(f.key)}
                         className={`px-3 py-1.5 rounded-lg text-xs transition-all ${
                           leadFilter === f.key
-                            ? "bg-[#0057FF]/15 text-[#00D4FF] border border-[#00D4FF]/20"
+                            ? "bg-[#FF6B1A]/15 text-[#FFB366] border border-[#FFB366]/20"
                             : "text-gray-500 hover:text-gray-300 border border-transparent"
                         }`}
                       >
@@ -1304,10 +1304,10 @@ export default function AdminPanel() {
                     <span className="text-[10px] text-gray-600 ml-auto">{filteredLeads.length} resultados</span>
                   </div>
 
-                  <div className="rounded-xl border border-[#1a1a2e] overflow-hidden">
+                  <div className="rounded-xl border border-[#1f1612] overflow-hidden">
                     <table className="w-full">
                       <thead>
-                        <tr className="bg-[#0d0d18] border-b border-[#1a1a2e]">
+                        <tr className="bg-[#0f0a08] border-b border-[#1f1612]">
                           <th className="text-left px-4 py-3 text-[10px] uppercase tracking-wider text-gray-500 font-medium">Nome</th>
                           <th className="text-left px-4 py-3 text-[10px] uppercase tracking-wider text-gray-500 font-medium">Email</th>
                           <th className="text-left px-4 py-3 text-[10px] uppercase tracking-wider text-gray-500 font-medium">Telefone</th>
@@ -1318,14 +1318,14 @@ export default function AdminPanel() {
                       </thead>
                       <tbody>
                         {filteredLeads.map(l => (
-                          <tr key={l.id} className="border-b border-[#1a1a2e] hover:bg-white/[0.02] transition-colors">
+                          <tr key={l.id} className="border-b border-[#1f1612] hover:bg-white/[0.02] transition-colors">
                             <td className="px-4 py-3 text-sm text-white">{l.name}</td>
                             <td className="px-4 py-3 text-xs text-gray-400">{l.email}</td>
                             <td className="px-4 py-3 text-xs text-gray-400">{l.phone || "—"}</td>
                             <td className="px-4 py-3">
                               <span className={`text-[10px] px-2 py-0.5 rounded-full border ${
                                 l.form_source === "partnership"
-                                  ? "bg-[#0057FF]/10 text-[#00D4FF] border-[#00D4FF]/20"
+                                  ? "bg-[#FF6B1A]/10 text-[#FFB366] border-[#FFB366]/20"
                                   : "bg-[#00FF88]/10 text-[#00FF88] border-[#00FF88]/20"
                               }`}>
                                 {l.form_source === "partnership" ? "Parceria" : "Acesso Antecipado"}
@@ -1355,7 +1355,7 @@ export default function AdminPanel() {
                 <div className="space-y-3">
                   <p className="text-xs text-gray-500 mb-4">Edite os textos e números exibidos na landing page do VS SALES.</p>
                   {siteContent.map(c => (
-                    <div key={c.id} className="rounded-xl border border-[#1a1a2e] bg-[#0d0d18]/60 p-4 flex items-center gap-4">
+                    <div key={c.id} className="rounded-xl border border-[#1f1612] bg-[#0f0a08]/60 p-4 flex items-center gap-4">
                       <div className="flex-1 min-w-0">
                         <p className="text-[11px] text-gray-500 uppercase tracking-wider mb-1">
                           {CONTENT_LABELS[c.key] || c.key}
@@ -1365,7 +1365,7 @@ export default function AdminPanel() {
                             type="text"
                             value={editValue}
                             onChange={e => setEditValue(e.target.value)}
-                            className="w-full h-9 px-3 rounded-lg bg-[#0A0A14] border border-[#00D4FF]/30 text-sm text-white focus:outline-none"
+                            className="w-full h-9 px-3 rounded-lg bg-[#0a0705] border border-[#FFB366]/30 text-sm text-white focus:outline-none"
                             autoFocus
                           />
                         ) : (
@@ -1409,14 +1409,14 @@ export default function AdminPanel() {
                           return (
                             <div
                               key={org.id}
-                              className="rounded-xl border border-[#1a1a2e] bg-[#0d0d18] p-4 flex items-center gap-4 hover:border-[#00D4FF]/20 transition-all"
+                              className="rounded-xl border border-[#1f1612] bg-[#0f0a08] p-4 flex items-center gap-4 hover:border-[#FFB366]/20 transition-all"
                             >
                               <div
                                 onClick={() => setSelectedOrgId(org.id)}
                                 className="flex items-center gap-4 flex-1 min-w-0 cursor-pointer hover:bg-white/[0.02] rounded-lg -m-2 p-2 transition-colors"
                               >
-                                <div className="h-10 w-10 rounded-lg flex items-center justify-center bg-[#0057FF]/10 shrink-0">
-                                  <Building2 className="h-5 w-5 text-[#00D4FF]" />
+                                <div className="h-10 w-10 rounded-lg flex items-center justify-center bg-[#FF6B1A]/10 shrink-0">
+                                  <Building2 className="h-5 w-5 text-[#FFB366]" />
                                 </div>
                                 <div className="flex-1 min-w-0">
                                   <p className="text-sm font-semibold text-white">{org.name}</p>
@@ -1433,7 +1433,7 @@ export default function AdminPanel() {
                                     navigator.clipboard.writeText(formUrl);
                                     toast({ title: "Link copiado!", description: formUrl });
                                   }}
-                                  className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-[#0057FF]/10 text-[#00D4FF] text-[10px] font-semibold hover:bg-[#0057FF]/20 transition-colors border border-[#00D4FF]/20"
+                                  className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-[#FF6B1A]/10 text-[#FFB366] text-[10px] font-semibold hover:bg-[#FF6B1A]/20 transition-colors border border-[#FFB366]/20"
                                   title="Copiar link do formulário"
                                 >
                                   <Link2 className="h-3.5 w-3.5" />
@@ -1469,12 +1469,12 @@ export default function AdminPanel() {
               <div className="flex items-center justify-between">
                 <h2 className="text-lg font-bold text-white">Planos & Preços</h2>
                 <div className="flex gap-2">
-                  <button onClick={loadPlans} className="flex items-center gap-1 text-[10px] text-gray-500 hover:text-[#00D4FF] px-3 py-2 rounded-lg border border-[#1a1a2e] hover:border-[#00D4FF]/30 transition-colors">
+                  <button onClick={loadPlans} className="flex items-center gap-1 text-[10px] text-gray-500 hover:text-[#FFB366] px-3 py-2 rounded-lg border border-[#1f1612] hover:border-[#FFB366]/30 transition-colors">
                     <RefreshCw className="h-3 w-3" /> Atualizar
                   </button>
                   <button
                     onClick={() => setEditingPlan({ name: "", slug: "", description: "", price_monthly: 0, price_yearly: null, features: [], is_popular: false, is_active: true, sort_order: plans.length + 1, currency: "BRL" })}
-                    className="flex items-center gap-1 text-[10px] text-white px-3 py-2 rounded-lg bg-[#0057FF] hover:bg-[#0057FF]/80 transition-colors"
+                    className="flex items-center gap-1 text-[10px] text-white px-3 py-2 rounded-lg bg-[#FF6B1A] hover:bg-[#FF6B1A]/80 transition-colors"
                   >
                     <Plus className="h-3 w-3" /> Novo Plano
                   </button>
@@ -1483,7 +1483,7 @@ export default function AdminPanel() {
 
               {/* Editing form */}
               {editingPlan && (
-                <div className="rounded-xl border border-[#00D4FF]/20 bg-[#0d0d18] p-5 space-y-4">
+                <div className="rounded-xl border border-[#FFB366]/20 bg-[#0f0a08] p-5 space-y-4">
                   <div className="flex items-center justify-between">
                     <h3 className="text-sm font-semibold text-white">{editingPlan.id ? "Editar Plano" : "Novo Plano"}</h3>
                     <button onClick={() => setEditingPlan(null)} className="text-gray-500 hover:text-white"><X className="h-4 w-4" /></button>
@@ -1492,34 +1492,34 @@ export default function AdminPanel() {
                     <div>
                       <label className="text-[10px] text-gray-500 uppercase tracking-wider mb-1 block">Nome</label>
                       <input value={editingPlan.name} onChange={e => setEditingPlan({ ...editingPlan, name: e.target.value })}
-                        className="w-full px-3 py-2 rounded-lg bg-[#0A0A0F] border border-[#1a1a2e] text-sm text-white" />
+                        className="w-full px-3 py-2 rounded-lg bg-[#0a0705] border border-[#1f1612] text-sm text-white" />
                     </div>
                     <div>
                       <label className="text-[10px] text-gray-500 uppercase tracking-wider mb-1 block">Slug</label>
                       <input value={editingPlan.slug} onChange={e => setEditingPlan({ ...editingPlan, slug: e.target.value })}
-                        className="w-full px-3 py-2 rounded-lg bg-[#0A0A0F] border border-[#1a1a2e] text-sm text-white" />
+                        className="w-full px-3 py-2 rounded-lg bg-[#0a0705] border border-[#1f1612] text-sm text-white" />
                     </div>
                   </div>
                   <div>
                     <label className="text-[10px] text-gray-500 uppercase tracking-wider mb-1 block">Subtítulo / Descrição</label>
                     <input value={editingPlan.description || ""} onChange={e => setEditingPlan({ ...editingPlan, description: e.target.value })}
-                      className="w-full px-3 py-2 rounded-lg bg-[#0A0A0F] border border-[#1a1a2e] text-sm text-white" />
+                      className="w-full px-3 py-2 rounded-lg bg-[#0a0705] border border-[#1f1612] text-sm text-white" />
                   </div>
                   <div className="grid grid-cols-3 gap-3">
                     <div>
                       <label className="text-[10px] text-gray-500 uppercase tracking-wider mb-1 block">Preço Mensal (R$)</label>
                       <input type="number" value={editingPlan.price_monthly} onChange={e => setEditingPlan({ ...editingPlan, price_monthly: Number(e.target.value) })}
-                        className="w-full px-3 py-2 rounded-lg bg-[#0A0A0F] border border-[#1a1a2e] text-sm text-white" />
+                        className="w-full px-3 py-2 rounded-lg bg-[#0a0705] border border-[#1f1612] text-sm text-white" />
                     </div>
                     <div>
                       <label className="text-[10px] text-gray-500 uppercase tracking-wider mb-1 block">Preço Anual (R$)</label>
                       <input type="number" value={editingPlan.price_yearly || ""} onChange={e => setEditingPlan({ ...editingPlan, price_yearly: e.target.value ? Number(e.target.value) : null })}
-                        placeholder="Opcional" className="w-full px-3 py-2 rounded-lg bg-[#0A0A0F] border border-[#1a1a2e] text-sm text-white placeholder:text-gray-600" />
+                        placeholder="Opcional" className="w-full px-3 py-2 rounded-lg bg-[#0a0705] border border-[#1f1612] text-sm text-white placeholder:text-gray-600" />
                     </div>
                     <div>
                       <label className="text-[10px] text-gray-500 uppercase tracking-wider mb-1 block">Ordem</label>
                       <input type="number" value={editingPlan.sort_order} onChange={e => setEditingPlan({ ...editingPlan, sort_order: Number(e.target.value) })}
-                        className="w-full px-3 py-2 rounded-lg bg-[#0A0A0F] border border-[#1a1a2e] text-sm text-white" />
+                        className="w-full px-3 py-2 rounded-lg bg-[#0a0705] border border-[#1f1612] text-sm text-white" />
                     </div>
                   </div>
                   <div>
@@ -1528,7 +1528,7 @@ export default function AdminPanel() {
                       value={Array.isArray(editingPlan.features) ? editingPlan.features.join("\n") : editingPlan.features}
                       onChange={e => setEditingPlan({ ...editingPlan, features: e.target.value.split("\n") })}
                       rows={5}
-                      className="w-full px-3 py-2 rounded-lg bg-[#0A0A0F] border border-[#1a1a2e] text-sm text-white resize-none"
+                      className="w-full px-3 py-2 rounded-lg bg-[#0a0705] border border-[#1f1612] text-sm text-white resize-none"
                     />
                   </div>
                   <div className="flex items-center gap-6">
@@ -1542,8 +1542,8 @@ export default function AdminPanel() {
                     </label>
                   </div>
                   <div className="flex justify-end gap-2">
-                    <button onClick={() => setEditingPlan(null)} className="px-4 py-2 rounded-lg text-xs text-gray-400 hover:text-white border border-[#1a1a2e] transition-colors">Cancelar</button>
-                    <button onClick={savePlan} disabled={savingPlan} className="flex items-center gap-1 px-4 py-2 rounded-lg text-xs text-white bg-[#0057FF] hover:bg-[#0057FF]/80 transition-colors disabled:opacity-50">
+                    <button onClick={() => setEditingPlan(null)} className="px-4 py-2 rounded-lg text-xs text-gray-400 hover:text-white border border-[#1f1612] transition-colors">Cancelar</button>
+                    <button onClick={savePlan} disabled={savingPlan} className="flex items-center gap-1 px-4 py-2 rounded-lg text-xs text-white bg-[#FF6B1A] hover:bg-[#FF6B1A]/80 transition-colors disabled:opacity-50">
                       {savingPlan ? <Loader2 className="h-3 w-3 animate-spin" /> : <Save className="h-3 w-3" />} Salvar
                     </button>
                   </div>
@@ -1552,19 +1552,19 @@ export default function AdminPanel() {
 
               {/* Plans list */}
               {plansLoading ? (
-                <div className="flex items-center justify-center h-48"><Loader2 className="h-5 w-5 animate-spin text-[#00D4FF]" /></div>
+                <div className="flex items-center justify-center h-48"><Loader2 className="h-5 w-5 animate-spin text-[#FFB366]" /></div>
               ) : (
                 <div className="space-y-3">
                   {plans.map(plan => {
                     const features = Array.isArray(plan.features) ? plan.features : [];
                     return (
-                      <div key={plan.id} className={`rounded-xl border p-5 transition-all ${plan.is_popular ? "border-[#0057FF]/40 bg-[#0057FF]/[0.04]" : "border-[#1a1a2e] bg-[#0d0d18]/60"}`}>
+                      <div key={plan.id} className={`rounded-xl border p-5 transition-all ${plan.is_popular ? "border-[#FF6B1A]/40 bg-[#FF6B1A]/[0.04]" : "border-[#1f1612] bg-[#0f0a08]/60"}`}>
                         <div className="flex items-center justify-between mb-3">
                           <div className="flex items-center gap-3">
                             <div className="flex items-center gap-2">
                               <h3 className="text-base font-bold text-white">{plan.name}</h3>
                               {plan.is_popular && (
-                                <span className="text-[9px] px-2 py-0.5 rounded-full bg-[#0057FF] text-white font-semibold uppercase tracking-wider">Recomendado</span>
+                                <span className="text-[9px] px-2 py-0.5 rounded-full bg-[#FF6B1A] text-white font-semibold uppercase tracking-wider">Recomendado</span>
                               )}
                               {!plan.is_active && (
                                 <span className="text-[9px] px-2 py-0.5 rounded-full bg-red-500/20 text-red-400 font-semibold">Inativo</span>
@@ -1573,10 +1573,10 @@ export default function AdminPanel() {
                             <span className="text-xs text-gray-500">{plan.description}</span>
                           </div>
                           <div className="flex items-center gap-2">
-                            <button onClick={() => setEditingPlan({ ...plan })} className="flex items-center gap-1 text-[10px] text-gray-400 hover:text-[#00D4FF] px-2 py-1.5 rounded-lg border border-[#1a1a2e] hover:border-[#00D4FF]/30 transition-colors">
+                            <button onClick={() => setEditingPlan({ ...plan })} className="flex items-center gap-1 text-[10px] text-gray-400 hover:text-[#FFB366] px-2 py-1.5 rounded-lg border border-[#1f1612] hover:border-[#FFB366]/30 transition-colors">
                               <Edit3 className="h-3 w-3" /> Editar
                             </button>
-                            <button onClick={() => deletePlan(plan.id)} className="flex items-center gap-1 text-[10px] text-gray-400 hover:text-red-400 px-2 py-1.5 rounded-lg border border-[#1a1a2e] hover:border-red-400/30 transition-colors">
+                            <button onClick={() => deletePlan(plan.id)} className="flex items-center gap-1 text-[10px] text-gray-400 hover:text-red-400 px-2 py-1.5 rounded-lg border border-[#1f1612] hover:border-red-400/30 transition-colors">
                               <Trash2 className="h-3 w-3" />
                             </button>
                           </div>
@@ -1593,7 +1593,7 @@ export default function AdminPanel() {
                         </div>
                         <div className="flex flex-wrap gap-1.5">
                           {features.map((f: string, i: number) => (
-                            <span key={i} className="text-[10px] px-2 py-1 rounded-lg bg-white/[0.04] text-gray-400 border border-[#1a1a2e]">{f}</span>
+                            <span key={i} className="text-[10px] px-2 py-1 rounded-lg bg-white/[0.04] text-gray-400 border border-[#1f1612]">{f}</span>
                           ))}
                         </div>
                       </div>
@@ -1619,27 +1619,27 @@ export default function AdminPanel() {
                   <p className="text-xs text-gray-500">Monitoramento e análise de atividades em tempo real.</p>
                 </div>
                 <div className="flex items-center gap-3">
-                  <div className="flex items-center bg-[#0A0A14] border border-[#1a1a2e] rounded-lg p-1">
+                  <div className="flex items-center bg-[#0a0705] border border-[#1f1612] rounded-lg p-1">
                     {(["1h", "6h", "24h", "all"] as const).map((r) => (
                       <button
                         key={r}
                         onClick={() => setLogTimeRange(r)}
                         className={`px-3 py-1 rounded-md text-[10px] font-medium transition-all ${
-                          logTimeRange === r ? "bg-[#0057FF] text-white shadow-lg" : "text-gray-500 hover:text-white"
+                          logTimeRange === r ? "bg-[#FF6B1A] text-white shadow-lg" : "text-gray-500 hover:text-white"
                         }`}
                       >
                         {r.toUpperCase()}
                       </button>
                     ))}
                   </div>
-                  <button onClick={loadLogs} className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[#0057FF]/10 text-[#00D4FF] text-xs font-medium hover:bg-[#0057FF]/20 transition-colors border border-[#00D4FF]/20">
+                  <button onClick={loadLogs} className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[#FF6B1A]/10 text-[#FFB366] text-xs font-medium hover:bg-[#FF6B1A]/20 transition-colors border border-[#FFB366]/20">
                     <RefreshCw className={`h-3.5 w-3.5 ${logsLoading ? "animate-spin" : ""}`} /> Atualizar
                   </button>
                 </div>
               </div>
 
               {/* Activity Chart */}
-              <div className="h-[200px] w-full bg-[#0d0d18] border border-[#1a1a2e] rounded-2xl p-4 overflow-hidden relative group">
+              <div className="h-[200px] w-full bg-[#0f0a08] border border-[#1f1612] rounded-2xl p-4 overflow-hidden relative group">
                 <div className="absolute top-4 right-4 z-10 flex gap-4">
                   <div className="flex items-center gap-1.5">
                     <div className="h-2 w-2 rounded-full bg-[#00FF88]" />
@@ -1678,7 +1678,7 @@ export default function AdminPanel() {
                       allowDecimals={false}
                     />
                     <RechartsTooltip 
-                      contentStyle={{ backgroundColor: "#0d0d18", border: "1px solid #1a1a2e", borderRadius: "12px", fontSize: "10px" }}
+                      contentStyle={{ backgroundColor: "#0f0a08", border: "1px solid #1f1612", borderRadius: "12px", fontSize: "10px" }}
                       itemStyle={{ fontSize: "10px" }}
                     />
                     <Area type="monotone" dataKey="success" stroke="#00FF88" fillOpacity={1} fill="url(#colorSuccess)" strokeWidth={2} />
@@ -1695,13 +1695,13 @@ export default function AdminPanel() {
                     value={logSearchQuery}
                     onChange={e => setLogSearchQuery(e.target.value)}
                     placeholder="Filtrar por ação, descrição, usuário ou erro..."
-                    className="w-full h-10 pl-9 pr-3 rounded-xl bg-[#0d0d18] border border-[#1a1a2e] text-sm text-white placeholder:text-gray-600 focus:outline-none focus:border-[#00D4FF]/30 transition-all font-inter"
+                    className="w-full h-10 pl-9 pr-3 rounded-xl bg-[#0f0a08] border border-[#1f1612] text-sm text-white placeholder:text-gray-600 focus:outline-none focus:border-[#FFB366]/30 transition-all font-inter"
                   />
                 </div>
                 <select
                   value={logUserFilter}
                   onChange={e => setLogUserFilter(e.target.value)}
-                  className="h-10 px-4 rounded-xl bg-[#0d0d18] border border-[#1a1a2e] text-sm text-white focus:outline-none focus:border-[#00D4FF]/30 transition-all cursor-pointer"
+                  className="h-10 px-4 rounded-xl bg-[#0f0a08] border border-[#1f1612] text-sm text-white focus:outline-none focus:border-[#FFB366]/30 transition-all cursor-pointer"
                 >
                   <option value="all">Todos os usuários</option>
                   {Array.from(new Map(activityLogs.map(l => [l.user_id, l.user_name || l.user_email])).entries()).map(([uid, name]) => (
@@ -1714,7 +1714,7 @@ export default function AdminPanel() {
               {logsLoading ? (
                 <div className="flex items-center justify-center py-20">
                   <div className="flex flex-col items-center gap-4">
-                    <Loader2 className="h-8 w-8 animate-spin text-[#00D4FF]" />
+                    <Loader2 className="h-8 w-8 animate-spin text-[#FFB366]" />
                     <p className="text-xs text-gray-500 animate-pulse">Carregando logs...</p>
                   </div>
                 </div>
@@ -1730,7 +1730,7 @@ export default function AdminPanel() {
                       <div
                         key={log.id}
                         onClick={() => setSelectedLog(log)}
-                        className="group flex items-center gap-4 p-3 rounded-2xl border border-[#1a1a2e] bg-[#0d0d18]/60 hover:bg-[#0d0d18] hover:border-[#00D4FF]/30 transition-all cursor-pointer"
+                        className="group flex items-center gap-4 p-3 rounded-2xl border border-[#1f1612] bg-[#0f0a08]/60 hover:bg-[#0f0a08] hover:border-[#FFB366]/30 transition-all cursor-pointer"
                       >
                         <div
                           className="h-10 w-10 rounded-xl flex items-center justify-center shrink-0 transition-transform group-hover:scale-105"
@@ -1762,7 +1762,7 @@ export default function AdminPanel() {
                                 {orgName}
                               </span>
                             )}
-                            <span className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-[#0057FF]/05 text-[#00D4FF]/80 border border-[#0057FF]/10">
+                            <span className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-[#FF6B1A]/05 text-[#FFB366]/80 border border-[#FF6B1A]/10">
                               <Terminal className="h-3 w-3" />
                               {log.action}
                             </span>
@@ -1778,14 +1778,14 @@ export default function AdminPanel() {
                           </span>
                         </div>
                         
-                        <ChevronRight className="h-4 w-4 text-gray-700 group-hover:text-[#00D4FF] group-hover:translate-x-1 transition-all" />
+                        <ChevronRight className="h-4 w-4 text-gray-700 group-hover:text-[#FFB366] group-hover:translate-x-1 transition-all" />
                       </div>
                     );
                   })}
 
                   {filteredLogs.length === 0 && (
-                    <div className="text-center py-20 bg-[#0d0d18] rounded-3xl border border-[#1a1a2e] border-dashed">
-                      <div className="h-16 w-16 bg-[#1a1a2e] rounded-2xl flex items-center justify-center mx-auto mb-4">
+                    <div className="text-center py-20 bg-[#0f0a08] rounded-3xl border border-[#1f1612] border-dashed">
+                      <div className="h-16 w-16 bg-[#1f1612] rounded-2xl flex items-center justify-center mx-auto mb-4">
                         <Activity className="h-8 w-8 text-gray-600 opacity-50" />
                       </div>
                       <p className="text-sm text-white font-medium">Nenhum log encontrado</p>
@@ -1797,7 +1797,7 @@ export default function AdminPanel() {
 
               {/* Log Detail Drawer */}
               <Drawer open={!!selectedLog} onOpenChange={(open) => { if (!open) { setSelectedLog(null); setDiagnosis(null); } }}>
-                <DrawerContent className="bg-[#0d0d18] border-[#1a1a2e] text-white max-h-[90vh]">
+                <DrawerContent className="bg-[#0f0a08] border-[#1f1612] text-white max-h-[90vh]">
                   <div className="mx-auto w-full max-w-4xl overflow-y-auto overflow-x-hidden p-6">
                     <DrawerHeader className="px-0">
                       <div className="flex items-start justify-between">
@@ -1823,7 +1823,7 @@ export default function AdminPanel() {
                       <div className="lg:col-span-2 space-y-6">
                         {/* Event Details */}
                         <div className="space-y-4">
-                          <h4 className="text-sm font-bold text-[#00D4FF] uppercase tracking-widest flex items-center gap-2">
+                          <h4 className="text-sm font-bold text-[#FFB366] uppercase tracking-widest flex items-center gap-2">
                              <Info className="h-4 w-4" /> Detalhes do Evento
                           </h4>
                           <div className="grid grid-cols-2 gap-4">
@@ -1897,7 +1897,7 @@ export default function AdminPanel() {
                           <h4 className="text-sm font-bold text-gray-400 uppercase tracking-widest flex items-center gap-2">
                              <Database className="h-4 w-4" /> Metadados Brutos
                           </h4>
-                          <pre className="text-[11px] bg-black/40 p-4 rounded-3xl border border-white/5 text-[#00D4FF]/80 overflow-x-auto font-mono custom-scrollbar">
+                          <pre className="text-[11px] bg-black/40 p-4 rounded-3xl border border-white/5 text-[#FFB366]/80 overflow-x-auto font-mono custom-scrollbar">
                             {JSON.stringify(selectedLog?.metadata, null, 2)}
                           </pre>
                         </div>
@@ -1910,7 +1910,7 @@ export default function AdminPanel() {
                           
                           <div className="space-y-4">
                             <div className="flex items-start gap-3">
-                              <User className="h-4 w-4 text-[#00D4FF] mt-1" />
+                              <User className="h-4 w-4 text-[#FFB366] mt-1" />
                               <div className="min-w-0 flex-1">
                                 <p className="text-[10px] text-gray-500 uppercase font-bold">Usuário</p>
                                 <p className="text-xs font-medium text-white truncate">{selectedLog?.user_name || "Anônimo"}</p>
@@ -1919,7 +1919,7 @@ export default function AdminPanel() {
                             </div>
 
                             <div className="flex items-start gap-3">
-                              <Building2 className="h-4 w-4 text-[#00D4FF] mt-1" />
+                              <Building2 className="h-4 w-4 text-[#FFB366] mt-1" />
                               <div className="min-w-0 flex-1">
                                 <p className="text-[10px] text-gray-500 uppercase font-bold">Organização</p>
                                 <p className="text-xs font-medium text-white truncate">{organizations.find(o => o.id === selectedLog?.org_id)?.name || "N/A"}</p>
@@ -1928,7 +1928,7 @@ export default function AdminPanel() {
 
                             {selectedLog?.metadata?.url && (
                               <div className="flex items-start gap-3">
-                                <Globe className="h-4 w-4 text-[#00D4FF] mt-1" />
+                                <Globe className="h-4 w-4 text-[#FFB366] mt-1" />
                                 <div className="min-w-0 flex-1">
                                   <p className="text-[10px] text-gray-500 uppercase font-bold">URL de Origem</p>
                                   <p className="text-xs font-medium text-white truncate" title={selectedLog.metadata.url}>
@@ -1940,7 +1940,7 @@ export default function AdminPanel() {
 
                             {selectedLog?.metadata?.userAgent && (
                               <div className="flex items-start gap-3">
-                                <Laptop className="h-4 w-4 text-[#00D4FF] mt-1" />
+                                <Laptop className="h-4 w-4 text-[#FFB366] mt-1" />
                                 <div className="min-w-0 flex-1">
                                   <p className="text-[10px] text-gray-500 uppercase font-bold">Ambiente</p>
                                   <p className="text-[10px] font-medium text-white break-words">

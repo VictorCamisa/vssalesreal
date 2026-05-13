@@ -29,6 +29,20 @@ export default {
         primary: {
           DEFAULT: "hsl(var(--primary))",
           foreground: "hsl(var(--primary-foreground))",
+          soft: "hsl(var(--primary-soft))",
+          strong: "hsl(var(--primary-strong))",
+        },
+        info: {
+          DEFAULT: "hsl(var(--info))",
+          foreground: "hsl(var(--info-foreground))",
+        },
+        brand: {
+          surface: "hsl(var(--brand-surface))",
+          "surface-2": "hsl(var(--brand-surface-2))",
+          "surface-3": "hsl(var(--brand-surface-3))",
+          border: "hsl(var(--brand-border))",
+          orange: "hsl(var(--brand-orange))",
+          "orange-soft": "hsl(var(--brand-orange-soft))",
         },
         secondary: {
           DEFAULT: "hsl(var(--secondary))",

@@ -1217,7 +1217,7 @@ const ERROR_CATEGORIES: Record<string, { label: string; description: string; ico
     label: "Cooldown Ativo",
     description: "Este contato já foi abordado recentemente e está em período de espera para evitar spam. O envio será possível após o período configurado.",
     icon: "⏳",
-    color: "text-blue-600 bg-blue-500/10",
+    color: "text-sky-600 bg-sky-500/10",
   },
   "not registered": {
     label: "Não Registrado",
@@ -1333,7 +1333,7 @@ function DetailDialog({
   const leadStatusConfig: Record<string, { label: string; color: string }> = {
     pending: { label: "Pendente", color: "bg-muted text-muted-foreground" },
     sent: { label: "Enviado", color: "bg-primary/10 text-primary" },
-    delivered: { label: "Entregue", color: "bg-blue-500/10 text-blue-600" },
+    delivered: { label: "Entregue", color: "bg-sky-500/10 text-sky-600" },
     read: { label: "Lido", color: "bg-emerald-500/10 text-emerald-600" },
     replied: { label: "Respondeu", color: "bg-amber-500/10 text-amber-600" },
     failed: { label: "Falha", color: "bg-destructive/10 text-destructive" },
@@ -1499,7 +1499,7 @@ function DetailDialog({
                 { label: "Total", value: total, sub: "leads", color: "text-foreground" },
                 { label: "Enviados", value: broadcast.sent_count || 0, sub: total > 0 ? `${((broadcast.sent_count || 0) / total * 100).toFixed(1)}%` : "0%", color: "text-primary" },
                 { label: "Falhas", value: broadcast.failed_count || 0, sub: total > 0 ? `${((broadcast.failed_count || 0) / total * 100).toFixed(1)}%` : "0%", color: "text-destructive" },
-                { label: "Entregues", value: broadcast.delivered_count || 0, sub: (broadcast.sent_count || 0) > 0 ? `${((broadcast.delivered_count || 0) / (broadcast.sent_count || 1) * 100).toFixed(1)}%` : "0%", color: "text-blue-500" },
+                { label: "Entregues", value: broadcast.delivered_count || 0, sub: (broadcast.sent_count || 0) > 0 ? `${((broadcast.delivered_count || 0) / (broadcast.sent_count || 1) * 100).toFixed(1)}%` : "0%", color: "text-sky-500" },
                 { label: "Respostas", value: broadcast.replied_count || 0, sub: (broadcast.sent_count || 0) > 0 ? `${((broadcast.replied_count || 0) / (broadcast.sent_count || 1) * 100).toFixed(1)}%` : "0%", color: "text-amber-500" },
                 { label: "Conversões", value: broadcast.converted_count || 0, sub: (broadcast.sent_count || 0) > 0 ? `${((broadcast.converted_count || 0) / (broadcast.sent_count || 1) * 100).toFixed(1)}%` : "0%", color: "text-emerald-600" },
               ].map(m => (
