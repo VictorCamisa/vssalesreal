@@ -41,8 +41,27 @@ export default {
           "surface-2": "hsl(var(--brand-surface-2))",
           "surface-3": "hsl(var(--brand-surface-3))",
           border: "hsl(var(--brand-border))",
-          orange: "hsl(var(--brand-orange))",
-          "orange-soft": "hsl(var(--brand-orange-soft))",
+          red: "hsl(var(--brand-red))",
+          "red-soft": "hsl(var(--brand-red-soft))",
+        },
+        neutral: {
+          50: "hsl(var(--neutral-50))",
+          100: "hsl(var(--neutral-100))",
+          200: "hsl(var(--neutral-200))",
+          300: "hsl(var(--neutral-300))",
+          400: "hsl(var(--neutral-400))",
+          500: "hsl(var(--neutral-500))",
+          700: "hsl(var(--neutral-700))",
+          900: "hsl(var(--neutral-900))",
+        },
+        "row-hover": "hsl(var(--row-hover))",
+        selected: {
+          DEFAULT: "hsl(var(--selected))",
+          foreground: "hsl(var(--selected-foreground))",
+        },
+        disabled: {
+          DEFAULT: "hsl(var(--disabled))",
+          foreground: "hsl(var(--disabled-foreground))",
         },
         secondary: {
           DEFAULT: "hsl(var(--secondary))",
@@ -51,14 +70,17 @@ export default {
         destructive: {
           DEFAULT: "hsl(var(--destructive))",
           foreground: "hsl(var(--destructive-foreground))",
+          soft: "hsl(var(--destructive-soft))",
         },
         success: {
           DEFAULT: "hsl(var(--success))",
           foreground: "hsl(var(--success-foreground))",
+          soft: "hsl(var(--success-soft))",
         },
         warning: {
           DEFAULT: "hsl(var(--warning))",
           foreground: "hsl(var(--warning-foreground))",
+          soft: "hsl(var(--warning-soft))",
         },
         muted: {
           DEFAULT: "hsl(var(--muted))",
@@ -95,10 +117,10 @@ export default {
         sm: "calc(var(--radius) - 4px)",
       },
       boxShadow: {
-        soft: "0 1px 4px 0 rgba(0, 20, 40, 0.06)",
-        card: "0 2px 12px -2px rgba(0, 20, 40, 0.08)",
-        elevated: "0 8px 30px -6px rgba(0, 20, 40, 0.12)",
-        nav: "0 1px 3px 0 rgba(0, 20, 40, 0.08)",
+        soft: "0 1px 4px 0 rgba(14, 14, 16, 0.06)",
+        card: "0 2px 12px -2px rgba(14, 14, 16, 0.08)",
+        elevated: "0 8px 30px -6px rgba(14, 14, 16, 0.12)",
+        nav: "0 1px 3px 0 rgba(14, 14, 16, 0.08)",
         glow: "0 0 20px -5px hsl(var(--primary) / 0.15)",
         "glow-lg": "0 0 40px -8px hsl(var(--primary) / 0.2)",
       },

@@ -5,125 +5,165 @@
 @tailwind utilities;
 
 /*
- * VS Sales Design System — 2026 rebrand
- * Brand: warm orange (#FF6B1A) replacing legacy blue.
+ * VS Sales Design System — identidade VS Soluções (vermelho + preto)
+ * Marca: vermelho VS #E63946 / vermelho profundo #C1121F sobre preto #0E0E10
+ * e off-white #FAFAF8. Funcionais: sucesso #1D9E75, aviso #EF9F27,
+ * erro #A32D2D (nunca #E63946 em erros), info #2F7BAC.
  * All color tokens are HSL channels (no hsl() wrapper) so Tailwind can compose
  * them with opacity modifiers (hsl(var(--primary) / 0.5)).
  */
 
 @layer base {
   :root {
-    --background: 30 25% 99%;
-    --foreground: 20 14% 9%;
+    --background: 60 17% 98%;
+    --foreground: 240 7% 6%;
     --card: 0 0% 100%;
-    --card-foreground: 20 14% 9%;
+    --card-foreground: 240 7% 6%;
     --popover: 0 0% 100%;
-    --popover-foreground: 20 14% 9%;
+    --popover-foreground: 240 7% 6%;
 
-    --primary: 22 95% 53%;
+    --primary: 355 78% 56%;
     --primary-foreground: 0 0% 100%;
-    --primary-soft: 24 100% 96%;
-    --primary-strong: 18 92% 48%;
+    --primary-soft: 353 81% 96%;
+    --primary-strong: 355 83% 41%;
 
-    --secondary: 30 14% 96%;
-    --secondary-foreground: 20 14% 9%;
-    --muted: 30 14% 96%;
-    --muted-foreground: 20 8% 44%;
-    --accent: 24 100% 95%;
-    --accent-foreground: 18 92% 38%;
+    --secondary: 240 6% 93%;
+    --secondary-foreground: 240 7% 6%;
+    --muted: 240 6% 93%;
+    --muted-foreground: 240 4% 35%;
+    --accent: 353 81% 96%;
+    --accent-foreground: 356 83% 30%;
 
-    --destructive: 0 84% 60%;
+    /* Erro usa #A32D2D dessaturado — nunca o vermelho de marca #E63946.
+       O tint de erro tem matiz 14° (terroso) para não se confundir com o
+       tint rosado da marca (--primary-soft, 353°). */
+    --destructive: 0 57% 41%;
     --destructive-foreground: 0 0% 100%;
-    --success: 142 72% 38%;
+    --destructive-soft: 14 55% 94%;
+    --success: 161 69% 37%;
     --success-foreground: 0 0% 100%;
-    --warning: 38 92% 50%;
-    --warning-foreground: 20 14% 9%;
-    --info: 200 90% 48%;
+    --success-soft: 161 45% 93%;
+    --warning: 36 86% 55%;
+    --warning-foreground: 240 7% 6%;
+    --warning-soft: 36 80% 94%;
+    --info: 204 57% 43%; /* #2F7BAC — azul neutro documentado */
     --info-foreground: 0 0% 100%;
 
-    --border: 24 12% 90%;
-    --input: 24 12% 90%;
-    --ring: 22 95% 53%;
+    --border: 240 6% 88%;
+    --input: 240 6% 88%;
+    --ring: 355 78% 56%;
     --radius: 0.625rem;
 
-    --sidebar-background: 30 20% 98%;
-    --sidebar-foreground: 20 8% 44%;
-    --sidebar-primary: 22 95% 53%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 24 100% 95%;
-    --sidebar-accent-foreground: 18 92% 38%;
-    --sidebar-border: 24 12% 90%;
-    --sidebar-ring: 22 95% 53%;
+    /* Escala de neutros absoluta (não muda no .dark): 50 é sempre claro,
+       900 sempre escuro. Âncoras do manual: 50=#FAFAF8, 300=#A8A8B0,
+       500=#55555C, 700=#2B2B31, 900=#0E0E10. */
+    --neutral-50: 60 17% 98%;
+    --neutral-100: 240 6% 93%;
+    --neutral-200: 240 6% 88%;
+    --neutral-300: 240 5% 67%;
+    --neutral-400: 240 4% 50%;
+    --neutral-500: 240 4% 35%;
+    --neutral-700: 240 7% 18%;
+    --neutral-900: 240 7% 6%;
 
-    --chart-1: 22 95% 53%;
-    --chart-2: 142 72% 38%;
-    --chart-3: 38 92% 50%;
-    --chart-4: 262 75% 60%;
-    --chart-5: 200 90% 48%;
+    /* Estados de aplicação (o manual da marca cobre só o site) */
+    --row-hover: 240 6% 96%;
+    --selected: 353 81% 96%;
+    --selected-foreground: 356 83% 30%;
+    --disabled: 240 6% 93%;
+    --disabled-foreground: 240 5% 67%;
+
+    --sidebar-background: 60 17% 98%;
+    --sidebar-foreground: 240 4% 35%;
+    --sidebar-primary: 355 78% 56%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 353 81% 96%;
+    --sidebar-accent-foreground: 356 83% 30%;
+    --sidebar-border: 240 6% 88%;
+    --sidebar-ring: 355 78% 56%;
+
+    --chart-1: 355 78% 56%;
+    --chart-2: 161 69% 37%;
+    --chart-3: 36 86% 55%;
+    /* O roxo é intencionalmente FORA da paleta da marca: gráficos com 4+
+       séries precisam de um matiz distinguível de vermelho/verde/âmbar/azul.
+       Não "corrigir" para uma cor de marca — quebra a leitura das séries. */
+    --chart-4: 262 45% 58%;
+    --chart-5: 204 57% 43%;
 
     /* Brand surfaces — used by hardcoded marketing/admin views */
-    --brand-surface: 24 18% 8%;
-    --brand-surface-2: 22 16% 11%;
-    --brand-surface-3: 22 14% 14%;
-    --brand-border: 22 14% 18%;
-    --brand-orange: 22 100% 56%;
-    --brand-orange-soft: 28 100% 65%;
+    --brand-surface: 240 7% 6%;
+    --brand-surface-2: 240 7% 11%;
+    --brand-surface-3: 240 7% 14%;
+    --brand-border: 240 7% 18%;
+    --brand-red: 355 78% 56%;
+    --brand-red-soft: 357 82% 66%;
   }
 
   .dark {
-    --background: 24 14% 6%;
-    --foreground: 30 15% 94%;
-    --card: 24 14% 9%;
-    --card-foreground: 30 15% 94%;
-    --popover: 24 16% 8%;
-    --popover-foreground: 30 15% 94%;
+    --background: 240 7% 6%;
+    --foreground: 60 17% 98%;
+    --card: 240 7% 11%;
+    --card-foreground: 60 17% 98%;
+    --popover: 240 7% 9%;
+    --popover-foreground: 60 17% 98%;
 
-    --primary: 22 100% 58%;
-    --primary-foreground: 20 14% 6%;
-    --primary-soft: 22 60% 14%;
-    --primary-strong: 18 95% 52%;
+    --primary: 355 85% 62%;
+    --primary-foreground: 240 7% 6%;
+    --primary-soft: 355 45% 14%;
+    --primary-strong: 357 82% 66%;
 
-    --secondary: 24 10% 13%;
-    --secondary-foreground: 30 12% 88%;
-    --muted: 24 10% 13%;
-    --muted-foreground: 25 8% 58%;
-    --accent: 22 40% 16%;
-    --accent-foreground: 24 100% 78%;
+    --secondary: 240 6% 13%;
+    --secondary-foreground: 240 6% 88%;
+    --muted: 240 6% 13%;
+    --muted-foreground: 240 5% 67%;
+    --accent: 355 40% 16%;
+    --accent-foreground: 355 85% 77%;
 
-    --destructive: 0 72% 55%;
+    --destructive: 0 52% 54%;
     --destructive-foreground: 0 0% 100%;
-    --success: 142 65% 45%;
+    --destructive-soft: 10 40% 15%;
+    --success: 161 60% 45%;
     --success-foreground: 0 0% 100%;
-    --warning: 38 90% 55%;
-    --warning-foreground: 24 14% 6%;
-    --info: 200 85% 55%;
+    --success-soft: 161 40% 12%;
+    --warning: 36 88% 60%;
+    --warning-foreground: 240 7% 6%;
+    --warning-soft: 36 50% 13%;
+    --info: 204 60% 55%;
     --info-foreground: 0 0% 100%;
 
-    --border: 24 10% 16%;
-    --input: 24 10% 16%;
-    --ring: 22 100% 58%;
+    --border: 240 7% 18%;
+    --input: 240 7% 18%;
+    --ring: 355 85% 62%;
 
-    --sidebar-background: 24 18% 5%;
-    --sidebar-foreground: 25 8% 58%;
-    --sidebar-primary: 22 100% 58%;
-    --sidebar-primary-foreground: 24 14% 6%;
-    --sidebar-accent: 24 12% 11%;
-    --sidebar-accent-foreground: 24 100% 78%;
-    --sidebar-border: 24 10% 13%;
-    --sidebar-ring: 22 100% 58%;
+    --row-hover: 240 6% 14%;
+    --selected: 355 45% 16%;
+    --selected-foreground: 355 85% 77%;
+    --disabled: 240 6% 13%;
+    --disabled-foreground: 240 4% 42%;
 
-    --chart-1: 22 100% 58%;
-    --chart-2: 142 65% 45%;
-    --chart-3: 38 90% 55%;
-    --chart-4: 262 75% 65%;
-    --chart-5: 200 85% 55%;
+    --sidebar-background: 240 8% 5%;
+    --sidebar-foreground: 240 5% 67%;
+    --sidebar-primary: 355 85% 62%;
+    --sidebar-primary-foreground: 240 7% 6%;
+    --sidebar-accent: 240 6% 11%;
+    --sidebar-accent-foreground: 355 85% 77%;
+    --sidebar-border: 240 7% 14%;
+    --sidebar-ring: 355 85% 62%;
 
-    --brand-surface: 24 18% 5%;
-    --brand-surface-2: 22 16% 8%;
-    --brand-surface-3: 22 14% 12%;
-    --brand-border: 22 14% 16%;
-    --brand-orange: 22 100% 58%;
-    --brand-orange-soft: 28 100% 68%;
+    --chart-1: 355 85% 62%;
+    --chart-2: 161 60% 45%;
+    --chart-3: 36 88% 60%;
+    /* Roxo fora da marca de propósito — ver nota no :root. */
+    --chart-4: 262 45% 65%;
+    --chart-5: 204 60% 55%;
+
+    --brand-surface: 240 7% 6%;
+    --brand-surface-2: 240 7% 11%;
+    --brand-surface-3: 240 7% 14%;
+    --brand-border: 240 7% 18%;
+    --brand-red: 355 85% 62%;
+    --brand-red-soft: 357 82% 70%;
   }
 
   html {
@@ -168,28 +208,28 @@
 @layer utilities {
   .text-gradient {
     @apply bg-clip-text text-transparent;
-    background-image: linear-gradient(135deg, hsl(var(--primary)), hsl(var(--brand-orange-soft)));
+    background-image: linear-gradient(135deg, hsl(var(--primary)), hsl(var(--brand-red-soft)));
   }
 
   .text-gradient-warm {
     @apply bg-clip-text text-transparent;
-    background-image: linear-gradient(135deg, hsl(14 95% 58%), hsl(38 95% 58%));
+    background-image: linear-gradient(135deg, hsl(355 78% 56%), hsl(357 82% 66%));
   }
 
   .gradient-primary {
-    background-image: linear-gradient(135deg, hsl(var(--primary)) 0%, hsl(14 92% 55%) 100%);
+    background-image: linear-gradient(135deg, hsl(var(--primary)) 0%, hsl(355 83% 45%) 100%);
   }
 
   .gradient-surface {
     background-image: radial-gradient(circle at 20% 0%, hsl(var(--primary) / 0.12), transparent 55%),
-                      radial-gradient(circle at 80% 100%, hsl(14 90% 55% / 0.08), transparent 50%),
+                      radial-gradient(circle at 80% 100%, hsl(356 83% 40% / 0.08), transparent 50%),
                       hsl(var(--background));
   }
 
   .gradient-brand-dark {
     background-image:
       radial-gradient(ellipse at top, hsl(var(--primary) / 0.18), transparent 60%),
-      radial-gradient(ellipse at bottom right, hsl(14 90% 50% / 0.12), transparent 55%),
+      radial-gradient(ellipse at bottom right, hsl(356 83% 40% / 0.12), transparent 55%),
       hsl(var(--brand-surface));
   }
 
